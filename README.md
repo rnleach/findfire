@@ -13,6 +13,10 @@ well as fire from each scanning sector (CONUS [FDCC], Full Disk [FDCF], and Meso
 independenly. Later versions may try to combine the time series from different satellites and
 sectors together.
 
+This initial version will also rely on the file naming convention used by the NOAA Big Data
+initiative to detect satellite, sector, scan start, and scan end times. Later versions may use
+attributes to detect these properties internally.
+
 
 ## Dependencies
 
