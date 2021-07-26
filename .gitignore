@@ -1,3 +1,11 @@
+# Editor configuration files.
+*.vim
+tags
+
+# Project layout
+build
+obj
+
 # Prerequisites
 *.d
 
