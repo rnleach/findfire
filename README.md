@@ -2,7 +2,8 @@
 Analysis of GOES-R/S NetCDF4 Fire Detection Characteristics files.
 
 (Goal - we're not there yet)
-Given a directory containing *-FDCC-*, *-FDCF-*, or *_FDCM-* files (Fire Detection Characteristics)
+
+Given a directory containing *-FDCC-*, *-FDCF-*, or *-FDCM-* files (Fire Detection Characteristics)
 from GOES-R (GOES-16) and GOES-S (GOES-17) satellites, this program will analyze all of them in 
 chronological order. The analysis finds clusters of pixels that are connected and analyzes their 
 mean latitude, mean longitude, and total fire power in megawatts. Then the points in the time series
@@ -15,7 +16,7 @@ sectors together.
 
 This initial version will also rely on the file naming convention used by the NOAA Big Data
 initiative to detect satellite, sector, scan start, and scan end times. Later versions may use
-attributes to detect these properties internally.
+attributes in the NetCDF4 to detect these properties internally.
 
 
 ## Dependencies
