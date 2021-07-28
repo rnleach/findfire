@@ -12,23 +12,22 @@
 #include "cpl_error.h"
 #include "cpl_string.h"
 #include "gdal.h"
-#include "ogr_srs_api.h"
 
 #include "firepoint.h"
 #include "cluster.h"
+#include "firesatimage.h"
 
-char const *fname =
-    "NETCDF:\"/Volumes/MET2/wxdata/GOES/"
-    "OR_ABI-L2-FDCC-M6_G17_s20212050401167_e20212050403540_c20212050404121.nc\":Power";
+char const *fname = "/Volumes/MET2/wxdata/GOES/"
+    "OR_ABI-L2-FDCC-M6_G17_s20212050401167_e20212050403540_c20212050404121.nc";
 
 
-void
+static void
 program_initialization()
 {
     GDALAllRegister();
 }
 
-void
+static void
 program_finalization()
 {
 }
@@ -38,113 +37,13 @@ main()
 {
     program_initialization();
 
-    GDALDatasetH dataset = 0;
-    dataset = GDALOpen(fname, GA_ReadOnly);
-    if(!dataset) {
-        printf("Error opening %s\n", fname);
-        return EXIT_FAILURE;
-    }
+    struct FireSatImage fdata = {0};
+    bool ok = fire_sat_image_open(fname, &fdata);
+    Stopif(!ok, return EXIT_FAILURE, "Error opening %s", fname);
 
-    double geo_trans[6] = {0};
-    if(GDALGetGeoTransform(dataset, geo_trans) == CE_None){
-
-        printf("Origin = (%.6f, %.6f)\n\n", geo_trans[0], geo_trans[3]);
-        printf("Pixel Size = (%.6f, %.6f)\n\n", geo_trans[1], geo_trans[5]);
-    }
-
-    /*
-    char **meta_data = GDALGetMetadata(dataset, 0);
-    char  **curr = meta_data;
-    while(*curr){
-        printf("     %s\n", *curr);
-        curr++;
-    }
-    char const *start_date_str = CSLFetchNameValue(meta_data, "NC_GLOBAL#time_coverage_start");
-    char const *end_date_str = CSLFetchNameValue(meta_data, "NC_GLOBAL#time_coverage_end");
-    assert(start_date_str && end_date_str);
-    printf("The start time is: %s\nThe  end time is: %s\n\n", start_date_str, end_date_str);
-    */
-
-    GDALRasterBandH band = GDALGetRasterBand(dataset, 1);
-    int n_block_x_size = 0;
-    int n_block_y_size = 0;
-    GDALGetBlockSize(band, &n_block_x_size, &n_block_y_size);
-    printf("Block = %dx%d Type = %s, ColorInterp = %s\n\n", n_block_x_size, n_block_y_size,
-            GDALGetDataTypeName(GDALGetRasterDataType(band)),
-            GDALGetColorInterpretationName(GDALGetRasterColorInterpretation(band)));
-
-    int b_got_min = 0;
-    int b_got_max = 0;
-    double adf_min_max[2];
-    adf_min_max[0] = GDALGetRasterMinimum(band, &b_got_min);
-    adf_min_max[1] = GDALGetRasterMaximum(band, &b_got_max);
-    if( !(b_got_min && b_got_max)) {
-        GDALComputeRasterMinMax(band, true, adf_min_max);
-    }
-    printf("Min=%.3f, Max=%.3f\n\n", adf_min_max[0], adf_min_max[1]);
-
-    if(GDALGetOverviewCount(band) > 0) {
-        printf("Band has %d overviews.\n\n", GDALGetOverviewCount(band));
-    }
-
-    OGRSpatialReferenceH src_srs = GDALGetSpatialRef(dataset);
-    assert(src_srs);
-
-    OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(0);
-    OSRImportFromEPSG(dst_srs, 4326);
-    assert(dst_srs);
-
-    OGRCoordinateTransformationH trans = OCTNewCoordinateTransformation(src_srs, dst_srs);
-    assert(trans);
-
-    int ysize = GDALGetRasterBandYSize(band);
-    int xsize = GDALGetRasterBandXSize(band);
-
-    GArray *buffer = g_array_sized_new(false, true, sizeof(float), xsize * ysize);
-    buffer = g_array_set_size(buffer, xsize * ysize);
-
-    CPLErr err = GDALRasterIO(band, GF_Read, 
-            0, 0, xsize, ysize, 
-            buffer->data, xsize, ysize, 
-            GDT_Float32, 0, 0);
-
-    if(err != CE_None){
-        printf("Error reading raster data, aborting.");
-        return EXIT_FAILURE;
-    }
-
-    GArray *points = g_array_new(false, true, sizeof(struct FirePoint));
-    assert(points);
-
-    for(int j = 0; j < ysize; ++j) {
-        for(int i = 0; i < xsize; ++i){
-
-            float power_mw = g_array_index(buffer, float, j * xsize + i);
-            if (power_mw > 0.0) {
-
-                double xp = geo_trans[0] + i * geo_trans[1] + j * geo_trans[2];
-                double yp = geo_trans[3] + i * geo_trans[4] + j * geo_trans[5];
-                double zp = 0.0;
-
-                OCTTransform(trans, 1, &xp, &yp, &zp);
-
-                //printf("(x,y) = (%4d, %4d), (x,y)=(%11.6f, %11.6f), power: %5.0f\n", 
-                //        i, j, xp, yp, power_mw);
-
-                struct FirePoint pnt = (struct FirePoint){
-                    .x = i, .y = j, .lat = xp, .lon = yp, .power = power_mw
-                };
-                points = g_array_append_val(points, pnt);
-            }
-        }
-    }
-
-    g_array_unref(buffer);
-    OCTDestroyCoordinateTransformation(trans);
-    GDALClose(dataset);
+    GArray *points = fire_sat_image_extract_fire_points(&fdata);
+    fire_sat_image_close(&fdata);
     
-    //printf("Found %d points with fire.\n", points->len);
-
     GArray *clusters = g_array_sized_new(false, true, sizeof(struct Cluster), 100);
     GArray *cluster_points = g_array_sized_new(false, true, sizeof(struct FirePoint), 20);
 
