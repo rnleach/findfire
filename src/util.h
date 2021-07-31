@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 /*-------------------------------------------------------------------------------------------------
  *                                        Error handling.
  *-----------------------------------------------------------------------------------------------*/
@@ -28,9 +27,10 @@
  *                                     File name handling.
  *-----------------------------------------------------------------------------------------------*/
 inline const char *
-file_ext(const char *fname) 
+file_ext(const char *fname)
 {
     const char *dot = strrchr(fname, '.');
-    if(!dot || dot == fname) return "";
+    if (!dot || dot == fname)
+        return "";
     return dot + 1;
 }

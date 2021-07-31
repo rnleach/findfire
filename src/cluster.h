@@ -4,7 +4,7 @@
 
 /**
  * \file cluster.h
- * \brief Types and functions for working with clusters. 
+ * \brief Types and functions for working with clusters.
  *
  * A cluster describes the aggregate properties of a connected group (or cluster) of FirePoint
  * objects.
@@ -27,14 +27,14 @@ struct Cluster {
 /** Compare \a Cluster objects for sorting in descending order of power. */
 int cluster_desc_cmp(const void *ap, const void *bp);
 
-/** 
+/**
  * \brief Group struct FirePoint objects into clusters.
  *
  * FirePoint objects that are directly adjacent to each other are grouped into clusters where
- * each point is in direct contact with at least one other point in the cluster. 
+ * each point is in direct contact with at least one other point in the cluster.
  *
  * \param points is an array of struct FirePoint objects.
  *
  * \returns an array of struct Cluster objects.
  * */
-GArray * clusters_from_fire_points(GArray const *points);
+GArray *clusters_from_fire_points(GArray const *points);

@@ -25,4 +25,3 @@ great_circle_distance_inner(double lat1, double lon1, double lat2, double lon2)
 
     return arc * 6371009.0;
 }
-

@@ -15,12 +15,12 @@
 #include "cpl_string.h"
 #include "gdal.h"
 
-#include "firepoint.h"
 #include "cluster.h"
+#include "firepoint.h"
 #include "firesatimage.h"
 
 char const *fname = "/home/ryan/wxdata/GOES/"
-    "OR_ABI-L2-FDCC-M6_G17_s20212050401167_e20212050403540_c20212050404121.nc";
+                    "OR_ABI-L2-FDCC-M6_G17_s20212050401167_e20212050403540_c20212050404121.nc";
 
 char const *data_dir = "/home/ryan/wxdata/GOES/";
 
@@ -42,7 +42,7 @@ process_entry(const char *fpath, const struct stat *sb, int typeflag, struct FTW
         return 0;
     }
 
-    if(strcmp(file_ext(fpath), "nc") != 0) {
+    if (strcmp(file_ext(fpath), "nc") != 0) {
         return 0;
     }
 
@@ -63,17 +63,17 @@ main()
 
     GArray *points = fire_sat_image_extract_fire_points(&fdata);
     fire_sat_image_close(&fdata);
-    
+
     GArray *clusters = clusters_from_fire_points(points);
 
     g_array_sort(clusters, cluster_desc_cmp);
 
-    for(unsigned int i = 0; i < clusters->len; ++i) {
+    for (unsigned int i = 0; i < clusters->len; ++i) {
 
         struct Cluster *curr_clust = &g_array_index(clusters, struct Cluster, i);
 
-        printf("Cluster: %2d, Lat: %10.6lf, Lon: %11.6lf, Count: %2d, Power: %5.0lfMW\n", 
-                i, curr_clust->lat, curr_clust->lon, curr_clust->count, curr_clust->power);
+        printf("Cluster: %2d, Lat: %10.6lf, Lon: %11.6lf, Count: %2d, Power: %5.0lfMW\n", i,
+               curr_clust->lat, curr_clust->lon, curr_clust->count, curr_clust->power);
     }
 
     g_array_unref(clusters);

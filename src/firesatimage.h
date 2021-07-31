@@ -2,8 +2,8 @@
 
 #include <stdbool.h>
 
-#include "glib.h"
 #include "gdal.h"
+#include "glib.h"
 
 /**
  * \brief Handle to a GDAL dataset for the Fire Detection Characteristics and some metadata.
@@ -23,7 +23,7 @@ struct FireSatImage {
     int y_size;
 };
 
-/** 
+/**
  * \brief Open a file containing GOES-R/S Fire Detection Characteristics.
  *
  * \param fname the path to the file name to open.
@@ -33,7 +33,7 @@ struct FireSatImage {
  */
 bool fire_sat_image_open(char const *fname, struct FireSatImage *tgt);
 
-/** 
+/**
  * \brief Close the file and clear the pointers associated with  with this dataset.
  *
  * \param dataset is the structure to close/finalize.

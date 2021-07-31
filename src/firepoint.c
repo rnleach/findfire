@@ -3,7 +3,7 @@
 
 #include <math.h>
 
-double 
+double
 firepoint_great_circle_distance(struct FirePoint const a, struct FirePoint const b)
 {
     double a_lat = a.lat * DEG2RAD;

@@ -2,8 +2,8 @@
 
 #include "firesatimage.h"
 
-#include "util.h"
 #include "firepoint.h"
+#include "util.h"
 
 #include "ogr_srs_api.h"
 
@@ -20,8 +20,8 @@ fire_sat_image_open(char const *fname, struct FireSatImage *tgt)
 
     char descriptor[1024] = {0};
     num_printed = snprintf(descriptor, sizeof(descriptor), "NETCDF:\"%s\":Power", fname);
-    Stopif(num_printed >= sizeof(descriptor), return false, 
-            "Descriptor buffer too small for %s", fname);
+    Stopif(num_printed >= sizeof(descriptor), return false, "Descriptor buffer too small for %s",
+           fname);
 
     tgt->dataset = GDALOpen(descriptor, GA_ReadOnly);
     Stopif(!tgt->dataset, return false, "Error opening %s", fname);
@@ -69,34 +69,33 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
     buffer = g_array_sized_new(false, true, sizeof(float), fdata->x_size * fdata->y_size);
     buffer = g_array_set_size(buffer, fdata->x_size * fdata->y_size);
 
-    CPLErr err = GDALRasterIO(fdata->band, GF_Read, 
-            0, 0, fdata->x_size, fdata->y_size, 
-            buffer->data, fdata->x_size, fdata->y_size, 
-            GDT_Float32, 0, 0);
+    CPLErr err = GDALRasterIO(fdata->band, GF_Read, 0, 0, fdata->x_size, fdata->y_size,
+                              buffer->data, fdata->x_size, fdata->y_size, GDT_Float32, 0, 0);
 
     Stopif(err != CE_None, goto ERR_RETURN, "Error reading raster data from %s", fdata->fname);
 
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
-    for(int j = 0; j < fdata->y_size; ++j) {
-        for(int i = 0; i < fdata->x_size; ++i){
+    for (int j = 0; j < fdata->y_size; ++j) {
+        for (int i = 0; i < fdata->x_size; ++i) {
 
             float power_mw = g_array_index(buffer, float, j * fdata->x_size + i);
             if (power_mw > 0.0) {
 
-                double xp = fdata->geo_transform[0] + i * fdata->geo_transform[1] + j * fdata->geo_transform[2];
-                double yp = fdata->geo_transform[3] + i * fdata->geo_transform[4] + j * fdata->geo_transform[5];
+                double xp = fdata->geo_transform[0] + i * fdata->geo_transform[1] +
+                            j * fdata->geo_transform[2];
+                double yp = fdata->geo_transform[3] + i * fdata->geo_transform[4] +
+                            j * fdata->geo_transform[5];
                 double zp = 0.0;
 
                 OCTTransform(trans, 1, &xp, &yp, &zp);
 
-                //printf("(x,y) = (%4d, %4d), (x,y)=(%11.6f, %11.6f), power: %5.0f\n", 
+                // printf("(x,y) = (%4d, %4d), (x,y)=(%11.6f, %11.6f), power: %5.0f\n",
                 //        i, j, xp, yp, power_mw);
 
-                struct FirePoint pnt = (struct FirePoint){
-                    .x = i, .y = j, .lat = xp, .lon = yp, .power = power_mw
-                };
+                struct FirePoint pnt =
+                    (struct FirePoint){.x = i, .y = j, .lat = xp, .lon = yp, .power = power_mw};
                 points = g_array_append_val(points, pnt);
             }
         }
@@ -109,8 +108,11 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
 
 ERR_RETURN:
 
-    if(buffer) g_array_unref(buffer);
-    if(trans) OCTDestroyCoordinateTransformation(trans);
-    if(points) g_array_unref(points);
+    if (buffer)
+        g_array_unref(buffer);
+    if (trans)
+        OCTDestroyCoordinateTransformation(trans);
+    if (points)
+        g_array_unref(points);
     return 0;
 }

@@ -7,7 +7,7 @@
  * that corresponds to a fire detection.
  */
 
-/** 
+/**
  * \brief Represents all the data associated with a single pixel in which the satellite has detected
  * a fire.
  */
@@ -32,4 +32,3 @@ struct FirePoint {
  * \return The distance between the points in meters.
  */
 double firepoint_great_circle_distance(struct FirePoint const a, struct FirePoint const b);
-
