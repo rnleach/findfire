@@ -65,6 +65,7 @@ main()
     fire_sat_image_close(&fdata);
 
     GArray *clusters = clusters_from_fire_points(points);
+    g_array_unref(points);
 
     g_array_sort(clusters, cluster_desc_cmp);
 
