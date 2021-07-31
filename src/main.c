@@ -1,10 +1,12 @@
 #include "util.h"
 
-#include "assert.h"
-#include "math.h"
-#include "stdbool.h"
-#include "stdio.h"
-#include "stdlib.h"
+#include <assert.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <ftw.h>
 
 #include <glib.h>
 
@@ -17,9 +19,10 @@
 #include "cluster.h"
 #include "firesatimage.h"
 
-char const *fname = "/Volumes/MET2/wxdata/GOES/"
+char const *fname = "/home/ryan/wxdata/GOES/"
     "OR_ABI-L2-FDCC-M6_G17_s20212050401167_e20212050403540_c20212050404121.nc";
 
+char const *data_dir = "/home/ryan/wxdata/GOES/";
 
 static void
 program_initialization()
@@ -32,10 +35,27 @@ program_finalization()
 {
 }
 
+static int
+process_entry(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
+{
+    if (typeflag != FTW_F) {
+        return 0;
+    }
+
+    if(strcmp(file_ext(fpath), "nc") != 0) {
+        return 0;
+    }
+
+    return 0;
+}
+
 int
 main()
 {
     program_initialization();
+
+    int err_code = nftw(data_dir, process_entry, 5, 0);
+    Stopif(err_code, return EXIT_FAILURE, "Error walking directories.");
 
     struct FireSatImage fdata = {0};
     bool ok = fire_sat_image_open(fname, &fdata);
@@ -44,59 +64,7 @@ main()
     GArray *points = fire_sat_image_extract_fire_points(&fdata);
     fire_sat_image_close(&fdata);
     
-    GArray *clusters = g_array_sized_new(false, true, sizeof(struct Cluster), 100);
-    GArray *cluster_points = g_array_sized_new(false, true, sizeof(struct FirePoint), 20);
-
-    for(unsigned int i = 0; i < points->len; i++){
-
-        struct FirePoint *fp = &g_array_index(points, struct FirePoint, i);
-
-        if(fp->x == 0 && fp->y == 0) continue;
-
-        cluster_points = g_array_append_val(cluster_points, *fp);
-        fp->x = 0;
-        fp->y = 0;
-
-        for(unsigned int j = i + 1; j < points->len; j++) {
-            struct FirePoint *candidate = &g_array_index(points, struct FirePoint, j);
-
-            if(candidate->x == 0 && candidate->y == 0) continue;
-            for(unsigned int k = 0; k < cluster_points->len; ++k){
-                struct FirePoint *a_point_in_cluster = &g_array_index(cluster_points, struct FirePoint, k);
-
-                int dx = abs(a_point_in_cluster->x - candidate->x);
-                int dy = abs(a_point_in_cluster->y - candidate->y);
-
-                if(dx <= 1 && dy <= 1){
-                    cluster_points = g_array_append_val(cluster_points, *candidate);
-                    candidate->x = 0;
-                    candidate->y = 0;
-                }
-            }
-        }
-
-        struct Cluster curr_clust = {0};
-        curr_clust.lat = g_array_index(cluster_points, struct FirePoint, 0).lat;
-        curr_clust.lon = g_array_index(cluster_points, struct FirePoint, 0).lon;
-        curr_clust.power = g_array_index(cluster_points, struct FirePoint, 0).power;
-        curr_clust.count = 1;
-
-        for(unsigned int j = 1; j < cluster_points->len; ++j) {
-
-            curr_clust.lat += g_array_index(cluster_points, struct FirePoint, j).lat;
-            curr_clust.lon += g_array_index(cluster_points, struct FirePoint, j).lon;
-            curr_clust.power += g_array_index(cluster_points, struct FirePoint, j).power;
-            curr_clust.count += 1;
-        }
-
-        curr_clust.lat /= curr_clust.count;
-        curr_clust.lon /= curr_clust.count;
-
-        clusters = g_array_append_val(clusters, curr_clust);
-
-        cluster_points = g_array_set_size(cluster_points, 0);
-    }
-    g_array_unref(cluster_points);
+    GArray *clusters = clusters_from_fire_points(points);
 
     g_array_sort(clusters, cluster_desc_cmp);
 
