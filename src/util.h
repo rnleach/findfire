@@ -112,5 +112,5 @@ parse_time_string(char const *tstr)
     parsed_time.tm_min = min;
     parsed_time.tm_sec = sec;
 
-    return timegm(&parsed_time);
+    return mktime(&parsed_time);
 }

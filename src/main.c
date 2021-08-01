@@ -21,16 +21,16 @@
 #include "firepoint.h"
 #include "firesatimage.h"
 
-char const *fname = "/home/ryan/wxdata/GOES/"
-                    "OR_ABI-L2-FDCC-M6_G17_s20212050401167_e20212050403540_c20212050404121.nc";
-
+char const *database_file = "/home/ryan/wxdata/GOES/";
 char const *data_dir = "/home/ryan/wxdata/GOES/";
 
 static void
 program_initialization()
 {
+    // Force to use UTC timezone.
     setenv("TZ", "UTC", 1);
     tzset();
+
     GDALAllRegister();
 }
 
