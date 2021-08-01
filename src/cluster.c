@@ -15,9 +15,10 @@ cluster_list_clear(struct ClusterList *tgt)
         g_array_unref(tgt->clusters);
     }
 
-    if (tgt->err_msg) {
-        free(tgt->err_msg);
-    }
+    // These are static strings!
+    //if (tgt->err_msg) {
+    //    free(tgt->err_msg);
+    //}
 
     memset(tgt, 0, sizeof(struct ClusterList));
 }
@@ -97,7 +98,7 @@ cluster_list_from_file(char const *full_path)
     struct FireSatImage fdata = {0};
     bool ok = fire_sat_image_open(full_path, &fdata);
     Stopif(!ok, err_msg = "Error opening NetCDF file";
-           goto ERR_RETURN, "Error opening %s", full_path);
+           goto ERR_RETURN, "Error opening NetCDF file %s", full_path);
 
     points = fire_sat_image_extract_fire_points(&fdata);
     fire_sat_image_close(&fdata);
@@ -118,7 +119,11 @@ ERR_RETURN:
         points = 0;
     }
 
-    g_array_unref(clusters);
+    if (clusters) {
+        g_array_unref(clusters);
+        clusters = 0;
+    }
+
     clist.error = true;
     clist.err_msg = err_msg;
     return clist;
