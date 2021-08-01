@@ -51,6 +51,22 @@ find_sector_start(char const *fname)
     return fdcm;
 }
 
+static char const *
+find_start_time(char const *fname)
+{
+    char const *start = strstr(fname, "_s");
+    if(start) return start + 2;
+    return start;
+}
+
+static char const *
+find_end_time(char const *fname)
+{
+    char const *end = strstr(fname, "_e");
+    if(end) return end + 2;
+    return end;
+}
+
 struct ClusterList
 cluster_list_from_file(char const *full_path)
 {
@@ -59,19 +75,24 @@ cluster_list_from_file(char const *full_path)
     GArray *points = 0;
     GArray *clusters = 0;
 
+    char const *fname = get_file_name(full_path);
+
     // Get the satellite name
-    char const *sat_start = find_satellite_start(get_file_name(full_path));
+    char const *sat_start = find_satellite_start(fname);
     err_msg = "Error parsing satellite name";
     Stopif(!sat_start, goto ERR_RETURN, "Error parsing satellite name");
     memcpy(clist.satellite, sat_start, 3);
 
     // Get the sector name
-    char const *sect_start = find_sector_start(get_file_name(full_path));
+    char const *sect_start = find_sector_start(fname);
     err_msg = "Error parsing sector name";
     Stopif(!sect_start, goto ERR_RETURN, "Error parsing sector name");
     memcpy(clist.sector, sect_start, 4);
 
     // Get the start and end times
+    clist.start = parse_time_string(find_start_time(fname));
+    clist.end = parse_time_string(find_end_time(fname));
+
     // Get the clusters member.
     struct FireSatImage fdata = {0};
     bool ok = fire_sat_image_open(full_path, &fdata);

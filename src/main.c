@@ -29,7 +29,9 @@ char const *data_dir = "/home/ryan/wxdata/GOES/";
 static void
 program_initialization()
 {
-    GDALAllRegister();
+   setenv("TZ", "UTC", 1);
+   tzset(); 
+   GDALAllRegister();
 }
 
 static void
@@ -73,6 +75,21 @@ main()
     struct ClusterList clusters = cluster_list_from_file(fname);
     g_array_sort(clusters.clusters, cluster_desc_cmp);
 
+    char start_str[128] = {0};
+    ctime_r(&clusters.start, start_str);
+    char end_str[128] = {0};
+    ctime_r(&clusters.end, end_str);
+
+    printf("Cluster analysis metadata:\n"
+           "     satellite: %s\n"
+           "        sector: %s\n"
+           "         start: %s"
+           "           end: %s",
+           clusters.satellite,
+           clusters.sector,
+           start_str,
+           end_str);
+
     for (unsigned int i = 0; i < clusters.clusters->len; ++i) {
 
         struct Cluster *curr_clust = &g_array_index(clusters.clusters, struct Cluster, i);
@@ -81,7 +98,6 @@ main()
                curr_clust->lat, curr_clust->lon, curr_clust->count, curr_clust->power);
     }
 
-    //g_array_unref(clusters);
     cluster_list_clear(&clusters);
 
     program_finalization();
