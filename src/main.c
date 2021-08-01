@@ -5,8 +5,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
-#include <ftw.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #include <glib.h>
 
@@ -35,49 +37,52 @@ program_finalization()
 {
 }
 
-static int
-process_entry(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-{
-    if (typeflag != FTW_F) {
-        return 0;
-    }
-
-    if (strcmp(file_ext(fpath), "nc") != 0) {
-        return 0;
-    }
-
-    return 0;
-}
-
 int
 main()
 {
     program_initialization();
 
-    int err_code = nftw(data_dir, process_entry, 5, 0);
-    Stopif(err_code, return EXIT_FAILURE, "Error walking directories.");
+    DIR *dir = opendir(data_dir);
+    Stopif(!dir, return EXIT_FAILURE, "Error opening data directory: %s", data_dir);
 
-    struct FireSatImage fdata = {0};
-    bool ok = fire_sat_image_open(fname, &fdata);
-    Stopif(!ok, return EXIT_FAILURE, "Error opening %s", fname);
+    struct dirent *entry = 0;
+    while((entry = readdir(dir))) {
+        if (entry->d_type == DT_REG) {
 
-    GArray *points = fire_sat_image_extract_fire_points(&fdata);
-    fire_sat_image_close(&fdata);
+            if(strcmp("nc", file_ext(entry->d_name)) != 0) {
+                continue;
+            }
 
-    GArray *clusters = clusters_from_fire_points(points);
-    g_array_unref(points);
+            char full_path[1024] = {0};
 
-    g_array_sort(clusters, cluster_desc_cmp);
+            strncat(full_path, data_dir, sizeof(full_path) - 1);
+            int remaining = sizeof(full_path) - strnlen(full_path, sizeof(full_path));
+            Stopif(remaining <= 0, return EXIT_FAILURE, "path buffer too small");
 
-    for (unsigned int i = 0; i < clusters->len; ++i) {
+            strncat(full_path, "/", remaining - 1);
+            remaining = sizeof(full_path) - strnlen(full_path, sizeof(full_path));
+            Stopif(remaining <= 0, return EXIT_FAILURE, "path buffer too small");
 
-        struct Cluster *curr_clust = &g_array_index(clusters, struct Cluster, i);
+            strncat(full_path, entry->d_name, remaining - 1);
+            remaining = sizeof(full_path) - strnlen(full_path, sizeof(full_path));
+            Stopif(remaining <= 0, return EXIT_FAILURE, "path buffer too small");
+
+        }
+    }
+
+    struct ClusterList clusters = cluster_list_from_file(fname);
+    g_array_sort(clusters.clusters, cluster_desc_cmp);
+
+    for (unsigned int i = 0; i < clusters.clusters->len; ++i) {
+
+        struct Cluster *curr_clust = &g_array_index(clusters.clusters, struct Cluster, i);
 
         printf("Cluster: %2d, Lat: %10.6lf, Lon: %11.6lf, Count: %2d, Power: %5.0lfMW\n", i,
                curr_clust->lat, curr_clust->lon, curr_clust->count, curr_clust->power);
     }
 
-    g_array_unref(clusters);
+    //g_array_unref(clusters);
+    cluster_list_clear(&clusters);
 
     program_finalization();
 }

@@ -1,20 +1,106 @@
 #include "cluster.h"
 
+#include <assert.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "firepoint.h"
+#include "firesatimage.h"
+#include "util.h"
 
-int
-cluster_desc_cmp(const void *ap, const void *bp)
+void
+cluster_list_clear(struct ClusterList *tgt)
 {
-    struct Cluster const *a = ap;
-    struct Cluster const *b = bp;
+    if (tgt->clusters) {
+        g_array_unref(tgt->clusters);
+    }
 
-    if (a->power > b->power)
-        return -1;
-    if (a->power < b->power)
-        return 1;
-    return 0;
+    if (tgt->err_msg) {
+        free(tgt->err_msg);
+    }
+
+    memset(tgt, 0, sizeof(struct ClusterList));
+}
+
+static char const *
+find_satellite_start(char const *fname)
+{
+    char const *g17 = strstr(fname, "G17");
+    if (g17) {
+        return g17;
+    }
+
+    char const *g16 = strstr(fname, "G16");
+    return g16;
+}
+
+static char const *
+find_sector_start(char const *fname)
+{
+    char const *fdcc = strstr(fname, "FDCC");
+    if (fdcc) {
+        return fdcc;
+    }
+
+    char const *fdcf = strstr(fname, "FDCF");
+    if (fdcf) {
+        return fdcf;
+    }
+
+    char const *fdcm = strstr(fname, "FDCM");
+    return fdcm;
+}
+
+struct ClusterList
+cluster_list_from_file(char const *full_path)
+{
+    struct ClusterList clist = {0};
+    char *err_msg = 0;
+    GArray *points = 0;
+    GArray *clusters = 0;
+
+    // Get the satellite name
+    char const *sat_start = find_satellite_start(get_file_name(full_path));
+    err_msg = "Error parsing satellite name";
+    Stopif(!sat_start, goto ERR_RETURN, "Error parsing satellite name");
+    memcpy(clist.satellite, sat_start, 3);
+
+    // Get the sector name
+    char const *sect_start = find_sector_start(get_file_name(full_path));
+    err_msg = "Error parsing sector name";
+    Stopif(!sect_start, goto ERR_RETURN, "Error parsing sector name");
+    memcpy(clist.sector, sect_start, 4);
+
+    // Get the start and end times
+    // Get the clusters member.
+    struct FireSatImage fdata = {0};
+    bool ok = fire_sat_image_open(full_path, &fdata);
+    Stopif(!ok, err_msg = "Error opening NetCDF file";
+           goto ERR_RETURN, "Error opening %s", full_path);
+
+    points = fire_sat_image_extract_fire_points(&fdata);
+    fire_sat_image_close(&fdata);
+
+    clusters = clusters_from_fire_points(points);
+    Stopif(!clusters, err_msg = "Error creating clusters.";
+           goto ERR_RETURN, "Error creating clusters from fire points.");
+    g_array_unref(points);
+
+    clist.clusters = clusters;
+
+    return clist;
+
+ERR_RETURN:
+
+    if (points) {
+        g_array_unref(points);
+        points = 0;
+    }
+
+    g_array_unref(clusters);
+    clist.error = true;
+    clist.err_msg = err_msg;
+    return clist;
 }
 
 GArray *
@@ -78,4 +164,17 @@ clusters_from_fire_points(GArray const *points)
     g_array_unref(cluster_points);
 
     return clusters;
+}
+
+int
+cluster_desc_cmp(const void *ap, const void *bp)
+{
+    struct Cluster const *a = ap;
+    struct Cluster const *b = bp;
+
+    if (a->power > b->power)
+        return -1;
+    if (a->power < b->power)
+        return 1;
+    return 0;
 }

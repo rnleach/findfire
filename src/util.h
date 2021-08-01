@@ -26,7 +26,7 @@
 /*-------------------------------------------------------------------------------------------------
  *                                     File name handling.
  *-----------------------------------------------------------------------------------------------*/
-inline const char *
+static inline char const *
 file_ext(const char *fname)
 {
     const char *dot = strrchr(fname, '.');
@@ -34,3 +34,16 @@ file_ext(const char *fname)
         return "";
     return dot + 1;
 }
+
+static inline char const *
+get_file_name(char const *full_path)
+{
+    const char *slash = strrchr(full_path,'/');
+    if (!slash) {
+        return full_path;
+    }
+
+    return slash + 1;
+}
+
+
