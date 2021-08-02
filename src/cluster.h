@@ -75,7 +75,7 @@ GArray *clusters_from_fire_points(GArray const *points);
  * \brief Analyze a file and return a ClusterList including the file metadata.
  *
  * The metadata is gleaned from the file name at this time.
- *  
+ *
  *  \param full_path is the path to the file to analyze.
  */
 struct ClusterList cluster_list_from_file(char const *full_path);
@@ -83,7 +83,7 @@ struct ClusterList cluster_list_from_file(char const *full_path);
 /**
  * \brief Clean up a struct ClusterList object.
  *
- * Use this function to clean up a ClusterList object. After it's cleaned up, it will be as if 
+ * Use this function to clean up a ClusterList object. After it's cleaned up, it will be as if
  * memset(0, sizeof(struct ClusterList)) had been called on the struct. This is meant to be used
  * for all ClusterList objects regardless of error state.
  */

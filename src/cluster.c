@@ -16,7 +16,7 @@ cluster_list_clear(struct ClusterList *tgt)
     }
 
     // These are static strings!
-    //if (tgt->err_msg) {
+    // if (tgt->err_msg) {
     //    free(tgt->err_msg);
     //}
 
@@ -56,7 +56,8 @@ static char const *
 find_start_time(char const *fname)
 {
     char const *start = strstr(fname, "_s");
-    if(start) return start + 2;
+    if (start)
+        return start + 2;
     return start;
 }
 
@@ -64,7 +65,8 @@ static char const *
 find_end_time(char const *fname)
 {
     char const *end = strstr(fname, "_e");
-    if(end) return end + 2;
+    if (end)
+        return end + 2;
     return end;
 }
 
