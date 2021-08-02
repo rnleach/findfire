@@ -18,10 +18,11 @@
 #include "gdal.h"
 
 #include "cluster.h"
+#include "database.h"
 #include "firepoint.h"
 #include "firesatimage.h"
 
-char const *database_file = "/home/ryan/wxdata/GOES/";
+char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
 char const *data_dir = "/home/ryan/wxdata/GOES/";
 
 static void
@@ -43,9 +44,18 @@ int
 main()
 {
     program_initialization();
+    int rc = EXIT_FAILURE; // We'll set it to success once we've achieved succes.
+
+    sqlite3 *cluster_db = 0;
+    sqlite3_stmt *add_stmt = 0;
 
     DIR *dir = opendir(data_dir);
-    Stopif(!dir, return EXIT_FAILURE, "Error opening data directory: %s", data_dir);
+    Stopif(!dir, goto CLEANUP_AND_EXIT, "Error opening data directory: %s", data_dir);
+
+    cluster_db = cluster_db_connect(database_file);
+    Stopif(!cluster_db, goto CLEANUP_AND_EXIT, "Error opening database.");
+    add_stmt = cluster_db_prepare_to_add(cluster_db);
+    Stopif(!add_stmt, goto CLEANUP_AND_EXIT, "Error preparing add statement.");
 
     struct Cluster biggest_fire = {0};
     char biggest_sat[4] = {0};
@@ -74,15 +84,15 @@ main()
 
             strncat(full_path, data_dir, sizeof(full_path) - 1);
             int remaining = sizeof(full_path) - strnlen(full_path, sizeof(full_path));
-            Stopif(remaining <= 0, return EXIT_FAILURE, "path buffer too small");
+            Stopif(remaining <= 0, goto CLEANUP_AND_EXIT, "path buffer too small");
 
             strncat(full_path, "/", remaining - 1);
             remaining = sizeof(full_path) - strnlen(full_path, sizeof(full_path));
-            Stopif(remaining <= 0, return EXIT_FAILURE, "path buffer too small");
+            Stopif(remaining <= 0, goto CLEANUP_AND_EXIT, "path buffer too small");
 
             strncat(full_path, entry->d_name, remaining - 1);
             remaining = sizeof(full_path) - strnlen(full_path, sizeof(full_path));
-            Stopif(remaining <= 0, return EXIT_FAILURE, "path buffer too small");
+            Stopif(remaining <= 0, goto CLEANUP_AND_EXIT, "path buffer too small");
 
             printf("Processing: %s\n", entry->d_name);
             struct ClusterList clusters = cluster_list_from_file(full_path);
@@ -91,6 +101,11 @@ main()
 
                     struct Cluster *curr_clust =
                         &g_array_index(clusters.clusters, struct Cluster, i);
+
+                    int failure = cluster_db_add_row(
+                        add_stmt, clusters.satellite, clusters.sector, clusters.start,
+                        curr_clust->lat, curr_clust->lon, curr_clust->power, curr_clust->count);
+                    Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
 
                     if (curr_clust->power > biggest_fire.power) {
                         biggest_fire = *curr_clust;
@@ -123,5 +138,13 @@ main()
     printf("Lat: %10.6lf, Lon: %11.6lf, Count: %2d, Power: %5.0lfMW\n", biggest_fire.lat,
            biggest_fire.lon, biggest_fire.count, biggest_fire.power);
 
+    rc = EXIT_SUCCESS;
+
+CLEANUP_AND_EXIT:
+    cluster_db_finalize_add(cluster_db, &add_stmt);
+    cluster_db_close(&cluster_db);
+    closedir(dir);
     program_finalization();
+
+    return rc;
 }
