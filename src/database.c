@@ -19,6 +19,7 @@ cluster_db_connect(char const *path)
                   "lat        REAL    NOT NULL,        \n"
                   "lon        REAL    NOT NULL,        \n"
                   "power      REAL    NOT NULL,        \n"
+                  "radius     REAL    NOT NULL,        \n"
                   "cell_count INTEGER NOT NULL)        \n";
     char *err_message = 0;
 
@@ -58,8 +59,8 @@ cluster_db_prepare_to_add(sqlite3 *db)
     }
 
     query = "INSERT INTO clusters (                                     \n"
-            "satellite, sector, start_time, lat, lon, power, cell_count \n"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?)";
+            "satellite, sector, start_time, lat, lon, power, radius, cell_count \n"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
     sqlite3_stmt *stmt = 0;
     rc = sqlite3_prepare_v2(db, query, -1, &stmt, 0);
@@ -88,7 +89,7 @@ cluster_db_finalize_add(sqlite3 *db, sqlite3_stmt **stmt)
 
 int
 cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector, time_t scan_start,
-                   float lat, float lon, float power, int num_points)
+                   float lat, float lon, float power, float radius, int num_points)
 {
     int rc = sqlite3_bind_text(stmt, 1, satellite, -1, 0);
     Stopif(rc != SQLITE_OK, return 1, "Error binding satellite: %s", sqlite3_errstr(rc));
@@ -108,7 +109,10 @@ cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector
     rc = sqlite3_bind_double(stmt, 6, power);
     Stopif(rc != SQLITE_OK, return 1, "Error binding power: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_int(stmt, 7, num_points);
+    rc = sqlite3_bind_double(stmt, 7, radius);
+    Stopif(rc != SQLITE_OK, return 1, "Error binding radius: %s", sqlite3_errstr(rc));
+
+    rc = sqlite3_bind_int(stmt, 8, num_points);
     Stopif(rc != SQLITE_OK, return 1, "Error binding cell count: %s", sqlite3_errstr(rc));
 
     rc = sqlite3_step(stmt);

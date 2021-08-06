@@ -40,4 +40,5 @@ int cluster_db_finalize_add(sqlite3 *db, sqlite3_stmt **stmt);
  * \returns the 0 on success and non-zero on error.
  */
 int cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector,
-                       time_t scan_start, float lat, float lon, float power, int num_points);
+                       time_t scan_start, float lat, float lon, float power, float radius,
+                       int num_points);

@@ -102,9 +102,10 @@ main()
                     struct Cluster *curr_clust =
                         &g_array_index(clusters.clusters, struct Cluster, i);
 
-                    int failure = cluster_db_add_row(
-                        add_stmt, clusters.satellite, clusters.sector, clusters.start,
-                        curr_clust->lat, curr_clust->lon, curr_clust->power, curr_clust->count);
+                    int failure = cluster_db_add_row(add_stmt, clusters.satellite, clusters.sector,
+                                                     clusters.start, curr_clust->lat,
+                                                     curr_clust->lon, curr_clust->power,
+                                                     curr_clust->radius, curr_clust->count);
                     Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
 
                     if (curr_clust->power > biggest_fire.power) {
@@ -135,8 +136,9 @@ main()
            "           end: %s",
            biggest_sat, biggest_sector, start_str, end_str);
 
-    printf("Lat: %10.6lf, Lon: %11.6lf, Count: %2d, Power: %5.0lfMW\n", biggest_fire.lat,
-           biggest_fire.lon, biggest_fire.count, biggest_fire.power);
+    printf("Lat: %10.6lf, Lon: %11.6lf, Count: %2d, Radius: %06.3lfkm, Power: %5.0lfMW\n",
+           biggest_fire.lat, biggest_fire.lon, biggest_fire.count, biggest_fire.radius,
+           biggest_fire.power);
 
     rc = EXIT_SUCCESS;
 

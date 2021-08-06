@@ -6,6 +6,7 @@
 
 #include "firepoint.h"
 #include "firesatimage.h"
+#include "geo.h"
 #include "util.h"
 
 void
@@ -184,6 +185,18 @@ clusters_from_fire_points(GArray const *points)
 
         curr_clust.lat /= curr_clust.count;
         curr_clust.lon /= curr_clust.count;
+
+        for (unsigned int j = 1; j < cluster_points->len; ++j) {
+            double pnt_lat = g_array_index(cluster_points, struct FirePoint, j).lat;
+            double pnt_lon = g_array_index(cluster_points, struct FirePoint, j).lon;
+
+            double gs_distance =
+                great_circle_distance(pnt_lat, pnt_lon, curr_clust.lat, curr_clust.lon);
+
+            if (gs_distance > curr_clust.radius) {
+                curr_clust.radius = gs_distance;
+            }
+        }
 
         clusters = g_array_append_val(clusters, curr_clust);
 

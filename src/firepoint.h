@@ -29,6 +29,6 @@ struct FirePoint {
  *
  * Calculate the great circle distance between \a a and \a b.
  *
- * \return The distance between the points in meters.
+ * \return The distance between the points in kilometers.
  */
 double firepoint_great_circle_distance(struct FirePoint const a, struct FirePoint const b);

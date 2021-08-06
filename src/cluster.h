@@ -23,6 +23,8 @@ struct Cluster {
     double lon;
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     double power;
+    /// The distance from the cluster center to the farthest point in the cluster.
+    double radius;
     /// The number of points that are in this cluster.
     int count;
 };
