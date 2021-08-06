@@ -58,7 +58,7 @@ cluster_db_prepare_to_add(sqlite3 *db)
         return 0;
     }
 
-    query = "INSERT INTO clusters (                                     \n"
+    query = "INSERT INTO clusters (                                             \n"
             "satellite, sector, start_time, lat, lon, power, radius, cell_count \n"
             ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 

@@ -3,9 +3,13 @@ PROJDIR := $(realpath $(CURDIR)/)
 SOURCEDIR := $(PROJDIR)/src
 OBJDIR := $(PROJDIR)/obj
 BUILDDIR := $(PROJDIR)/build
+MAINSDIR := $(PROJDIR)/mains
 
 # Target executable
-TARGET = $(BUILDDIR)/findfire
+PROG1 = findfire
+PROG2 = connectfire
+TARGET1 = $(BUILDDIR)/$(PROG1)
+TARGET2 = $(BUILDDIR)/$(PROG2)
 CFLAGS = -g -fPIC -flto -Wall -Werror -O3 -std=c11 -I$(SOURCEDIR)
 LDLIBS = -flto -fPIC -lm
 
@@ -40,6 +44,7 @@ SOURCES = $(wildcard $(SOURCEDIR)/*.c)
 
 # Define object files for all sources, and dependencies for all objects
 OBJS := $(subst $(SOURCEDIR), $(OBJDIR), $(SOURCES:.c=.o))
+MAIN_OBJS := $(subst $(MAINSDIR), $(MAINSDIR), $(SOURCES:.c=.o))
 DEPS = $(OBJS:.o=.d)
 
 # Hide or not the calls depending on VERBOSE
@@ -51,16 +56,24 @@ endif
 
 .PHONY: all clean directories 
 
-all: makefile directories $(TARGET)
+all: makefile directories $(TARGET1) $(TARGET2)
 
-$(TARGET): directories makefile $(OBJS) 
+$(TARGET1): directories makefile $(OBJS) $(MAINSDIR)/$(PROG1).o
 	@echo Linking $@
-	$(HIDE)$(CC) $(OBJS) $(LDLIBS) -o $(TARGET)
+	$(HIDE)$(CC) $(MAINSDIR)/$(PROG1).o $(OBJS) $(LDLIBS) -o $(TARGET1)
+
+$(TARGET2): directories makefile $(OBJS) $(MAINSDIR)/$(PROG2).o
+	@echo Linking $@
+	$(HIDE)$(CC) $(MAINSDIR)/$(PROG2).o $(OBJS) $(LDLIBS) -o $(TARGET2)
 
 -include $(DEPS)
 
 # Generate rules
 $(OBJDIR)/%.o: $(SOURCEDIR)/%.c makefile
+	@echo Building $@
+	$(HIDE)$(CC) -c $(CFLAGS) -o $@ $< -MMD
+
+$(MAINSDIR)/%.o: $(MAINSDIR)/%.c makefile
 	@echo Building $@
 	$(HIDE)$(CC) -c $(CFLAGS) -o $@ $< -MMD
 
@@ -80,6 +93,6 @@ clean:
 #	target_dir = ~/bin/
 #endif
 #
-#install: $(TARGET) makefile
-#	strip $(TARGET) && cp $(TARGET) $(target_dir)
+#install: $(TARGET1) makefile
+#	strip $(TARGET1) && cp $(TARGET1) $(target_dir)
 
