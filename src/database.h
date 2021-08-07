@@ -42,3 +42,7 @@ int cluster_db_finalize_add(sqlite3 *db, sqlite3_stmt **stmt);
 int cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector,
                        time_t scan_start, float lat, float lon, float power, float radius,
                        int num_points);
+/**
+ * \brief Find the latest valid time in the database so you can safely skip anything older.
+ */
+time_t cluster_db_newest_scan_start(sqlite3 *db);
