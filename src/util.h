@@ -56,7 +56,6 @@ parse_time_string(char const *tstr)
 
     memcpy(buff, tstr, 4);
     int year = atoi(buff);
-    memset(buff, 0, sizeof(buff));
     bool leap_year = year % 4 == 0;
     if (leap_year && year % 100 == 0) {
         leap_year = false;
@@ -66,9 +65,9 @@ parse_time_string(char const *tstr)
     }
     year -= 1900;
 
+    memset(buff, 0, sizeof(buff));
     memcpy(buff, tstr + 4, 3);
     int doy = atoi(buff);
-    memset(buff, 0, sizeof(buff));
     int month = 0;
     int day = 0;
     for (int i = 1; i < 12; i++) {
@@ -89,17 +88,19 @@ parse_time_string(char const *tstr)
             doy -= days_in_month;
         } else {
             day = doy;
+            break;
         }
     }
 
+    memset(buff, 0, sizeof(buff));
     memcpy(buff, tstr + 7, 2);
     int hour = atoi(buff);
-    memset(buff, 0, sizeof(buff));
 
+    memset(buff, 0, sizeof(buff));
     memcpy(buff, tstr + 9, 2);
     int min = atoi(buff);
-    memset(buff, 0, sizeof(buff));
 
+    memset(buff, 0, sizeof(buff));
     memcpy(buff, tstr + 11, 2);
     int sec = atoi(buff);
 
@@ -111,6 +112,14 @@ parse_time_string(char const *tstr)
     parsed_time.tm_hour = hour;
     parsed_time.tm_min = min;
     parsed_time.tm_sec = sec;
+
+    // TODO: Add debug assert for time being less than now and greater than some start period
+    // for the GOES-R/S imagery.
+    assert(month < 12);
+    assert(day <= 31);
+    assert(hour < 24);
+    assert(min < 60);
+    assert(sec < 60);
 
     return mktime(&parsed_time);
 }
