@@ -148,7 +148,7 @@ cluster_db_newest_scan_start(sqlite3 *db)
 
 CLEAN_UP:
     rc = sqlite3_finalize(stmt);
-    Stopif(rc != SQLITE_ROW, return newest_scan_time, "Error finalizing: %s", sqlite3_errstr(rc));
+    Stopif(rc != SQLITE_OK, return newest_scan_time, "Error finalizing: %s", sqlite3_errstr(rc));
     
     return newest_scan_time;
 }
