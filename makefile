@@ -44,7 +44,6 @@ SOURCES = $(wildcard $(SOURCEDIR)/*.c)
 
 # Define object files for all sources, and dependencies for all objects
 OBJS := $(subst $(SOURCEDIR), $(OBJDIR), $(SOURCES:.c=.o))
-MAIN_OBJS := $(subst $(MAINSDIR), $(MAINSDIR), $(SOURCES:.c=.o))
 DEPS = $(OBJS:.o=.d)
 
 # Hide or not the calls depending on VERBOSE
@@ -84,6 +83,7 @@ directories:
 
 clean:
 	$(HIDE)rm -rf $(OBJDIR) $(BUILDDIR) 2>/dev/null
+	$(HIDE)rm $(MAINSDIR)/*.d $(MAINSDIR)/*.o
 	@echo Cleaning done!
 
 #detected_OS = $(shell uname)
