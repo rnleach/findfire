@@ -134,22 +134,21 @@ cluster_db_newest_scan_start(sqlite3 *db)
     sqlite3_stmt *stmt = 0;
     int rc = sqlite3_prepare_v2(db, query, -1, &stmt, 0);
     Stopif(rc != SQLITE_OK, goto CLEAN_UP, "Error preparing newest scan statement: %s",
-            sqlite3_errstr(rc));
+           sqlite3_errstr(rc));
 
     rc = sqlite3_step(stmt);
     Stopif(rc != SQLITE_ROW, goto CLEAN_UP, "Error stepping: %s", sqlite3_errstr(rc));
 
     // Check for NULL
-    if(sqlite3_column_type(stmt, 0) != SQLITE_INTEGER) {
+    if (sqlite3_column_type(stmt, 0) != SQLITE_INTEGER) {
         goto CLEAN_UP;
     }
-    
+
     newest_scan_time = sqlite3_column_int64(stmt, 0);
 
 CLEAN_UP:
     rc = sqlite3_finalize(stmt);
     Stopif(rc != SQLITE_OK, return newest_scan_time, "Error finalizing: %s", sqlite3_errstr(rc));
-    
+
     return newest_scan_time;
 }
-

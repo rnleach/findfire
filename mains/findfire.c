@@ -84,7 +84,7 @@ main()
             }
 
             time_t scan_start = parse_time_string(cluster_find_start_time(entry->d_name));
-            if(scan_start < newest_scan_start_time) {
+            if (scan_start < newest_scan_start_time) {
                 // Don't try to add data that's already there.
                 continue;
             }
