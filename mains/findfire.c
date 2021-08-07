@@ -57,6 +57,9 @@ main()
     add_stmt = cluster_db_prepare_to_add(cluster_db);
     Stopif(!add_stmt, goto CLEANUP_AND_EXIT, "Error preparing add statement.");
 
+    // Subtract 600 seconds to give 10 minutes of overlap.
+    time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db) - 600;
+
     struct Cluster biggest_fire = {0};
     char biggest_sat[4] = {0};
     char biggest_sector[5] = {0};
@@ -77,6 +80,12 @@ main()
             }
             // Skip meso-sector for now, I don't have many of those.
             if (strstr(entry->d_name, "FDCM")) {
+                continue;
+            }
+
+            time_t scan_start = parse_time_string(cluster_find_start_time(entry->d_name));
+            if(scan_start < newest_scan_start_time) {
+                // Don't try to add data that's already there.
                 continue;
             }
 

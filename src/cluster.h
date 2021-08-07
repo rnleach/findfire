@@ -90,3 +90,8 @@ struct ClusterList cluster_list_from_file(char const *full_path);
  * for all ClusterList objects regardless of error state.
  */
 void cluster_list_clear(struct ClusterList *tgt);
+
+/**
+ * \brief Parse the file name and find the scan start time.
+ */
+char const* cluster_find_start_time(char const *fname);

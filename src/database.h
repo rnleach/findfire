@@ -44,5 +44,8 @@ int cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *se
                        int num_points);
 /**
  * \brief Find the latest valid time in the database so you can safely skip anything older.
+ *
+ * \returns 0 if there is an error or the database is empty, otherwise returns the scan start
+ * time of the latest path.
  */
 time_t cluster_db_newest_scan_start(sqlite3 *db);

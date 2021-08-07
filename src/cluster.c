@@ -53,8 +53,8 @@ find_sector_start(char const *fname)
     return fdcm;
 }
 
-static char const *
-find_start_time(char const *fname)
+char const *
+cluster_find_start_time(char const *fname)
 {
     char const *start = strstr(fname, "_s");
     if (start)
@@ -94,7 +94,7 @@ cluster_list_from_file(char const *full_path)
     memcpy(clist.sector, sect_start, 4);
 
     // Get the start and end times
-    clist.start = parse_time_string(find_start_time(fname));
+    clist.start = parse_time_string(cluster_find_start_time(fname));
     clist.end = parse_time_string(find_end_time(fname));
 
     // Get the clusters member.
