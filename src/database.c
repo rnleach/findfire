@@ -12,15 +12,16 @@ cluster_db_connect(char const *path)
     int rc = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error connecting to %s", path);
 
-    char *query = "CREATE TABLE IF NOT EXISTS clusters(\n"
-                  "satellite  TEXT    NOT NULL,        \n"
-                  "sector     TEXT    NOT NULL,        \n"
-                  "start_time INTEGER NOT NULL,        \n"
-                  "lat        REAL    NOT NULL,        \n"
-                  "lon        REAL    NOT NULL,        \n"
-                  "power      REAL    NOT NULL,        \n"
-                  "radius     REAL    NOT NULL,        \n"
-                  "cell_count INTEGER NOT NULL)        \n";
+    char *query = "CREATE TABLE IF NOT EXISTS clusters(          \n"
+                  "rowid      INTEGER PRIMARY KEY AUTOINCREMENT, \n"
+                  "satellite  TEXT    NOT NULL,                  \n"
+                  "sector     TEXT    NOT NULL,                  \n"
+                  "start_time INTEGER NOT NULL,                  \n"
+                  "lat        REAL    NOT NULL,                  \n"
+                  "lon        REAL    NOT NULL,                  \n"
+                  "power      REAL    NOT NULL,                  \n"
+                  "radius     REAL    NOT NULL,                  \n"
+                  "cell_count INTEGER NOT NULL)                  \n";
     char *err_message = 0;
 
     rc = sqlite3_exec(handle, query, 0, 0, &err_message);

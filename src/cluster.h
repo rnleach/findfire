@@ -17,6 +17,8 @@
  * \brief The aggregate properties of a connected group of FirePoint objects.
  */
 struct Cluster {
+    /// The row id in the database. If this is 0 or less, the row is not yet known.
+    long int rowid;
     /// Average latitude of the points in the cluster.
     double lat;
     /// Average longitude of the points in the cluster.
