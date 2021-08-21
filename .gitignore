@@ -2,6 +2,10 @@
 *.vim
 tags
 
+# Rust
+Cargo.lock
+target
+
 # Project layout
 build
 obj
