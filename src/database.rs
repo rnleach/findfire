@@ -9,13 +9,11 @@ pub struct ClusterDatabase {
 
 impl ClusterDatabase {
     pub fn connect<P: AsRef<Path>>(path_to_db: P) -> Result<Self, Box<dyn Error>> {
-        /*
+
         let conn = rusqlite::Connection::open_with_flags(
             path_to_db,
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_CREATE,
         )?;
-        */
-        let conn = rusqlite::Connection::open_in_memory()?;
 
         conn.execute(include_str!("create_db.sql"), [])?;
 
