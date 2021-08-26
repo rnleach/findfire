@@ -20,7 +20,6 @@ impl ClusterDatabase {
     }
 
     pub fn prepare(&self) -> Result<AddRowsTransaction, Box<dyn Error>> {
-
         let stmt = self.db.prepare(include_str!("add_row_statement.sql"))?;
 
         self.db.execute("BEGIN", [])?;

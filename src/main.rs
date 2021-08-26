@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     return false;
                 }
             };
-            
+
             scan_start > most_recent_in_db
         })
     {
