@@ -44,9 +44,6 @@ attributes in the NetCDF4 to detect these properties internally.
 #### rusqlite
  The rust interface to SQLITE3
 
-#### string-error
- To simplifiy some error handling. I'll likely develop my own error type and remove this eventually.
-
 #### walkdir
  For listing all the files in the data directory. Currently this may not be necessary, but in the 
  future I may go to a more structured directory tree for organizing the data instead of putting all

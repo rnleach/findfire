@@ -183,9 +183,9 @@ impl ClusterList {
         } else if fname.contains(G17) {
             G17
         } else {
-            return Err(string_error::static_err(
-                "Invalid file name, no satellite description.",
-            ));
+            return Err(Box::new(FindFireError {
+                msg: "Invalid file name, no satellite description.",
+            }));
         };
 
         // Sectors
@@ -200,9 +200,9 @@ impl ClusterList {
         } else if fname.contains(MESO) {
             MESO
         } else {
-            return Err(string_error::static_err(
-                "Invalid file name, no satellite sector description.",
-            ));
+            return Err(Box::new(FindFireError {
+                msg: "Invalid file name, no satellite sector description.",
+            }));
         };
 
         let start = find_start_time(&fname)?;
