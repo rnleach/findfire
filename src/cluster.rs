@@ -4,9 +4,9 @@
  * A cluster describes the aggregate properties of a connected group (or cluster) of FirePoint
  * objects.
  */
-use crate::{error::FindFireError, firepoint::FirePoint, firesatimage::FireSatImage};
+use crate::{firepoint::FirePoint, firesatimage::FireSatImage};
 
-use std::{error::Error, path::Path};
+use std::error::Error;
 
 /**
  * The aggregate properties of a connected group of FirePoint objects.
@@ -161,54 +161,19 @@ impl Cluster {
 
 impl ClusterList {
     /**
-     * Analyze a file and return a ClusterList including the file metadata.
-     *
-     * The metadata is gleaned from the file name at this time.
+     * Analyze a FireSatImage and return a ClusterList including the file metadata.
      *
      * #Arguments
-     * full_path - the path to the file to analyze.
+     * fsat - the already loaded image data.
      */
-    pub fn from_file<F: AsRef<std::path::Path>>(full_path: F) -> Result<Self, Box<dyn Error>> {
-        let pth: &Path = full_path.as_ref();
-        let fname = pth.file_name().unwrap().to_string_lossy();
-
-        // Satellites
-        const G16: &str = "G16";
-        const G17: &str = "G17";
-
-        let satellite = if fname.contains(G16) {
-            G16
-        } else if fname.contains(G17) {
-            G17
-        } else {
-            return Err(Box::new(FindFireError {
-                msg: "Invalid file name, no satellite description.",
-            }));
-        };
-
-        // Sectors
-        const CONUS: &str = "FDCC";
-        const FULL_DISK: &str = "FDCF";
-        const MESO: &str = "FDCM";
-
-        let sector = if fname.contains(CONUS) {
-            CONUS
-        } else if fname.contains(FULL_DISK) {
-            FULL_DISK
-        } else if fname.contains(MESO) {
-            MESO
-        } else {
-            return Err(Box::new(FindFireError {
-                msg: "Invalid file name, no satellite sector description.",
-            }));
-        };
-
-        let start = FireSatImage::find_start_time(&fname)?;
-        let end = FireSatImage::find_end_time(&fname)?;
-
-        let sat_data = FireSatImage::open(pth)?;
-        let points = sat_data.extract_fire_points()?;
+    pub fn from_fire_sat_image(fsat: &FireSatImage) -> Result<Self, Box<dyn Error>> {
+        let points = fsat.extract_fire_points()?;
         let clusters = Cluster::from_fire_points(points);
+
+        let satellite = fsat.satellite();
+        let sector = fsat.sector();
+        let start = fsat.start();
+        let end = fsat.end();
 
         Ok(ClusterList {
             satellite,

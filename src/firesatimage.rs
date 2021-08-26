@@ -10,54 +10,16 @@ static START: std::sync::Once = std::sync::Once::new();
 
 pub struct FireSatImage {
     dataset: Dataset,
+    satellite: &'static str,
+    sector: &'static str,
+    start: NaiveDateTime,
+    end: NaiveDateTime,
 }
 
 impl FireSatImage {
-    /**
-     * Parse the file name and find the scan start time.
-     */
-    pub fn find_start_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
-        if let Some(i) = fname.find("_s") {
-            let start = i + 2;
-            let end = start + 13;
-            let date_str = &fname[start..end];
-
-            match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
-                Ok(st) => Ok(st),
-                Err(_) => Err(FindFireError {
-                    msg: "error parsing start time from file",
-                }),
-            }
-        } else {
-            Err(FindFireError {
-                msg: "invalid filename format",
-            })
-        }
-    }
-
-    /**
-     * Parse the file name and find the scan end time.
-     */
-    pub(crate) fn find_end_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
-        if let Some(i) = fname.find("_e") {
-            let start = i + 2;
-            let end = start + 13;
-            let date_str = &fname[start..end];
-
-            match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
-                Ok(st) => Ok(st),
-                Err(_) => Err(FindFireError {
-                    msg: "error parsing start time from file",
-                }),
-            }
-        } else {
-            Err(FindFireError {
-                msg: "invalid filename format",
-            })
-        }
-    }
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let pth: &Path = path.as_ref();
+        let fname = pth.file_name().unwrap().to_string_lossy();
 
         let dataset = unsafe {
             // Trick to get the library to call GDALAllRegister
@@ -79,7 +41,19 @@ impl FireSatImage {
             }
         }?;
 
-        Ok(FireSatImage { dataset })
+        let satellite = Self::find_satellite_name(&fname)?;
+        let sector = Self::find_sector_name(&fname)?;
+
+        let start = FireSatImage::find_start_time(&fname)?;
+        let end = FireSatImage::find_end_time(&fname)?;
+
+        Ok(FireSatImage {
+            dataset,
+            satellite,
+            sector,
+            start,
+            end,
+        })
     }
 
     pub fn extract_fire_points(&self) -> Result<Vec<FirePoint>, Box<dyn Error>> {
@@ -123,5 +97,97 @@ impl FireSatImage {
         }
 
         Ok(points)
+    }
+
+    pub fn start(&self) -> NaiveDateTime {
+        self.start
+    }
+    pub fn end(&self) -> NaiveDateTime {
+        self.end
+    }
+    pub fn satellite(&self) -> &'static str {
+        self.satellite
+    }
+    pub fn sector(&self) -> &'static str {
+        self.sector
+    }
+
+    /**
+     * Parse the file name and find the scan start time.
+     */
+    pub fn find_start_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
+        if let Some(i) = fname.find("_s") {
+            let start = i + 2;
+            let end = start + 13;
+            let date_str = &fname[start..end];
+
+            match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
+                Ok(st) => Ok(st),
+                Err(_) => Err(FindFireError {
+                    msg: "error parsing start time from file",
+                }),
+            }
+        } else {
+            Err(FindFireError {
+                msg: "invalid filename format",
+            })
+        }
+    }
+
+    /**
+     * Parse the file name and find the scan end time.
+     */
+    fn find_end_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
+        if let Some(i) = fname.find("_e") {
+            let start = i + 2;
+            let end = start + 13;
+            let date_str = &fname[start..end];
+
+            match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
+                Ok(st) => Ok(st),
+                Err(_) => Err(FindFireError {
+                    msg: "error parsing start time from file",
+                }),
+            }
+        } else {
+            Err(FindFireError {
+                msg: "invalid filename format",
+            })
+        }
+    }
+
+    fn find_satellite_name(fname: &str) -> Result<&'static str, Box<dyn Error>> {
+        // Satellites
+        const G16: &str = "G16";
+        const G17: &str = "G17";
+
+        if fname.contains(G16) {
+            Ok(G16)
+        } else if fname.contains(G17) {
+            Ok(G17)
+        } else {
+            Err(Box::new(FindFireError {
+                msg: "Invalid file name, no satellite description.",
+            }))
+        }
+    }
+
+    fn find_sector_name(fname: &str) -> Result<&'static str, Box<dyn Error>> {
+        // Sectors
+        const CONUS: &str = "FDCC";
+        const FULL_DISK: &str = "FDCF";
+        const MESO: &str = "FDCM";
+
+        if fname.contains(CONUS) {
+            Ok(CONUS)
+        } else if fname.contains(FULL_DISK) {
+            Ok(FULL_DISK)
+        } else if fname.contains(MESO) {
+            Ok(MESO)
+        } else {
+            Err(Box::new(FindFireError {
+                msg: "Invalid file name, no satellite sector description.",
+            }))
+        }
     }
 }

@@ -19,7 +19,7 @@ the NetCDF4 to detect these properties internally.
  intermediary database. This program looks at 1 satellite file at a time.
 
 ### connectfire
- Take the intermediary database created by findfire and connects the clusters in time, and stores 
+ Takes the intermediary database created by findfire and connects the clusters in time, and stores 
  the results in another database. Each cluster in the final database will have an index code 
  assigned to it. Codes with the same (6-character) prefix represent the same initial fire. 
  If at a time step there are multiple clusters that should be assigned to the same fire from a
@@ -36,17 +36,20 @@ the NetCDF4 to detect these properties internally.
 #### GDAL (3.2.2 or later used in development)
  This is critical for accessing and geo-referencing the data. Whatever version of GDAL you're using,
  it must have support for NetCDF4 installed as well. This shouldn't be a problem since that is the
- default anyway.
+ default.
 
 
 #### SQLITE3
  sqlite3 is used to keep track of the detected fires so they can be connected and tracked throughout
- time. (Planned).
+ time.
 
 ### Rust crates available on crates.io
 
 #### chrono
  Date-time types are critical for the whole project.
+
+#### crossbeam-channel
+ For concurrency and the ability to process multiple files at a time.
 
 #### gdal and gdal-sys
  The Rust interface to GDAL.
