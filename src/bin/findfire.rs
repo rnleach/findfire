@@ -14,6 +14,15 @@ const DATA_DIR: &'static str = "/home/ryan/wxdata/GOES/";
 
 const CHANNEL_SIZE: usize = 5;
 
+#[derive(Debug, Clone, Copy)]
+struct BiggestFireInfo {
+    start: NaiveDateTime,
+    end: NaiveDateTime,
+    satellite: &'static str,
+    sector: &'static str,
+    cluster: Cluster,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let (to_load_thread, from_path_gen) = bounded(CHANNEL_SIZE);
     let (to_analysis, from_load_thread) = bounded(CHANNEL_SIZE);
@@ -29,7 +38,33 @@ fn main() -> Result<(), Box<dyn Error>> {
     anal_thread.join().unwrap();
     let biggest_fire = db_thread.join().unwrap();
 
-    println!("{:?}", biggest_fire);
+    let BiggestFireInfo {
+        start,
+        end,
+        satellite,
+        sector,
+        cluster:
+            Cluster {
+                radius,
+                power,
+                lat,
+                lon,
+                count,
+                ..
+            },
+    } = biggest_fire;
+    println!();
+    println!("Biggest fire added to database:");
+    println!("    satellite - {:>19}", satellite);
+    println!("       sector - {:>19}", sector);
+    println!("        start - {:>19}", start);
+    println!("          end - {:>19}", end);
+    println!("          lat - {:>19.6}", lat);
+    println!("          lon - {:>19.6}", lon);
+    println!("   power (MW) - {:>19.1}", power);
+    println!("  radius (km) - {:>19.1}", radius);
+    println!("        count - {:>19}", count);
+    println!();
 
     Ok(())
 }
@@ -141,7 +176,7 @@ fn start_analysis_thread(
 
 fn start_database_thread(
     from_analysis_thread: Receiver<ClusterList>,
-) -> Result<JoinHandle<Cluster>, Box<dyn Error>> {
+) -> Result<JoinHandle<BiggestFireInfo>, Box<dyn Error>> {
     let jh = thread::Builder::new()
         .name("database".to_owned())
         .spawn(move || {
@@ -149,6 +184,11 @@ fn start_database_thread(
             let mut add_transaction = cluster_db.prepare().unwrap();
 
             let mut biggest_fire = Cluster::default();
+            let mut biggest_fire_sat = "NA";
+            let mut biggest_fire_sect = "NA";
+            let mut biggest_fire_start_scan =
+                chrono::naive::NaiveDate::from_ymd(2000, 1, 1).and_hms(0, 0, 0);
+            let mut biggest_fire_end_scan = biggest_fire_start_scan;
 
             for cluster_list in from_analysis_thread {
                 for cluster in &cluster_list.clusters {
@@ -167,11 +207,21 @@ fn start_database_thread(
 
                     if cluster.power > biggest_fire.power {
                         biggest_fire = *cluster;
+                        biggest_fire_sat = cluster_list.satellite;
+                        biggest_fire_sect = cluster_list.sector;
+                        biggest_fire_start_scan = cluster_list.start;
+                        biggest_fire_end_scan = cluster_list.end;
                     }
                 }
             }
 
-            biggest_fire
+            BiggestFireInfo {
+                cluster: biggest_fire,
+                start: biggest_fire_start_scan,
+                end: biggest_fire_end_scan,
+                satellite: biggest_fire_sat,
+                sector: biggest_fire_sect,
+            }
         })?;
 
     Ok(jh)
