@@ -1,6 +1,6 @@
 use std::{collections::HashMap, error::Error};
 
-use findfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
+use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
 
 use chrono::NaiveDateTime;
 
