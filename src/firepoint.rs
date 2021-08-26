@@ -21,4 +21,3 @@ pub struct FirePoint {
     /// The power of the fire in that pixel in megawatts.
     pub power: f64,
 }
-
