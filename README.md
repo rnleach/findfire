@@ -34,18 +34,20 @@ attributes in the NetCDF4 to detect these properties internally.
  time. (Planned).
 
 ### Rust crates available on crates.io
-chrono = "^0.4.19"
 
-### gdal and gdal-sys
+#### chrono
+ Date-time types are critical for the whole project.
+
+#### gdal and gdal-sys
  The Rust interface to GDAL.
 
-### rusqlite
+#### rusqlite
  The rust interface to SQLITE3
 
-### string-error
+#### string-error
  To simplifiy some error handling. I'll likely develop my own error type and remove this eventually.
 
-### walkdir
+#### walkdir
  For listing all the files in the data directory. Currently this may not be necessary, but in the 
  future I may go to a more structured directory tree for organizing the data instead of putting all
  the files in the same directory. Then this will be useful for walking the directory tree.
