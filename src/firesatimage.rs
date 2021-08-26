@@ -2,6 +2,7 @@ use crate::{error::FindFireError, firepoint::FirePoint};
 
 use std::{error::Error, ffi::CString, path::Path};
 
+use chrono::naive::NaiveDateTime;
 use gdal::{raster::Buffer, Dataset};
 use gdal_sys::{GDALAccess::GA_ReadOnly, GDALDatasetH};
 
@@ -12,6 +13,49 @@ pub struct FireSatImage {
 }
 
 impl FireSatImage {
+    /**
+     * Parse the file name and find the scan start time.
+     */
+    pub fn find_start_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
+        if let Some(i) = fname.find("_s") {
+            let start = i + 2;
+            let end = start + 13;
+            let date_str = &fname[start..end];
+
+            match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
+                Ok(st) => Ok(st),
+                Err(_) => Err(FindFireError {
+                    msg: "error parsing start time from file",
+                }),
+            }
+        } else {
+            Err(FindFireError {
+                msg: "invalid filename format",
+            })
+        }
+    }
+
+    /**
+     * Parse the file name and find the scan end time.
+     */
+    pub(crate) fn find_end_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
+        if let Some(i) = fname.find("_e") {
+            let start = i + 2;
+            let end = start + 13;
+            let date_str = &fname[start..end];
+
+            match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
+                Ok(st) => Ok(st),
+                Err(_) => Err(FindFireError {
+                    msg: "error parsing start time from file",
+                }),
+            }
+        } else {
+            Err(FindFireError {
+                msg: "invalid filename format",
+            })
+        }
+    }
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let pth: &Path = path.as_ref();
 

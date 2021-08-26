@@ -1,15 +1,17 @@
 use std::{collections::HashMap, error::Error};
 
+use findfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
+
 use chrono::NaiveDateTime;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
 const DATA_DIR: &'static str = "/home/ryan/wxdata/GOES/";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let cluster_db = crate::database::ClusterDatabase::connect(DATABASE_FILE)?;
+    let cluster_db = ClusterDatabase::connect(DATABASE_FILE)?;
     let mut add_transaction = cluster_db.prepare()?;
 
-    let mut biggest_fire = crate::cluster::Cluster::default();
+    let mut biggest_fire = Cluster::default();
 
     let mut most_recent: HashMap<String, NaiveDateTime> = HashMap::new();
 
@@ -53,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
 
-            let scan_start: NaiveDateTime = match crate::cluster::find_start_time(&fname) {
+            let scan_start: NaiveDateTime = match FireSatImage::find_start_time(&fname) {
                 Ok(st) => st,
                 Err(err) => {
                     println!("Error parsing file name: {}\n   {}", fname, err);
@@ -66,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     {
         println!("Processing: {}", fname);
 
-        let clusters = crate::cluster::ClusterList::from_file(entry.path())?;
+        let clusters = ClusterList::from_file(entry.path())?;
 
         for cluster in &clusters.clusters {
             add_transaction.add_row(
@@ -90,10 +92,3 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-mod cluster;
-mod database;
-mod error;
-mod firepoint;
-mod firesatimage;
-mod geo;

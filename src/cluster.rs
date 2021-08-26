@@ -8,8 +8,6 @@ use crate::{error::FindFireError, firepoint::FirePoint, firesatimage::FireSatIma
 
 use std::{error::Error, path::Path};
 
-use chrono::naive::NaiveDateTime;
-
 /**
  * The aggregate properties of a connected group of FirePoint objects.
  */
@@ -205,8 +203,8 @@ impl ClusterList {
             }));
         };
 
-        let start = find_start_time(&fname)?;
-        let end = find_end_time(&fname)?;
+        let start = FireSatImage::find_start_time(&fname)?;
+        let end = FireSatImage::find_end_time(&fname)?;
 
         let sat_data = FireSatImage::open(pth)?;
         let points = sat_data.extract_fire_points()?;
@@ -218,50 +216,6 @@ impl ClusterList {
             clusters,
             start,
             end,
-        })
-    }
-}
-
-/**
- * Parse the file name and find the scan start time.
- */
-pub fn find_start_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
-    if let Some(i) = fname.find("_s") {
-        let start = i + 2;
-        let end = start + 13;
-        let date_str = &fname[start..end];
-
-        match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
-            Ok(st) => Ok(st),
-            Err(_) => Err(FindFireError {
-                msg: "error parsing start time from file",
-            }),
-        }
-    } else {
-        Err(FindFireError {
-            msg: "invalid filename format",
-        })
-    }
-}
-
-/**
- * Parse the file name and find the scan end time.
- */
-fn find_end_time(fname: &str) -> Result<NaiveDateTime, FindFireError> {
-    if let Some(i) = fname.find("_e") {
-        let start = i + 2;
-        let end = start + 13;
-        let date_str = &fname[start..end];
-
-        match NaiveDateTime::parse_from_str(date_str, "%Y%j%H%M%S") {
-            Ok(st) => Ok(st),
-            Err(_) => Err(FindFireError {
-                msg: "error parsing start time from file",
-            }),
-        }
-    } else {
-        Err(FindFireError {
-            msg: "invalid filename format",
         })
     }
 }
