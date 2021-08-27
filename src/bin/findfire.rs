@@ -93,14 +93,17 @@ fn start_path_generation_thread(
     let jh = thread::Builder::new()
         .name("path_gen".to_owned())
         .spawn(move || {
-            for entry in walkdir::WalkDir::new(DATA_DIR)
+            for (entry, fname) in walkdir::WalkDir::new(DATA_DIR)
                 .into_iter()
                 .filter_map(|res| res.ok())
+                // Ignore directories, WalkDir will take care of recursing into them.
+                .filter(|entry| entry.path().is_file())
+                // Get the file name
                 .map(|entry| {
                     let fname: String = entry.file_name().to_string_lossy().to_string();
                     (entry, fname)
                 })
-                // Only consider NetCDF files.
+                // Only consider NetCDF files or directories that we need to recurse into.
                 .filter(|(_entry, fname)| fname.ends_with(".nc"))
                 // Skip full disk and meso-sector files (for now)
                 .filter(|(_entry, fname)| !(fname.contains("FDCF") || fname.contains("FDCM")))
@@ -129,11 +132,8 @@ fn start_path_generation_thread(
 
                     scan_start > most_recent_in_db
                 })
-                .map(|(entry, fname)| {
-                    println!("Processing {}", fname);
-                    entry
-                })
             {
+                println!("Processing {}", fname);
                 to_load_thread.send(entry).unwrap();
             }
         })?;

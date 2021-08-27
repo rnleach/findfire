@@ -58,6 +58,4 @@ the NetCDF4 to detect these properties internally.
  The rust interface to SQLITE3
 
 #### walkdir
- For listing all the files in the data directory. Currently this may not be necessary, but in the 
- future I may go to a more structured directory tree for organizing the data instead of putting all
- the files in the same directory. Then this will be useful for walking the directory tree.
+ For listing all the files in the root data directory. 
