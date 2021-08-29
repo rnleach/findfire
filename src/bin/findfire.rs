@@ -10,7 +10,7 @@ use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/home/ryan/wxdata/GOES/";
+const DATA_DIR: &'static str = "/media/ryan/SAT/wxdata/GOES/";
 
 const CHANNEL_SIZE: usize = 5;
 
@@ -106,7 +106,7 @@ fn start_path_generation_thread(
                 // Only consider NetCDF files or directories that we need to recurse into.
                 .filter(|(_entry, fname)| fname.ends_with(".nc"))
                 // Skip full disk and meso-sector files (for now)
-                .filter(|(_entry, fname)| !(fname.contains("FDCF") || fname.contains("FDCM")))
+                //.filter(|(_entry, fname)| !(fname.contains("FDCF") || fname.contains("FDCM")))
                 // Filter out stuff older than the most recent in the database.
                 .filter(|(_entry, fname)| {
                     let mut most_recent_in_db = beginning_of_time;
