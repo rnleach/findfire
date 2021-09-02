@@ -10,7 +10,7 @@ use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 const DATABASE_FILE: &'static str = "/Users/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/Volumes/MET2/wxdata/GOES/";
+const DATA_DIR: &'static str = "/Volumes/MET2/wxdata/GOESX/";
 
 const CHANNEL_SIZE: usize = 5;
 
