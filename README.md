@@ -38,12 +38,11 @@ the NetCDF4 to detect these properties internally.
  it must have support for NetCDF4 installed as well. This shouldn't be a problem since that is the
  default.
 
-
 #### SQLITE3
  sqlite3 is used to keep track of the detected fires so they can be connected and tracked throughout
  time.
 
-### Rust crates available on crates.io
+### Rust crates available on crates.io (direct dependencies)
 
 #### chrono
  Date-time types are critical for the whole project.
