@@ -9,8 +9,8 @@ use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/media/ryan/SAT/wxdata/GOES/";
+const DATABASE_FILE: &'static str = "/Users/ryan/wxdata/findfire.sqlite";
+const DATA_DIR: &'static str = "/Volumes/MET2/wxdata/GOES/";
 
 const CHANNEL_SIZE: usize = 5;
 
@@ -91,7 +91,7 @@ fn start_path_generation_thread(
     }
 
     let jh = thread::Builder::new()
-        .name("path_gen".to_owned())
+        .name("findfire-path_gen".to_owned())
         .spawn(move || {
             for (entry, fname) in walkdir::WalkDir::new(DATA_DIR)
                 .into_iter()
@@ -103,10 +103,10 @@ fn start_path_generation_thread(
                     let fname: String = entry.file_name().to_string_lossy().to_string();
                     (entry, fname)
                 })
-                // Only consider NetCDF files or directories that we need to recurse into.
+                // Only consider NetCDF files.
                 .filter(|(_entry, fname)| fname.ends_with(".nc"))
                 // Skip full disk and meso-sector files (for now)
-                //.filter(|(_entry, fname)| !(fname.contains("FDCF") || fname.contains("FDCM")))
+                .filter(|(_entry, fname)| !(fname.contains("FDCF") || fname.contains("FDCM")))
                 // Filter out stuff older than the most recent in the database.
                 .filter(|(_entry, fname)| {
                     let mut most_recent_in_db = beginning_of_time;
@@ -146,7 +146,7 @@ fn start_load_thread(
     to_analysis: Sender<FireSatImage>,
 ) -> Result<JoinHandle<()>, Box<dyn Error>> {
     let jh = thread::Builder::new()
-        .name("load".to_owned())
+        .name("findfire-load".to_owned())
         .spawn(move || {
             for entry in from_path_gen {
                 let fsat_data = FireSatImage::open(entry.path()).unwrap();
@@ -163,7 +163,7 @@ fn start_analysis_thread(
     to_database_thread: Sender<ClusterList>,
 ) -> Result<JoinHandle<()>, Box<dyn Error>> {
     let jh = thread::Builder::new()
-        .name("analysis".to_owned())
+        .name("findfire-analysis".to_owned())
         .spawn(move || {
             for fire_sat_image in from_load_thread {
                 let clusters = ClusterList::from_fire_sat_image(&fire_sat_image).unwrap();
@@ -178,7 +178,7 @@ fn start_database_thread(
     from_analysis_thread: Receiver<ClusterList>,
 ) -> Result<JoinHandle<BiggestFireInfo>, Box<dyn Error>> {
     let jh = thread::Builder::new()
-        .name("database".to_owned())
+        .name("findfire-database".to_owned())
         .spawn(move || {
             let cluster_db = ClusterDatabase::connect(DATABASE_FILE).unwrap();
             let mut add_transaction = cluster_db.prepare().unwrap();
