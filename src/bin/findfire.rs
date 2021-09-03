@@ -4,10 +4,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use log::LevelFilter;
 use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
 use simple_logger::SimpleLogger;
 
@@ -26,12 +24,7 @@ struct BiggestFireInfo {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-
-    SimpleLogger::new()
-        .with_module_level("goes_arch", LevelFilter::Debug)
-        .with_module_level("serde_xml_rs", LevelFilter::Off)
-        .with_module_level("reqwest", LevelFilter::Off)
-        .init()?;
+    SimpleLogger::new().init()?;
 
     log::trace!("Trace messages enabled.");
     log::debug!("Debug messages enabled.");

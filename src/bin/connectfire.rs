@@ -1,18 +1,12 @@
 use std::error::Error;
 
-use log::LevelFilter;
-use simple_logger::SimpleLogger;
 use satfire::ClusterDatabase;
+use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
 
 fn main() -> Result<(), Box<dyn Error>> {
-
-    SimpleLogger::new()
-        .with_module_level("goes_arch", LevelFilter::Debug)
-        .with_module_level("serde_xml_rs", LevelFilter::Off)
-        .with_module_level("reqwest", LevelFilter::Off)
-        .init()?;
+    SimpleLogger::new().init()?;
 
     log::trace!("Trace messages enabled.");
     log::debug!("Debug messages enabled.");
