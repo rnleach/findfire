@@ -14,7 +14,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::warn!("Warn messages enabled.");
     log::error!("Error messages enabled.");
 
-    let _cluster_db = ClusterDatabase::connect(DATABASE_FILE)?;
+    let cluster_db = ClusterDatabase::connect(DATABASE_FILE)?;
+    let mut records = cluster_db.create_cluster_record_query()?;
+    let records = records.cluster_records_for("G17")?;
+
+    for record in records {
+        println!("{:?}", record);
+    }
 
     Ok(())
 }

@@ -1,5 +1,6 @@
 use std::{error::Error, path::Path};
 
+use crate::ClusterRecord;
 use chrono::NaiveDateTime;
 use rusqlite::ToSql;
 
@@ -38,6 +39,36 @@ impl ClusterDatabase {
         )?;
 
         Ok(latest)
+    }
+
+    pub fn create_cluster_record_query(&self) -> Result<ClusterRecordQuery, Box<dyn Error>> {
+        let stmt = self.db.prepare("SELECT rowid, mid_point_time, lat, lon, power, radius FROM clusters WHERE satellite = ? ORDER BY mid_point_time ASC")?;
+        Ok(ClusterRecordQuery(stmt))
+    }
+}
+
+pub struct ClusterRecordQuery<'a>(rusqlite::Statement<'a>);
+impl<'a> ClusterRecordQuery<'a> {
+    pub fn cluster_records_for(
+        &mut self,
+        satellite: &str,
+    ) -> Result<impl Iterator<Item = ClusterRecord> + '_, Box<dyn Error>> {
+        let rows = self
+            .0
+            .query_and_then(&[satellite], |row| {
+                let id: i64 = row.get(0)?;
+                let valid_time: NaiveDateTime =
+                    chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(1)?, 0);
+                let lat: f64 = row.get(2)?;
+                let lon: f64 = row.get(3)?;
+                let power: f64 = row.get(4)?;
+                let radius: f64 = row.get(5)?;
+
+                Ok(ClusterRecord::new(id, valid_time, lat, lon, power, radius))
+            })?
+            .filter_map(|res: Result<_, rusqlite::Error>| res.ok());
+
+        Ok(rows)
     }
 }
 

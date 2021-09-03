@@ -1,4 +1,4 @@
-pub use cluster::{Cluster, ClusterList};
+pub use cluster::{Cluster, ClusterList, ClusterRecord};
 pub use cluster_database::{AddRowsTransaction, ClusterDatabase};
 pub use error::FindFireError;
 pub use firepoint::FirePoint;
