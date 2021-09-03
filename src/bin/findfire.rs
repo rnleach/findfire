@@ -4,13 +4,15 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
 
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
+use log::LevelFilter;
+use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
+use simple_logger::SimpleLogger;
 
-const DATABASE_FILE: &'static str = "/Users/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/Volumes/MET2/wxdata/GOESX/";
+const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
+const DATA_DIR: &'static str = "/media/ryan/SAT/wxdata/GOESX/";
 
 const CHANNEL_SIZE: usize = 5;
 
@@ -24,6 +26,19 @@ struct BiggestFireInfo {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+
+    SimpleLogger::new()
+        .with_module_level("goes_arch", LevelFilter::Debug)
+        .with_module_level("serde_xml_rs", LevelFilter::Off)
+        .with_module_level("reqwest", LevelFilter::Off)
+        .init()?;
+
+    log::trace!("Trace messages enabled.");
+    log::debug!("Debug messages enabled.");
+    log::info!("Info messages enabled.");
+    log::warn!("Warn messages enabled.");
+    log::error!("Error messages enabled.");
+
     let (to_load_thread, from_path_gen) = bounded(CHANNEL_SIZE);
     let (to_analysis, from_load_thread) = bounded(CHANNEL_SIZE);
     let (to_database_thread, from_analysis_thread) = bounded(CHANNEL_SIZE);
@@ -53,18 +68,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ..
             },
     } = biggest_fire;
-    println!();
-    println!("Biggest fire added to database:");
-    println!("    satellite - {:>19}", satellite);
-    println!("       sector - {:>19}", sector);
-    println!("        start - {:>19}", start);
-    println!("          end - {:>19}", end);
-    println!("          lat - {:>19.6}", lat);
-    println!("          lon - {:>19.6}", lon);
-    println!("   power (MW) - {:>19.1}", power);
-    println!("  radius (km) - {:>19.1}", radius);
-    println!("        count - {:>19}", count);
-    println!();
+    log::info!("");
+    log::info!("Biggest fire added to database:");
+    log::info!("    satellite - {:>19}", satellite);
+    log::info!("       sector - {:>19}", sector);
+    log::info!("        start - {:>19}", start);
+    log::info!("          end - {:>19}", end);
+    log::info!("          lat - {:>19.6}", lat);
+    log::info!("          lon - {:>19.6}", lon);
+    log::info!("   power (MW) - {:>19.1}", power);
+    log::info!("  radius (km) - {:>19.1}", radius);
+    log::info!("        count - {:>19}", count);
+    log::info!("");
 
     Ok(())
 }
@@ -125,7 +140,7 @@ fn start_path_generation_thread(
                     let scan_start: NaiveDateTime = match FireSatImage::find_start_time(&fname) {
                         Ok(st) => st,
                         Err(err) => {
-                            println!("Error parsing file name: {}\n   {}", fname, err);
+                            log::error!("Error parsing file name: {}\n   {}", fname, err);
                             return false;
                         }
                     };
@@ -133,7 +148,7 @@ fn start_path_generation_thread(
                     scan_start > most_recent_in_db
                 })
             {
-                println!("Processing {}", fname);
+                log::info!("Processing {}", fname);
                 to_load_thread.send(entry).unwrap();
             }
         })?;
