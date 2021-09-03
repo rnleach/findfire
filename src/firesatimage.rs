@@ -1,12 +1,9 @@
 use crate::{error::FindFireError, firepoint::FirePoint};
 
-use std::{error::Error, ffi::CString, path::Path};
+use std::{error::Error, path::Path};
 
 use chrono::naive::NaiveDateTime;
 use gdal::{raster::Buffer, Dataset};
-use gdal_sys::{GDALAccess::GA_ReadOnly, GDALDatasetH};
-
-static START: std::sync::Once = std::sync::Once::new();
 
 pub struct FireSatImage {
     dataset: Dataset,
@@ -19,27 +16,22 @@ pub struct FireSatImage {
 impl FireSatImage {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let pth: &Path = path.as_ref();
-        let fname = pth.file_name().unwrap().to_string_lossy();
-
-        let dataset = unsafe {
-            // Trick to get the library to call GDALAllRegister
-            START.call_once(|| {
-                let driver = gdal::Driver::get("netCDF");
-                assert!(driver.is_ok());
-            });
-
-            let open_path = format!("NETCDF:\"{}\":Power", pth.to_string_lossy());
-            let open_path: CString = CString::new(open_path)?;
-            let c_handle: GDALDatasetH = gdal_sys::GDALOpen(open_path.as_ptr(), GA_ReadOnly);
-
-            if c_handle.is_null() {
-                Err(FindFireError {
-                    msg: "error opening netcdf file",
-                })
-            } else {
-                Ok(Dataset::from_c_dataset(c_handle))
-            }
+        let fname = if pth.exists() && pth.is_file() {
+            Ok(pth
+                .file_name()
+                .ok_or(FindFireError {
+                    msg: "Path was not a file",
+                })?
+                .to_string_lossy())
+        } else {
+            Err(FindFireError {
+                msg: "Path isn't a file or doesn't exist",
+            })
         }?;
+
+        let open_path = format!("NETCDF:\"{}\":Power", pth.to_string_lossy());
+        let open_path = std::path::PathBuf::from(&open_path);
+        let dataset = Dataset::open(&open_path)?;
 
         let satellite = Self::find_satellite_name(&fname)?;
         let sector = Self::find_sector_name(&fname)?;
