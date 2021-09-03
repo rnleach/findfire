@@ -58,7 +58,7 @@ impl<'a> AddRowsTransaction<'a> {
         let _ = self.0.execute([
             &satellite as &dyn ToSql,
             &sector,
-            &scan_mid_point,
+            &scan_mid_point.timestamp(),
             &lat,
             &lon,
             &power,
