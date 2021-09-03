@@ -13,8 +13,6 @@ use std::error::Error;
  */
 #[derive(Clone, Copy, Debug)]
 pub struct Cluster {
-    /// The row id in the database. If this is 0 or less, the row is not yet known.
-    pub rowid: i64,
     /// Average latitude of the points in the cluster.
     pub lat: f64,
     /// Average longitude of the points in the cluster.
@@ -30,7 +28,6 @@ pub struct Cluster {
 impl Default for Cluster {
     fn default() -> Self {
         Cluster {
-            rowid: -1,
             lat: f64::NAN,
             lon: f64::NAN,
             power: 0.0,
@@ -57,10 +54,8 @@ pub struct ClusterList {
     ///
     /// At the time of writing it will either be "G16" or "G17"
     pub satellite: &'static str,
-    /// Start time of the scan
-    pub start: chrono::naive::NaiveDateTime,
-    /// End time of the scan
-    pub end: chrono::naive::NaiveDateTime,
+    /// Mid point time of the scan
+    pub mid_point: chrono::naive::NaiveDateTime,
     /// List of struct Cluster objects associated with the above metadata.
     pub clusters: Vec<Cluster>,
 }
@@ -127,7 +122,6 @@ impl Cluster {
                 lon: 0.0,
                 power: 0.0,
                 radius: 0.0,
-                rowid: 0,
             };
 
             for pnt in &cluster_points {
@@ -172,15 +166,13 @@ impl ClusterList {
 
         let satellite = fsat.satellite();
         let sector = fsat.sector();
-        let start = fsat.start();
-        let end = fsat.end();
+        let mid_point = fsat.scan_midpoint();
 
         Ok(ClusterList {
             satellite,
             sector,
             clusters,
-            start,
-            end,
+            mid_point,
         })
     }
 }

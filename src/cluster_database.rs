@@ -48,7 +48,7 @@ impl<'a> AddRowsTransaction<'a> {
         &mut self,
         satellite: &'static str,
         sector: &'static str,
-        scan_start: NaiveDateTime,
+        scan_mid_point: NaiveDateTime,
         lat: f64,
         lon: f64,
         power: f64,
@@ -58,7 +58,7 @@ impl<'a> AddRowsTransaction<'a> {
         let _ = self.0.execute([
             &satellite as &dyn ToSql,
             &sector,
-            &scan_start,
+            &scan_mid_point,
             &lat,
             &lon,
             &power,

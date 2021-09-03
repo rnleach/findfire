@@ -2,7 +2,7 @@ INSERT OR IGNORE INTO clusters
 (
     satellite, 
     sector, 
-    start_time, 
+    mid_point_time, 
     lat, 
     lon, 
     power, 
