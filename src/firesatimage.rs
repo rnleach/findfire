@@ -94,12 +94,19 @@ impl FireSatImage {
     pub fn start(&self) -> NaiveDateTime {
         self.start
     }
+
     pub fn end(&self) -> NaiveDateTime {
         self.end
     }
+
+    pub fn scan_midpoint(&self) -> NaiveDateTime {
+        self.start + (self.end - self.start) / 2
+    }
+
     pub fn satellite(&self) -> &'static str {
         self.satellite
     }
+
     pub fn sector(&self) -> &'static str {
         self.sector
     }
