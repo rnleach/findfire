@@ -125,9 +125,12 @@ fn finish_this_time_step(
 
     for fire in fires.iter_mut() {
         // TODO: If there is only 1 child fire, update the radius & last observed date
+        unimplemented!();
 
-        // TODO: If there are several candidates, create a new fire for each with un updated code
+        // TODO: If there are several candidates, create a new fire for each with an updated code
+        unimplemented!();
 
         // TODO: In all cases, update the associations
+        unimplemented!();
     }
 }
