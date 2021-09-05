@@ -50,7 +50,7 @@ the NetCDF4 to detect these properties internally.
 #### crossbeam-channel
  For concurrency and the ability to process multiple files at a time.
 
-#### gdal and gdal-sys
+#### gdal
  The Rust interface to GDAL.
 
 #### rusqlite
@@ -58,3 +58,9 @@ the NetCDF4 to detect these properties internally.
 
 #### walkdir
  For listing all the files in the root data directory. 
+
+#### geo
+ A rust library for geospatial primitives and algorithms.
+
+#### serde and bincode
+ Serde to serialize the fire perimeters in bincode for storing in the sqlite database.
