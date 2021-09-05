@@ -92,7 +92,7 @@ impl Cluster {
             curr_clust.lon /= curr_clust.count as f64;
 
             for pnt in &cluster_points {
-                let gs_distance = crate::geo::great_circle_distance(
+                let gs_distance = crate::my_geo::great_circle_distance(
                     pnt.lat,
                     pnt.lon,
                     curr_clust.lat,
