@@ -97,7 +97,7 @@ impl Cluster {
                     pnt.lon,
                     curr_clust.lat,
                     curr_clust.lon,
-                );
+                ) + 2.5;
 
                 curr_clust.radius = curr_clust.radius.max(gs_distance);
             }
