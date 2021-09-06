@@ -6,11 +6,12 @@ use std::{
 
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
+use log::LevelFilter;
 use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
+const DATA_DIR: &'static str = "/home/ryan/wxdata/GOES/";
 
 const CHANNEL_SIZE: usize = 5;
 
@@ -23,7 +24,10 @@ struct BiggestFireInfo {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    SimpleLogger::new().init()?;
+    SimpleLogger::new()
+        .with_level(LevelFilter::Info)
+        .with_module_level("findfire", LevelFilter::Debug)
+        .init()?;
 
     log::trace!("Trace messages enabled.");
     log::debug!("Debug messages enabled.");
@@ -57,12 +61,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ..
             },
     } = biggest_fire;
+
+    let (lat, lon) = (centroid.x(), centroid.y());
+
     log::info!("");
     log::info!("Biggest fire added to database:");
     log::info!("     satellite - {:>19}", satellite);
     log::info!("        sector - {:>19}", sector);
     log::info!("scan mid point - {:>19}", mid_point);
-    log::info!("      centroid - {:?}", centroid);
+    log::info!("      latitude - {:>19.6}", lat);
+    log::info!("     longitude - {:>19.6}", lon);
     log::info!("    power (MW) - {:>19.1}", power);
     log::info!("         count - {:>19}", count);
     log::info!("");
@@ -84,9 +92,13 @@ fn start_path_generation_thread(
             let key = format!("{}_{}", sat, sect);
             let latest_entry = match cluster_db.find_latest(sat, sect) {
                 Ok(vt) => vt,
-                Err(_err) => continue,
+                Err(err) => {
+                    log::debug!("Error finding latest entry for {}: {}", key, err);
+                    continue;
+                }
             };
 
+            log::debug!("latest entry for {} is {}", key, latest_entry);
             most_recent.insert(key, latest_entry);
         }
     }
