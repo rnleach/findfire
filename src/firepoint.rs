@@ -14,10 +14,10 @@ pub struct FirePoint {
     pub x: isize,
     /// The y-coordinate (row number, often indexed as 'j') in the grid.
     pub y: isize,
-    /// The latitude
-    pub lat: f64,
-    /// The longitude
-    pub lon: f64,
+    /// The latitudes of the corners of the area
+    pub lats: [f64; 4],
+    /// The longitudes of the corners of the area
+    pub lons: [f64; 4],
     /// The power of the fire in that pixel in megawatts.
     pub power: f64,
 }

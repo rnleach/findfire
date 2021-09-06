@@ -69,17 +69,25 @@ impl FireSatImage {
             for i in 0..x_size {
                 let power = data[j * x_size + i];
                 if power > 0.0 {
-                    let mut xp: [f64; 1] =
-                        [gtrans[0] + gtrans[1] * i as f64 + j as f64 * gtrans[2]];
-                    let mut yp: [f64; 1] =
-                        [gtrans[3] + gtrans[4] * i as f64 + j as f64 * gtrans[5]];
-                    let mut zp: [f64; 1] = [0.0];
+                    let ii = i as f64;
+                    let jj = j as f64;
 
+                    let mut xp: [f64; 4] = [ii - 0.5, ii + 0.5, ii + 0.5, ii - 0.5];
+                    let mut yp: [f64; 4] = [jj + 0.5, jj + 0.5, jj - 0.5, jj - 0.5];
+                    let mut zp: [f64; 4] = [0.0; 4];
+
+                    // Convert from array indexes to geo coodinate scan angle radians
+                    for corner in 0..xp.len() {
+                        xp[corner] = gtrans[0] + gtrans[1] * xp[corner] + gtrans[2] * yp[corner];
+                        yp[corner] = gtrans[3] + gtrans[4] * xp[corner] + gtrans[5] * yp[corner];
+                    }
+
+                    // Convert to lat-lon
                     let _ = trans.transform_coords(&mut xp, &mut yp, &mut zp);
 
                     points.push(FirePoint {
-                        lat: xp[0],
-                        lon: yp[0],
+                        lats: xp,
+                        lons: yp,
                         power,
                         x: i as isize,
                         y: j as isize,

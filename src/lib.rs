@@ -3,7 +3,7 @@ pub use cluster_database::{AddRowsTransaction, ClusterDatabase};
 pub use error::{ConnectFireError, FindFireError};
 pub use firepoint::FirePoint;
 pub use firesatimage::FireSatImage;
-pub use geo::great_circle_distance;
+pub use my_geo::great_circle_distance;
 
 /**************************************************************************************************
  * Private Implementation
@@ -13,4 +13,4 @@ mod cluster_database;
 mod error;
 mod firepoint;
 mod firesatimage;
-mod geo;
+mod my_geo;
