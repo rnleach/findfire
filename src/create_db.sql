@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS clusters
   lat            REAL    NOT NULL,
   lon            REAL    NOT NULL,
   power          REAL    NOT NULL,
-  radius         REAL    NOT NULL,
-  cell_count     INTEGER NOT NULL
+  cell_count     INTEGER NOT NULL,
+  perimeter      BLOB    NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ON clusters (satellite, sector, mid_point_time, lat, lon);

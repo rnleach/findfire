@@ -10,11 +10,11 @@ use satfire::{Cluster, ClusterDatabase, ClusterList, FireSatImage};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/media/ryan/SAT/wxdata/GOESX/";
+const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
 
 const CHANNEL_SIZE: usize = 5;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct BiggestFireInfo {
     mid_point: NaiveDateTime,
     satellite: &'static str,
@@ -51,10 +51,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         sector,
         cluster:
             Cluster {
-                radius,
                 power,
-                lat,
-                lon,
+                centroid,
                 count,
                 ..
             },
@@ -64,10 +62,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::info!("     satellite - {:>19}", satellite);
     log::info!("        sector - {:>19}", sector);
     log::info!("scan mid point - {:>19}", mid_point);
-    log::info!("           lat - {:>19.6}", lat);
-    log::info!("           lon - {:>19.6}", lon);
+    log::info!("      centroid - {:?}", centroid);
     log::info!("    power (MW) - {:>19.1}", power);
-    log::info!("   radius (km) - {:>19.1}", radius);
     log::info!("         count - {:>19}", count);
     log::info!("");
 
@@ -195,26 +191,25 @@ fn start_database_thread(
                 chrono::naive::NaiveDate::from_ymd(2000, 1, 1).and_hms(0, 0, 0);
 
             for cluster_list in from_analysis_thread {
-                for cluster in &cluster_list.clusters {
+                for cluster in cluster_list.clusters {
+                    if cluster.power > biggest_fire.power {
+                        biggest_fire = cluster.clone();
+                        biggest_fire_sat = cluster_list.satellite;
+                        biggest_fire_sect = cluster_list.sector;
+                        biggest_fire_mid_point_scan = cluster_list.mid_point;
+                    }
+
                     add_transaction
                         .add_row(
                             cluster_list.satellite,
                             cluster_list.sector,
                             cluster_list.mid_point,
-                            cluster.lat,
-                            cluster.lon,
+                            cluster.centroid,
                             cluster.power,
-                            cluster.radius,
+                            cluster.perimeter,
                             cluster.count,
                         )
                         .unwrap();
-
-                    if cluster.power > biggest_fire.power {
-                        biggest_fire = *cluster;
-                        biggest_fire_sat = cluster_list.satellite;
-                        biggest_fire_sect = cluster_list.sector;
-                        biggest_fire_mid_point_scan = cluster_list.mid_point;
-                    }
                 }
             }
 

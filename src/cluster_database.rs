@@ -2,6 +2,7 @@ use std::{error::Error, path::Path};
 
 use crate::ClusterRecord;
 use chrono::NaiveDateTime;
+use geo::{point, Point, Polygon};
 use rusqlite::ToSql;
 
 pub struct ClusterDatabase {
@@ -42,12 +43,13 @@ impl ClusterDatabase {
     }
 
     pub fn create_cluster_record_query(&self) -> Result<ClusterRecordQuery, Box<dyn Error>> {
-        let stmt = self.db.prepare("SELECT rowid, mid_point_time, lat, lon, power, radius FROM clusters WHERE satellite = ? ORDER BY mid_point_time ASC")?;
+        let stmt = self.db.prepare("SELECT rowid, mid_point_time, lat, lon, power, perimeter FROM clusters WHERE satellite = ? ORDER BY mid_point_time ASC")?;
         Ok(ClusterRecordQuery(stmt))
     }
 }
 
 pub struct ClusterRecordQuery<'a>(rusqlite::Statement<'a>);
+
 impl<'a> ClusterRecordQuery<'a> {
     pub fn cluster_records_for(
         &mut self,
@@ -61,10 +63,17 @@ impl<'a> ClusterRecordQuery<'a> {
                     chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(1)?, 0);
                 let lat: f64 = row.get(2)?;
                 let lon: f64 = row.get(3)?;
+                let centroid = point!(x: lat, y: lon);
                 let power: f64 = row.get(4)?;
-                let radius: f64 = row.get(5)?;
 
-                Ok(ClusterRecord::new(id, valid_time, lat, lon, power, radius))
+                let pblob = row.get_ref(5)?.as_blob()?;
+
+                let perimeter: Polygon<f64> =
+                    bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+                Ok(ClusterRecord::new(
+                    id, valid_time, power, perimeter, centroid,
+                ))
             })?
             .filter_map(|res: Result<_, rusqlite::Error>| res.ok());
 
@@ -80,12 +89,16 @@ impl<'a> AddRowsTransaction<'a> {
         satellite: &'static str,
         sector: &'static str,
         scan_mid_point: NaiveDateTime,
-        lat: f64,
-        lon: f64,
+        centroid: Point<f64>,
         power: f64,
-        radius: f64,
+        perimeter: Polygon<f64>,
         num_points: i32,
     ) -> Result<(), Box<dyn Error>> {
+        let lat = centroid.x();
+        let lon = centroid.y();
+
+        let perimeter = bincode::serialize(&perimeter)?;
+
         let _ = self.0.execute([
             &satellite as &dyn ToSql,
             &sector,
@@ -93,8 +106,8 @@ impl<'a> AddRowsTransaction<'a> {
             &lat,
             &lon,
             &power,
-            &radius,
             &num_points,
+            &perimeter,
         ])?;
 
         Ok(())
