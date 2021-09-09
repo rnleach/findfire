@@ -7,8 +7,6 @@
 
 pub use cluster::Cluster;
 pub use cluster_list::ClusterList;
-pub use cluster_record::ClusterRecord;
 
 mod cluster;
 mod cluster_list;
-mod cluster_record;

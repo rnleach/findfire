@@ -2,7 +2,6 @@
 
 use std::error::Error;
 
-use crate::ClusterRecord;
 use chrono::NaiveDateTime;
 use geo::{point, Point, Polygon};
 use rusqlite::ToSql;
@@ -35,6 +34,38 @@ impl super::FiresDatabase {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ClusterRecord {
+    /// Row id from the database.
+    pub rowid: i64,
+    /// The mid-point time of the scan this cluster was detected in.
+    pub scan_time: NaiveDateTime,
+    /// Total (sum) of the fire power of the points in the cluster in megawatts.
+    pub power: f64,
+    /// Perimeter
+    pub perimeter: Polygon<f64>,
+    /// Centroid
+    pub centroid: Point<f64>,
+}
+
+impl ClusterRecord {
+    pub fn new(
+        rowid: i64,
+        scan_time: NaiveDateTime,
+        power: f64,
+        perimeter: Polygon<f64>,
+        centroid: Point<f64>,
+    ) -> Self {
+        ClusterRecord {
+            rowid,
+            scan_time,
+            power,
+            perimeter,
+            centroid,
+        }
+    }
+}
+
 pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
 
 impl<'a> ClusterQuery<'a> {
@@ -45,8 +76,8 @@ impl<'a> ClusterQuery<'a> {
         let rows = self
             .0
             .query_and_then(&[satellite], |row| {
-                let id: i64 = row.get(0)?;
-                let valid_time: NaiveDateTime =
+                let rowid: i64 = row.get(0)?;
+                let scan_time: NaiveDateTime =
                     chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(1)?, 0);
                 let lat: f64 = row.get(2)?;
                 let lon: f64 = row.get(3)?;
@@ -58,9 +89,13 @@ impl<'a> ClusterQuery<'a> {
                 let perimeter: Polygon<f64> =
                     bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
-                Ok(ClusterRecord::new(
-                    id, valid_time, power, perimeter, centroid,
-                ))
+                Ok(ClusterRecord {
+                    rowid,
+                    scan_time,
+                    power,
+                    perimeter,
+                    centroid,
+                })
             })?
             .filter_map(|res: Result<_, rusqlite::Error>| res.ok());
 

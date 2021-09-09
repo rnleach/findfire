@@ -5,7 +5,7 @@ pub struct FiresDatabase {
 }
 
 mod db_clusters;
-pub use db_clusters::{AddClustersTransaction, ClusterQuery};
+pub use db_clusters::{AddClustersTransaction, ClusterQuery, ClusterRecord};
 mod db_fires;
 pub use db_fires::AddFireTransaction;
 
