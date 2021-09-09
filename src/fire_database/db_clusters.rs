@@ -48,24 +48,6 @@ pub struct ClusterRecord {
     pub centroid: Point<f64>,
 }
 
-impl ClusterRecord {
-    pub fn new(
-        rowid: i64,
-        scan_time: NaiveDateTime,
-        power: f64,
-        perimeter: Polygon<f64>,
-        centroid: Point<f64>,
-    ) -> Self {
-        ClusterRecord {
-            rowid,
-            scan_time,
-            power,
-            perimeter,
-            centroid,
-        }
-    }
-}
-
 pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
 
 impl<'a> ClusterQuery<'a> {
