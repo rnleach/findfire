@@ -5,11 +5,13 @@ use geo::{
     algorithm::{concave_hull::ConcaveHull, intersects::Intersects},
     line_string, polygon, MultiPolygon, Point, Polygon,
 };
+use itertools::Itertools;
 use log::LevelFilter;
 use satfire::{ClusterDatabase, ClusterRecord, ConnectFireError};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
+const DAYS_FOR_FIRE_OUT: i64 = 21;
 
 fn main() -> Result<(), Box<dyn Error>> {
     SimpleLogger::new().with_level(LevelFilter::Debug).init()?;
@@ -22,111 +24,79 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cluster_db = ClusterDatabase::connect(DATABASE_FILE)?;
     let mut records = cluster_db.create_cluster_record_query()?;
-    let records = records.cluster_records_for("G17")?;
 
-    let mut curr_time_stamp = chrono::NaiveDate::from_ymd(1900, 1, 1).and_hms(0, 0, 0);
     let mut next_fire_state = FireDataNextNewFireState(1);
     let mut fires = vec![];
     let mut cluster_code_associations = vec![];
 
-    // If the last time the fire was observed was longer than this, lets assume this is a new
-    // a new fire.
-    let mut too_long_ago = curr_time_stamp;
-    let mut last_sort = curr_time_stamp;
+    records.cluster_records_for("G17")?
+        .group_by(|record| record.scan_time)
+        .into_iter()
+        .for_each(|(curr_time_stamp, records)| {
 
-    let mut num_new_non_child_fires = 0;
-    let mut total_clusters_this_time_step = 0;
-    for record in records {
-        let next_time_stamp = record.scan_time;
+            let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
+            fires.retain(|f: &FireData| f.last_observed > too_long_ago);
 
-        if next_time_stamp != curr_time_stamp {
-            assert!(next_time_stamp > curr_time_stamp);
+            let mut num_fires = 0;
+            let mut num_new_fires = 0;
 
-            let new_child_fires = finish_this_time_step(&mut fires, &mut cluster_code_associations);
+            for record in records {
 
-            let num_old_fires =
-                total_clusters_this_time_step - new_child_fires.len() - num_new_non_child_fires;
+                num_fires += 1;
 
+                // Try to assign it as a canidate member to a fire, but if that fails, create a new fire.
+                if let Some(record) = assign_cluster_to_fire(&mut fires, record, too_long_ago) {
+                    let id = next_fire_state.get_next_fire_id().expect("Ran out of fire ID #'s!");
+                    let ClusterRecord {
+                        centroid,
+                        scan_time,
+                        perimeter,
+                        ..
+                    } = record;
+
+                    let fd = FireData {
+                        id,
+                        origin: centroid,
+                        last_observed: scan_time,
+                        candidates: vec![],
+                        next_child_num: 0,
+                        perimeter,
+                    };
+                    fires.push(fd);
+                    num_new_fires += 1;
+                }
+            }
+
+            let num_old_fires = num_fires - num_new_fires;
             log::debug!(
-                "[{}] Fires this time: {:4}  Old: {:4} ({:3.0}%) New: {:4} ({:3.0}%) Children: {:4} ({:3.0}%)  Total fires: {:6}",
+                "[{}] Fires this time: {:4}  Old: {:4} ({:3.0}%) New: {:4} ({:3.0}%) Total fires: {:6}",
                 curr_time_stamp,
-                total_clusters_this_time_step,
+                num_fires,
                 num_old_fires,
-                num_old_fires as f64 / total_clusters_this_time_step as f64 * 100.0,
-                num_new_non_child_fires,
-                num_new_non_child_fires as f64 / total_clusters_this_time_step as f64 * 100.0,
-                new_child_fires.len(),
-                new_child_fires.len() as f64 / total_clusters_this_time_step as f64 * 100.0,
+                num_old_fires as f64 / num_fires as f64 * 100.0,
+                num_new_fires,
+                num_new_fires as f64 / num_fires as f64 * 100.0,
                 fires.len(),
             );
 
-            if curr_time_stamp - last_sort > Duration::days(1) {
-                fires.sort_by_key(|k| k.last_observed );
-                last_sort = curr_time_stamp;
-            }
 
-            fires.extend(new_child_fires);
+            finish_this_time_step(&mut fires, &mut cluster_code_associations);
 
-            // TODO: Write out fire associations to a database
+        });
 
-            curr_time_stamp = next_time_stamp;
-            too_long_ago = curr_time_stamp - Duration::days(21);
-            num_new_non_child_fires = 0;
-            total_clusters_this_time_step = 0;
-        }
-
-        // Try to assign it as a canidate member to a fire, but if that fails, create a new fire.
-        if let Some(record) = assign_cluster_to_fire(&mut fires, record, too_long_ago) {
-            let id = next_fire_state.get_next_fire_id()?;
-            let ClusterRecord {
-                centroid,
-                scan_time,
-                perimeter,
-                ..
-            } = record;
-
-            let fd = FireData {
-                id,
-                origin: centroid,
-                last_observed: scan_time,
-                candidates: vec![],
-                next_child_num: 0,
-                perimeter,
-            };
-            fires.push(fd);
-            num_new_non_child_fires += 1;
-        }
-
-        total_clusters_this_time_step += 1;
+    if let Some(most_descendant) = fires.into_iter().max_by_key(|item| item.id.0.len()) {
+        log::info!("");
+        log::info!("Tallest Family Tree");
+        let (lat, lon) = (most_descendant.origin.x(), most_descendant.origin.y());
+        log::info!(
+            "{:10.6} {:11.6} {} {:<}",
+            lat,
+            lon,
+            most_descendant.last_observed,
+            most_descendant.id.0
+        );
+        log::info!("");
     }
-
-    let new_fires = finish_this_time_step(&mut fires, &mut cluster_code_associations);
-    fires.extend(new_fires);
-    // TODO: Write out fire associations to a database
-
-    fires.sort_by(|a, b| a.id.cmp(&b.id));
-
-    let mut most_descendendant = fires[0].clone();
-
-    for fire in fires {
-        let (lat, lon) = (fire.origin.x(), fire.origin.y());
-        log::info!("{:10.6} {:11.6} {:<}", lat, lon, fire.id.0);
-
-        if fire.id.0.len() > most_descendendant.id.0.len() {
-            most_descendendant = fire;
-        }
-    }
-    log::info!("");
-    log::info!("Tallest Family Tree");
-    let (lat, lon) = (most_descendendant.origin.x(), most_descendendant.origin.y());
-    log::info!(
-        "{:10.6} {:11.6} {} {:<}",
-        lat,
-        lon,
-        most_descendendant.last_observed,
-        most_descendendant.id.0
-    );
-    log::info!("");
 
     Ok(())
 }
@@ -200,10 +170,7 @@ impl FireDataNextNewFireState {
     }
 }
 
-fn finish_this_time_step(
-    fires: &mut Vec<FireData>,
-    associations: &mut Vec<(i64, FireCode)>,
-) -> Vec<FireData> {
+fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut Vec<(i64, FireCode)>) {
     let mut new_fires = vec![];
 
     let mut tmp_polygon: Polygon<f64> = polygon!();
@@ -248,7 +215,7 @@ fn finish_this_time_step(
         }
     }
 
-    new_fires
+    fires.extend(new_fires);
 }
 
 fn merge_polygons(left: Polygon<f64>, right: Polygon<f64>) -> Polygon<f64> {
