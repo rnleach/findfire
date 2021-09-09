@@ -54,6 +54,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         ..
                     } = record;
 
+                    cluster_code_associations.push((record.rowid, id.clone()));
+
                     let fd = FireData {
                         id,
                         origin: centroid,
