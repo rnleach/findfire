@@ -16,7 +16,7 @@ impl FiresDatabase {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_CREATE,
         )?;
 
-        conn.execute(include_str!("create_db.sql"), [])?;
+        conn.execute_batch(include_str!("create_db.sql"))?;
 
         Ok(FiresDatabase { db: conn })
     }

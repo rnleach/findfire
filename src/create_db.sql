@@ -11,5 +11,22 @@ CREATE TABLE IF NOT EXISTS clusters
   perimeter      BLOB    NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ON clusters (satellite, sector, mid_point_time, lat, lon);
+CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups 
+  ON clusters (satellite, sector, mid_point_time, lat, lon);
 
+CREATE TABLE IF NOT EXISTS fires
+(
+    id            TEXT PRIMARY KEY,
+    last_observed INTEGER NOT NULL,
+    origin_lat    REAL    NOT NULL,
+    origin_lon    REAL    NOT NULL,
+    perimeter     BLOB    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS associations
+(
+    cluster_row_id INTEGER,
+    fire_id        TEXT,
+    FOREIGN KEY (cluster_row_id) REFERENCES clusters (rowid),
+    FOREIGN KEY (fire_id) REFERENCES fires (id)
+);
