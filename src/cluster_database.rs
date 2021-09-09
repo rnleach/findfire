@@ -5,11 +5,11 @@ use chrono::NaiveDateTime;
 use geo::{point, Point, Polygon};
 use rusqlite::ToSql;
 
-pub struct ClusterDatabase {
+pub struct FiresDatabase {
     db: rusqlite::Connection,
 }
 
-impl ClusterDatabase {
+impl FiresDatabase {
     pub fn connect<P: AsRef<Path>>(path_to_db: P) -> Result<Self, Box<dyn Error>> {
         let conn = rusqlite::Connection::open_with_flags(
             path_to_db,
@@ -18,7 +18,7 @@ impl ClusterDatabase {
 
         conn.execute(include_str!("create_db.sql"), [])?;
 
-        Ok(ClusterDatabase { db: conn })
+        Ok(FiresDatabase { db: conn })
     }
 
     pub fn prepare(&self) -> Result<AddRowsTransaction, Box<dyn Error>> {

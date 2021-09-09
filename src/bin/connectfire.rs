@@ -7,7 +7,7 @@ use geo::{
 };
 use itertools::Itertools;
 use log::LevelFilter;
-use satfire::{ClusterDatabase, ClusterRecord, ConnectFireError};
+use satfire::{FiresDatabase, ClusterRecord, ConnectFireError};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::warn!("Warn messages enabled.");
     log::error!("Error messages enabled.");
 
-    let cluster_db = ClusterDatabase::connect(DATABASE_FILE)?;
+    let cluster_db = FiresDatabase::connect(DATABASE_FILE)?;
     let mut records = cluster_db.create_cluster_record_query()?;
 
     let mut next_fire_state = FireDataNextNewFireState(1);
