@@ -21,14 +21,14 @@ impl FiresDatabase {
         Ok(FiresDatabase { db: conn })
     }
 
-    pub fn prepare(&self) -> Result<AddRowsTransaction, Box<dyn Error>> {
+    pub fn add_cluster_handle(&self) -> Result<AddClustersTransaction, Box<dyn Error>> {
         let stmt = self.db.prepare(include_str!("add_row_statement.sql"))?;
 
         self.db.execute("BEGIN", [])?;
-        Ok(AddRowsTransaction(stmt, &self.db))
+        Ok(AddClustersTransaction(stmt, &self.db))
     }
 
-    pub fn find_latest(
+    pub fn find_latest_cluster(
         &self,
         satellite: &str,
         sector: &str,
@@ -42,16 +42,16 @@ impl FiresDatabase {
         Ok(latest)
     }
 
-    pub fn create_cluster_record_query(&self) -> Result<ClusterRecordQuery, Box<dyn Error>> {
+    pub fn cluster_query_handle(&self) -> Result<ClusterQuery, Box<dyn Error>> {
         let stmt = self.db.prepare("SELECT rowid, mid_point_time, lat, lon, power, perimeter FROM clusters WHERE satellite = ? ORDER BY mid_point_time ASC")?;
-        Ok(ClusterRecordQuery(stmt))
+        Ok(ClusterQuery(stmt))
     }
 }
 
-pub struct ClusterRecordQuery<'a>(rusqlite::Statement<'a>);
+pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
 
-impl<'a> ClusterRecordQuery<'a> {
-    pub fn cluster_records_for(
+impl<'a> ClusterQuery<'a> {
+    pub fn records_for(
         &mut self,
         satellite: &str,
     ) -> Result<impl Iterator<Item = ClusterRecord> + '_, Box<dyn Error>> {
@@ -81,10 +81,10 @@ impl<'a> ClusterRecordQuery<'a> {
     }
 }
 
-pub struct AddRowsTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
+pub struct AddClustersTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
 
-impl<'a> AddRowsTransaction<'a> {
-    pub fn add_row(
+impl<'a> AddClustersTransaction<'a> {
+    pub fn add_cluster(
         &mut self,
         satellite: &'static str,
         sector: &'static str,
@@ -114,7 +114,7 @@ impl<'a> AddRowsTransaction<'a> {
     }
 }
 
-impl<'a> Drop for AddRowsTransaction<'a> {
+impl<'a> Drop for AddClustersTransaction<'a> {
     fn drop(&mut self) {
         self.1.execute("COMMIT", []).unwrap();
     }

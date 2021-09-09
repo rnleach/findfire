@@ -7,7 +7,7 @@ use std::{
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::LevelFilter;
-use satfire::{Cluster, FiresDatabase, ClusterList, FireSatImage};
+use satfire::{Cluster, ClusterList, FireSatImage, FiresDatabase};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -90,7 +90,7 @@ fn start_path_generation_thread(
     for sat in ["G16", "G17"] {
         for sect in ["FDCC", "FDCM", "FDCF"] {
             let key = format!("{}_{}", sat, sect);
-            let latest_entry = match cluster_db.find_latest(sat, sect) {
+            let latest_entry = match cluster_db.find_latest_cluster(sat, sect) {
                 Ok(vt) => vt,
                 Err(err) => {
                     log::debug!("Error finding latest entry for {}: {}", key, err);
@@ -194,7 +194,7 @@ fn start_database_thread(
         .name("findfire-database".to_owned())
         .spawn(move || {
             let cluster_db = FiresDatabase::connect(DATABASE_FILE).unwrap();
-            let mut add_transaction = cluster_db.prepare().unwrap();
+            let mut add_transaction = cluster_db.add_cluster_handle().unwrap();
 
             let mut biggest_fire = Cluster::default();
             let mut biggest_fire_sat = "NA";
@@ -212,7 +212,7 @@ fn start_database_thread(
                     }
 
                     add_transaction
-                        .add_row(
+                        .add_cluster(
                             cluster_list.satellite,
                             cluster_list.sector,
                             cluster_list.mid_point,
