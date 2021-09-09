@@ -1,6 +1,6 @@
 pub use cluster::{Cluster, ClusterList, ClusterRecord};
 pub use error::{ConnectFireError, FindFireError};
-pub use fire_database::{AddClustersTransaction, AddFireTransaction, FiresDatabase};
+pub use fire_database::{AddClustersTransaction, AddFireTransaction, ClusterQuery, FiresDatabase};
 pub use firepoint::FirePoint;
 pub use firesatimage::FireSatImage;
 
