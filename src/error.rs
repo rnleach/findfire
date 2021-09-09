@@ -4,6 +4,17 @@ use std::{
 };
 
 #[derive(Debug, Clone, Copy)]
+pub struct SatFireError {
+    pub msg: &'static str,
+}
+
+impl Display for SatFireError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.msg)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct FindFireError {
     pub msg: &'static str,
 }

@@ -7,7 +7,7 @@ pub struct FiresDatabase {
 mod db_clusters;
 pub use db_clusters::{AddClustersTransaction, ClusterQuery, ClusterRecord};
 mod db_fires;
-pub use db_fires::AddFireTransaction;
+pub use db_fires::{AddFireTransaction, FireCode, FireDataNextNewFireState, FireQuery, FireRecord};
 
 impl FiresDatabase {
     pub fn connect<P: AsRef<Path>>(path_to_db: P) -> Result<Self, Box<dyn Error>> {

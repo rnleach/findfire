@@ -7,7 +7,7 @@ use geo::{
 };
 use itertools::Itertools;
 use log::LevelFilter;
-use satfire::{ClusterRecord, ConnectFireError, FiresDatabase};
+use satfire::{ClusterRecord, FireCode, FiresDatabase};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -22,10 +22,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::warn!("Warn messages enabled.");
     log::error!("Error messages enabled.");
 
-    let cluster_db = FiresDatabase::connect(DATABASE_FILE)?;
-    let mut records = cluster_db.cluster_query_handle()?;
+    let fires_db = FiresDatabase::connect(DATABASE_FILE)?;
+    let mut records = fires_db.cluster_query_handle()?;
 
-    let mut next_fire_state = FireDataNextNewFireState(1);
+    let mut next_fire_state = fires_db.next_new_fire_id_state()?;
     let mut fires = vec![];
     let mut cluster_code_associations = vec![];
 
@@ -86,16 +86,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         });
 
-    if let Some(most_descendant) = fires.into_iter().max_by_key(|item| item.id.0.len()) {
+    if let Some(most_descendant) = fires
+        .into_iter()
+        .max_by_key(|item| item.id.num_generations())
+    {
         log::info!("");
         log::info!("Tallest Family Tree");
         let (lat, lon) = (most_descendant.origin.x(), most_descendant.origin.y());
         log::info!(
-            "{:10.6} {:11.6} {} {:<}",
+            "{:10.6} {:11.6} {} {:2} {:<}",
             lat,
             lon,
             most_descendant.last_observed,
-            most_descendant.id.0
+            most_descendant.id.num_generations(),
+            most_descendant.id,
         );
         log::info!("");
     }
@@ -141,35 +145,6 @@ struct FireData {
 
     /// Where to start numbering future children
     next_child_num: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct FireCode(String);
-
-impl FireCode {
-    pub fn make_child_fire(&self, child_num: u32) -> FireCode {
-        assert!(child_num < 100);
-
-        FireCode(format!("{}{:02}", self.0, child_num))
-    }
-}
-
-struct FireDataNextNewFireState(u32);
-
-impl FireDataNextNewFireState {
-    pub fn get_next_fire_id(&mut self) -> Result<FireCode, ConnectFireError> {
-        let val_to_return = self.0;
-
-        self.0 += 1;
-
-        if val_to_return <= 999_999 {
-            Ok(FireCode(format!("{:06}", val_to_return)))
-        } else {
-            Err(ConnectFireError {
-                msg: "Too many fires for this program.",
-            })
-        }
-    }
 }
 
 fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut Vec<(i64, FireCode)>) {
