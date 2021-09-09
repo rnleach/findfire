@@ -16,16 +16,27 @@ impl FiresDatabase {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_CREATE,
         )?;
 
-        conn.execute_batch(include_str!("create_db.sql"))?;
+        conn.execute_batch(include_str!("fire_database/create_db.sql"))?;
 
         Ok(FiresDatabase { db: conn })
     }
 
     pub fn add_cluster_handle(&self) -> Result<AddClustersTransaction, Box<dyn Error>> {
-        let stmt = self.db.prepare(include_str!("add_row_statement.sql"))?;
+        let stmt = self
+            .db
+            .prepare(include_str!("fire_database/add_cluster.sql"))?;
 
         self.db.execute("BEGIN", [])?;
         Ok(AddClustersTransaction(stmt, &self.db))
+    }
+
+    pub fn add_fire_handle(&self) -> Result<AddFireTransaction, Box<dyn Error>> {
+        let stmt = self
+            .db
+            .prepare(include_str!("fire_database/add_fire.sql"))?;
+
+        self.db.execute("BEGIN", [])?;
+        Ok(AddFireTransaction(stmt, &self.db))
     }
 
     pub fn find_latest_cluster(
@@ -34,7 +45,7 @@ impl FiresDatabase {
         sector: &str,
     ) -> Result<NaiveDateTime, Box<dyn Error>> {
         let latest: NaiveDateTime = self.db.query_row(
-            include_str!("find_latest.sql"),
+            include_str!("fire_database/find_latest_cluster.sql"),
             &[satellite, sector],
             |row| row.get(0),
         )?;
@@ -43,7 +54,7 @@ impl FiresDatabase {
     }
 
     pub fn cluster_query_handle(&self) -> Result<ClusterQuery, Box<dyn Error>> {
-        let stmt = self.db.prepare("SELECT rowid, mid_point_time, lat, lon, power, perimeter FROM clusters WHERE satellite = ? ORDER BY mid_point_time ASC")?;
+        let stmt = self.db.prepare(include_str!("fire_database/get_clusters.sql"))?;
         Ok(ClusterQuery(stmt))
     }
 }
@@ -115,6 +126,39 @@ impl<'a> AddClustersTransaction<'a> {
 }
 
 impl<'a> Drop for AddClustersTransaction<'a> {
+    fn drop(&mut self) {
+        self.1.execute("COMMIT", []).unwrap();
+    }
+}
+
+pub struct AddFireTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
+
+impl<'a> AddFireTransaction<'a> {
+    pub fn add_fire(
+        &mut self,
+        fire_id: &str,
+        last_oberved: NaiveDateTime,
+        origin: Point<f64>,
+        perimeter: Polygon<f64>,
+    ) -> Result<(), Box<dyn Error>> {
+        let lat = origin.x();
+        let lon = origin.y();
+
+        let perimeter = bincode::serialize(&perimeter)?;
+
+        let _ = self.0.execute([
+            &fire_id as &dyn ToSql,
+            &last_oberved.timestamp(),
+            &lat,
+            &lon,
+            &perimeter,
+        ])?;
+
+        Ok(())
+    }
+}
+
+impl<'a> Drop for AddFireTransaction<'a> {
     fn drop(&mut self) {
         self.1.execute("COMMIT", []).unwrap();
     }
