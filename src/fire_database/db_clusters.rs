@@ -8,10 +8,10 @@ use rusqlite::ToSql;
 
 impl super::FiresDatabase {
     pub fn add_cluster_handle(&self) -> Result<AddClustersTransaction, Box<dyn Error>> {
-        let stmt = self.db.prepare(include_str!("add_cluster.sql"))?;
-
-        self.db.execute("BEGIN", [])?;
-        Ok(AddClustersTransaction(stmt, &self.db))
+        Ok(AddClustersTransaction {
+            buffer: Vec::with_capacity(BUFFER_CAPACITY),
+            db: &self.db,
+        })
     }
 
     pub fn find_latest_cluster(
@@ -48,6 +48,7 @@ pub struct ClusterRecord {
     pub centroid: Point<f64>,
 }
 
+//pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
 pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
 
 impl<'a> ClusterQuery<'a> {
@@ -85,7 +86,21 @@ impl<'a> ClusterQuery<'a> {
     }
 }
 
-pub struct AddClustersTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
+//pub struct AddClustersTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
+pub struct AddClustersTransaction<'a> {
+    buffer: Vec<(
+        &'static str,
+        &'static str,
+        NaiveDateTime,
+        Point<f64>,
+        f64,
+        Polygon<f64>,
+        i32,
+    )>,
+    db: &'a rusqlite::Connection,
+}
+
+const BUFFER_CAPACITY: usize = 10_000;
 
 impl<'a> AddClustersTransaction<'a> {
     pub fn add_cluster(
@@ -98,21 +113,47 @@ impl<'a> AddClustersTransaction<'a> {
         perimeter: Polygon<f64>,
         num_points: i32,
     ) -> Result<(), Box<dyn Error>> {
-        let lat = centroid.x();
-        let lon = centroid.y();
+        self.buffer.push((
+            satellite,
+            sector,
+            scan_mid_point,
+            centroid,
+            power,
+            perimeter,
+            num_points,
+        ));
 
-        let perimeter = bincode::serialize(&perimeter)?;
+        if self.buffer.len() >= BUFFER_CAPACITY {
+            self.flush()?;
+        }
 
-        let _ = self.0.execute([
-            &satellite as &dyn ToSql,
-            &sector,
-            &scan_mid_point.timestamp(),
-            &lat,
-            &lon,
-            &power,
-            &num_points,
-            &perimeter,
-        ])?;
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), Box<dyn Error>> {
+        self.db.execute_batch("BEGIN;")?;
+        let mut stmt = self.db.prepare(include_str!("add_cluster.sql"))?;
+
+        for (satellite, sector, scan_mid_point, centroid, power, perimeter, num_points) in
+            self.buffer.drain(..)
+        {
+            let lat = centroid.x();
+            let lon = centroid.y();
+
+            let perimeter = bincode::serialize(&perimeter)?;
+            let _ = stmt.execute([
+                &satellite as &dyn ToSql,
+                &sector,
+                &scan_mid_point.timestamp(),
+                &lat,
+                &lon,
+                &power,
+                &num_points,
+                &perimeter,
+            ])?;
+        }
+
+        self.db.execute_batch("COMMIT;")?;
 
         Ok(())
     }
@@ -120,6 +161,6 @@ impl<'a> AddClustersTransaction<'a> {
 
 impl<'a> Drop for AddClustersTransaction<'a> {
     fn drop(&mut self) {
-        self.1.execute("COMMIT", []).unwrap();
+        self.flush().unwrap();
     }
 }

@@ -8,6 +8,8 @@ mod db_clusters;
 pub use db_clusters::{AddClustersTransaction, ClusterQuery, ClusterRecord};
 mod db_fires;
 pub use db_fires::{AddFireTransaction, FireCode, FireDataNextNewFireState, FireQuery, FireRecord};
+mod db_cluster_fire_associations;
+pub use db_cluster_fire_associations::AddAssociationsTransaction;
 
 impl FiresDatabase {
     pub fn connect<P: AsRef<Path>>(path_to_db: P) -> Result<Self, Box<dyn Error>> {

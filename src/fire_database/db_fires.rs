@@ -29,10 +29,10 @@ impl super::FiresDatabase {
     }
 
     pub fn add_fire_handle(&self) -> Result<AddFireTransaction, Box<dyn Error>> {
-        let stmt = self.db.prepare(include_str!("add_fire.sql"))?;
-
-        self.db.execute("BEGIN", [])?;
-        Ok(AddFireTransaction(stmt, &self.db))
+        Ok(AddFireTransaction {
+            db: &self.db,
+            buffer: Vec::with_capacity(BUFFER_CAPACITY),
+        })
     }
 }
 
@@ -136,30 +136,60 @@ pub struct FireRecord {
     pub origin: Point<f64>,
 }
 
-pub struct AddFireTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
+pub struct AddFireTransaction<'a> {
+    buffer: Vec<(
+        String,
+        &'static str,
+        NaiveDateTime,
+        Point<f64>,
+        Polygon<f64>,
+    )>,
+    db: &'a rusqlite::Connection,
+}
+
+const BUFFER_CAPACITY: usize = 10_000;
 
 impl<'a> AddFireTransaction<'a> {
-    pub fn add_fire(
+    pub fn add_fire<S: Into<String>>(
         &mut self,
         fire_id: &str,
-        satellite: &str,
-        last_oberved: NaiveDateTime,
+        satellite: &'static str,
+        last_observed: NaiveDateTime,
         origin: Point<f64>,
         perimeter: Polygon<f64>,
     ) -> Result<(), Box<dyn Error>> {
-        let lat = origin.x();
-        let lon = origin.y();
+        let fire_id: String = fire_id.into();
 
-        let perimeter = bincode::serialize(&perimeter)?;
+        self.buffer
+            .push((fire_id, satellite, last_observed, origin, perimeter));
 
-        let _ = self.0.execute([
-            &fire_id as &dyn ToSql,
-            &satellite,
-            &last_oberved.timestamp(),
-            &lat,
-            &lon,
-            &perimeter,
-        ])?;
+        if self.buffer.len() >= BUFFER_CAPACITY {
+            self.flush()?;
+        }
+
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), Box<dyn Error>> {
+        self.db.execute_batch("BEGIN;")?;
+        let mut stmt = self.db.prepare(include_str!("add_fire.sql"))?;
+
+        for (fire_id, satellite, last_observed, origin, perimeter) in self.buffer.drain(..) {
+            let lat = origin.x();
+            let lon = origin.y();
+
+            let perimeter = bincode::serialize(&perimeter)?;
+            let _ = stmt.execute([
+                &fire_id as &dyn ToSql,
+                &satellite,
+                &last_observed.timestamp(),
+                &lat,
+                &lon,
+                &perimeter,
+            ])?;
+        }
+
+        self.db.execute_batch("COMMIT;")?;
 
         Ok(())
     }
@@ -167,6 +197,6 @@ impl<'a> AddFireTransaction<'a> {
 
 impl<'a> Drop for AddFireTransaction<'a> {
     fn drop(&mut self) {
-        self.1.execute("COMMIT", []).unwrap();
+        self.flush().unwrap()
     }
 }
