@@ -151,7 +151,7 @@ pub struct AddFireTransaction<'a> {
     db: &'a rusqlite::Connection,
 }
 
-const BUFFER_CAPACITY: usize = 1_000;
+const BUFFER_CAPACITY: usize = 100_000;
 
 impl<'a> AddFireTransaction<'a> {
     pub fn add_fire<S: Into<String>>(

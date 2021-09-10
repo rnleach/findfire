@@ -100,7 +100,7 @@ pub struct AddClustersTransaction<'a> {
     db: &'a rusqlite::Connection,
 }
 
-const BUFFER_CAPACITY: usize = 10_000;
+const BUFFER_CAPACITY: usize = 100_000;
 
 impl<'a> AddClustersTransaction<'a> {
     pub fn add_cluster(
