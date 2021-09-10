@@ -24,10 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let fires_db = FiresDatabase::connect(DATABASE_FILE)?;
     let mut records = fires_db.cluster_query_handle()?;
-
-    let mut next_fire_state = fires_db.next_new_fire_id_state()?;
-    let mut fires = vec![];
     let mut cluster_code_associations = fires_db.add_association_handle()?;
+    let mut next_fire_state = fires_db.next_new_fire_id_state()?;
+
+    let mut active_fires = vec![];
 
     records.records_for("G17")?
         .group_by(|record| record.scan_time)
@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .for_each(|(curr_time_stamp, records)| {
 
             let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
-            fires.retain(|f: &FireData| f.last_observed > too_long_ago);
+            active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
 
             let mut num_fires = 0;
             let mut num_new_fires = 0;
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 num_fires += 1;
 
                 // Try to assign it as a canidate member to a fire, but if that fails, create a new fire.
-                if let Some(record) = assign_cluster_to_fire(&mut fires, record, too_long_ago) {
+                if let Some(record) = assign_cluster_to_fire(&mut active_fires, record, too_long_ago) {
                     let id = next_fire_state.get_next_fire_id().expect("Ran out of fire ID #'s!");
                     let ClusterRecord {
                         centroid,
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         next_child_num: 0,
                         perimeter,
                     };
-                    fires.push(fd);
+                    active_fires.push(fd);
                     num_new_fires += 1;
                 }
             }
@@ -78,15 +78,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                 num_old_fires as f64 / num_fires as f64 * 100.0,
                 num_new_fires,
                 num_new_fires as f64 / num_fires as f64 * 100.0,
-                fires.len(),
+                active_fires.len(),
             );
 
 
-            finish_this_time_step(&mut fires, &mut cluster_code_associations);
+            finish_this_time_step(&mut active_fires, &mut cluster_code_associations);
 
         });
 
-    if let Some(most_descendant) = fires
+    if let Some(most_descendant) = active_fires
         .into_iter()
         .max_by_key(|item| item.id.num_generations())
     {
@@ -109,11 +109,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 /// Return the ClusterRecord if it couldn't be assigned somewhere else
 fn assign_cluster_to_fire(
-    fires: &mut Vec<FireData>,
+    active_fires: &mut Vec<FireData>,
     cluster: ClusterRecord,
     too_long_ago: NaiveDateTime,
 ) -> Option<ClusterRecord> {
-    for fire in fires
+    for fire in active_fires
         .iter_mut()
         .rev()
         .take_while(|f| f.last_observed > too_long_ago)

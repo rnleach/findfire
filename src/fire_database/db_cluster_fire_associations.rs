@@ -37,6 +37,7 @@ impl<'a> AddAssociationsTransaction<'a> {
     }
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
+        log::info!("Flushing associations.");
         self.db.execute_batch("BEGIN;")?;
         let mut stmt = self
             .db

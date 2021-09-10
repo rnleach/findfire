@@ -11,7 +11,7 @@ use satfire::{Cluster, ClusterList, FireSatImage, FiresDatabase};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/home/ryan/wxdata/GOES/";
+const DATA_DIR: &'static str = "/home/ryan/wxdata/GOESX/";
 
 const CHANNEL_SIZE: usize = 5;
 

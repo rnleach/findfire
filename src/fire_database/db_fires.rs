@@ -175,6 +175,7 @@ impl<'a> AddFireTransaction<'a> {
     }
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
+        log::info!("Flushing fires.");
         self.db.execute_batch("BEGIN;")?;
         let mut stmt = self.db.prepare(include_str!("add_fire.sql"))?;
 

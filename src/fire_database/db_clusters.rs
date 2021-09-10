@@ -131,6 +131,7 @@ impl<'a> AddClustersTransaction<'a> {
     }
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
+        log::info!("Flushing clusters.");
         self.db.execute_batch("BEGIN;")?;
         let mut stmt = self.db.prepare(include_str!("add_cluster.sql"))?;
 
