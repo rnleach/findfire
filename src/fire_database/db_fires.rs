@@ -84,6 +84,10 @@ impl FireCode {
     pub fn num_generations(&self) -> usize {
         (self.0.len() - 6) / 2 + 1
     }
+
+    pub fn clone_string(&self) -> String {
+        self.0.clone()
+    }
 }
 
 impl Display for FireCode {

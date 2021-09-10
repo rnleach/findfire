@@ -7,7 +7,7 @@ use geo::{
 };
 use itertools::Itertools;
 use log::LevelFilter;
-use satfire::{ClusterRecord, FireCode, FiresDatabase};
+use satfire::{AddAssociationsTransaction, ClusterRecord, FireCode, FiresDatabase};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut next_fire_state = fires_db.next_new_fire_id_state()?;
     let mut fires = vec![];
-    let mut cluster_code_associations = vec![];
+    let mut cluster_code_associations = fires_db.add_association_handle()?;
 
     records.records_for("G17")?
         .group_by(|record| record.scan_time)
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         ..
                     } = record;
 
-                    cluster_code_associations.push((record.rowid, id.clone()));
+                    cluster_code_associations.add_association(record.rowid, id.clone_string()).unwrap();
 
                     let fd = FireData {
                         id,
@@ -147,7 +147,7 @@ struct FireData {
     next_child_num: u32,
 }
 
-fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut Vec<(i64, FireCode)>) {
+fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut AddAssociationsTransaction) {
     let mut new_fires = vec![];
 
     let mut tmp_polygon: Polygon<f64> = polygon!();
@@ -162,14 +162,19 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut Vec<(i64,
                 tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter);
                 std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
 
-                associations.push((candidate.rowid, fire.id.clone()));
+                associations
+                    .add_association(candidate.rowid, fire.id.clone_string())
+                    .unwrap();
             }
         } else {
             // If there are several candidates, create a new fire for each with an updated code
             for candidate in fire.candidates.drain(..) {
                 let id = fire.id.make_child_fire(fire.next_child_num);
+                // TODO add the next child value to the
                 fire.next_child_num += 1;
-                associations.push((candidate.rowid, id.clone()));
+                associations
+                    .add_association(candidate.rowid, fire.id.clone_string())
+                    .unwrap();
 
                 let ClusterRecord {
                     centroid,
