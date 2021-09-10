@@ -30,6 +30,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut fires = fires_db.add_fire_handle()?;
     let mut next_fire_state = fires_db.next_new_fire_id_state()?;
 
+    let mut last_purge: NaiveDateTime = chrono::NaiveDate::from_ymd(1900, 1, 1).and_hms(0, 0, 0);
+
     let mut active_fires = vec![];
 
     for (curr_time_stamp, records) in records
@@ -38,7 +40,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_iter()
     {
         let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
-        active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
+
+        if curr_time_stamp - last_purge > Duration::days(1) {
+            for af in active_fires
+                .iter()
+                .filter(|af: &&FireData| af.last_observed <= too_long_ago)
+            {
+                fires.add_fire(
+                    af.id.clone_string(),
+                    "G17",
+                    af.last_observed,
+                    af.origin,
+                    af.perimeter.clone(),
+                )?;
+            }
+
+            active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
+
+            last_purge = curr_time_stamp;
+        }
 
         let mut num_fires = 0;
         let mut num_new_fires = 0;
@@ -99,6 +119,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             &mut cluster_code_associations,
             &mut fires,
             "G17",
+        )?;
+    }
+
+    for af in &active_fires {
+        fires.add_fire(
+            af.id.clone_string(),
+            "G17",
+            af.last_observed,
+            af.origin,
+            af.perimeter.clone(),
         )?;
     }
 
