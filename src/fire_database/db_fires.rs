@@ -12,11 +12,19 @@ use rusqlite::{Connection, ToSql};
 
 impl super::FiresDatabase {
     pub fn next_new_fire_id_state(&self) -> Result<FireDataNextNewFireState, Box<dyn Error>> {
-        // TODO retrieve from database
-        assert!(false);
+        let next_id_num: i64 = match self.db.query_row(
+            "SELECT item_value FROM meta WHERE item_name = 'next fire num'",
+            [],
+            |row| row.get(0),
+        ) {
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(1),
+            other => other,
+        }?;
+
+        assert!(next_id_num > 0);
         Ok(FireDataNextNewFireState {
             conn: &self.db,
-            next_id_num: 1,
+            next_id_num: next_id_num as u32,
         })
     }
 
@@ -91,9 +99,12 @@ pub struct FireDataNextNewFireState<'a> {
 
 impl<'a> Drop for FireDataNextNewFireState<'a> {
     fn drop(&mut self) {
-        // TODO save next fire state to database
-        assert!(false);
-        self.conn.execute("", []).unwrap();
+        self.conn
+            .execute(
+                "INSERT OR UPDATE INTO meta (item_name, item_value) VALUES (?, ?)",
+                [&"next fire num" as &dyn ToSql, &self.next_id_num],
+            )
+            .unwrap();
     }
 }
 
