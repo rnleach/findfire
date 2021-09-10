@@ -146,7 +146,7 @@ fn start_path_generation_thread(
                     scan_start > most_recent_in_db
                 })
             {
-                log::info!("Processing {}", fname);
+                log::debug!("Processing {}", fname);
                 to_load_thread.send(entry).unwrap();
             }
         })?;

@@ -105,7 +105,7 @@ impl<'a> Drop for FireDataNextNewFireState<'a> {
     fn drop(&mut self) {
         self.conn
             .execute(
-                "INSERT OR UPDATE INTO meta (item_name, item_value) VALUES (?, ?)",
+                "INSERT OR REPLACE INTO meta (item_name, item_value) VALUES (?, ?)",
                 [&"next fire num" as &dyn ToSql, &self.next_id_num],
             )
             .unwrap();
@@ -151,12 +151,12 @@ pub struct AddFireTransaction<'a> {
     db: &'a rusqlite::Connection,
 }
 
-const BUFFER_CAPACITY: usize = 10_000;
+const BUFFER_CAPACITY: usize = 1_000;
 
 impl<'a> AddFireTransaction<'a> {
     pub fn add_fire<S: Into<String>>(
         &mut self,
-        fire_id: &str,
+        fire_id: S,
         satellite: &'static str,
         last_observed: NaiveDateTime,
         origin: Point<f64>,
@@ -175,7 +175,7 @@ impl<'a> AddFireTransaction<'a> {
     }
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
-        log::info!("Flushing fires.");
+        log::debug!("Flushing fires.");
         self.db.execute_batch("BEGIN;")?;
         let mut stmt = self.db.prepare(include_str!("add_fire.sql"))?;
 
@@ -183,15 +183,28 @@ impl<'a> AddFireTransaction<'a> {
             let lat = origin.x();
             let lon = origin.y();
 
+            log::trace!(
+                "'{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}'",
+                fire_id,
+                satellite,
+                last_observed,
+                lat,
+                lon,
+                perimeter
+            );
+
             let perimeter = bincode::serialize(&perimeter)?;
-            let _ = stmt.execute([
+            match stmt.execute([
                 &fire_id as &dyn ToSql,
                 &satellite,
                 &last_observed.timestamp(),
                 &lat,
                 &lon,
                 &perimeter,
-            ])?;
+            ]) {
+                Ok(_) => {}
+                Err(err) => log::error!("{}", err),
+            }
         }
 
         self.db.execute_batch("COMMIT;")?;
@@ -202,6 +215,7 @@ impl<'a> AddFireTransaction<'a> {
 
 impl<'a> Drop for AddFireTransaction<'a> {
     fn drop(&mut self) {
+        log::debug!("Dropping AddFireTransaction");
         self.flush().unwrap()
     }
 }

@@ -7,7 +7,9 @@ use geo::{
 };
 use itertools::Itertools;
 use log::LevelFilter;
-use satfire::{AddAssociationsTransaction, ClusterRecord, FireCode, FiresDatabase};
+use satfire::{
+    AddAssociationsTransaction, AddFireTransaction, ClusterRecord, FireCode, FiresDatabase,
+};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -25,66 +27,80 @@ fn main() -> Result<(), Box<dyn Error>> {
     let fires_db = FiresDatabase::connect(DATABASE_FILE)?;
     let mut records = fires_db.cluster_query_handle()?;
     let mut cluster_code_associations = fires_db.add_association_handle()?;
+    let mut fires = fires_db.add_fire_handle()?;
     let mut next_fire_state = fires_db.next_new_fire_id_state()?;
 
     let mut active_fires = vec![];
 
-    records.records_for("G17")?
+    for (curr_time_stamp, records) in records
+        .records_for("G17")?
         .group_by(|record| record.scan_time)
         .into_iter()
-        .for_each(|(curr_time_stamp, records)| {
+    {
+        let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
+        active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
 
-            let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
-            active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
+        let mut num_fires = 0;
+        let mut num_new_fires = 0;
 
-            let mut num_fires = 0;
-            let mut num_new_fires = 0;
+        for record in records {
+            num_fires += 1;
 
-            for record in records {
+            // Try to assign it as a canidate member to a fire, but if that fails, create a new fire.
+            if let Some(record) = assign_cluster_to_fire(&mut active_fires, record, too_long_ago) {
+                let id = next_fire_state
+                    .get_next_fire_id()
+                    .expect("Ran out of fire ID #'s!");
+                let ClusterRecord {
+                    centroid,
+                    scan_time,
+                    perimeter,
+                    ..
+                } = record;
 
-                num_fires += 1;
+                cluster_code_associations
+                    .add_association(record.rowid, id.clone_string())
+                    .unwrap();
 
-                // Try to assign it as a canidate member to a fire, but if that fails, create a new fire.
-                if let Some(record) = assign_cluster_to_fire(&mut active_fires, record, too_long_ago) {
-                    let id = next_fire_state.get_next_fire_id().expect("Ran out of fire ID #'s!");
-                    let ClusterRecord {
-                        centroid,
-                        scan_time,
-                        perimeter,
-                        ..
-                    } = record;
-
-                    cluster_code_associations.add_association(record.rowid, id.clone_string()).unwrap();
-
-                    let fd = FireData {
-                        id,
-                        origin: centroid,
-                        last_observed: scan_time,
-                        candidates: vec![],
-                        next_child_num: 0,
-                        perimeter,
-                    };
-                    active_fires.push(fd);
-                    num_new_fires += 1;
-                }
+                let fd = FireData {
+                    id,
+                    origin: centroid,
+                    last_observed: scan_time,
+                    candidates: vec![],
+                    next_child_num: 0,
+                    perimeter,
+                };
+                fires.add_fire(
+                    fd.id.clone_string(),
+                    "G17",
+                    fd.last_observed,
+                    fd.origin,
+                    fd.perimeter.clone(),
+                )?;
+                active_fires.push(fd);
+                num_new_fires += 1;
             }
+        }
 
-            let num_old_fires = num_fires - num_new_fires;
-            log::debug!(
-                "[{}] Fires this time: {:4}  Old: {:4} ({:3.0}%) New: {:4} ({:3.0}%) Total fires: {:6}",
-                curr_time_stamp,
-                num_fires,
-                num_old_fires,
-                num_old_fires as f64 / num_fires as f64 * 100.0,
-                num_new_fires,
-                num_new_fires as f64 / num_fires as f64 * 100.0,
-                active_fires.len(),
-            );
+        let num_old_fires = num_fires - num_new_fires;
+        log::debug!(
+            "[{}] Fires this time: {:4}  Old: {:4} ({:3.0}%) New: {:4} ({:3.0}%) Total fires: {:6}",
+            curr_time_stamp,
+            num_fires,
+            num_old_fires,
+            num_old_fires as f64 / num_fires as f64 * 100.0,
+            num_new_fires,
+            num_new_fires as f64 / num_fires as f64 * 100.0,
+            active_fires.len(),
+        );
 
-
-            finish_this_time_step(&mut active_fires, &mut cluster_code_associations);
-
-        });
+        finish_this_time_step(
+            &mut active_fires,
+            &mut cluster_code_associations,
+            &mut fires,
+            "G17",
+        )?;
+    }
 
     if let Some(most_descendant) = active_fires
         .into_iter()
@@ -147,7 +163,12 @@ struct FireData {
     next_child_num: u32,
 }
 
-fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut AddAssociationsTransaction) {
+fn finish_this_time_step(
+    fires: &mut Vec<FireData>,
+    associations: &mut AddAssociationsTransaction,
+    fires_db: &mut AddFireTransaction,
+    satellite: &'static str,
+) -> Result<(), Box<dyn Error>> {
     let mut new_fires = vec![];
 
     let mut tmp_polygon: Polygon<f64> = polygon!();
@@ -192,12 +213,21 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, associations: &mut AddAssoci
                     next_child_num: 0,
                 };
 
+                fires_db.add_fire(
+                    new_fire.id.clone_string(),
+                    satellite,
+                    new_fire.last_observed,
+                    new_fire.origin,
+                    new_fire.perimeter.clone(),
+                )?;
                 new_fires.push(new_fire);
             }
         }
     }
 
     fires.extend(new_fires);
+
+    Ok(())
 }
 
 fn merge_polygons(left: Polygon<f64>, right: Polygon<f64>) -> Polygon<f64> {

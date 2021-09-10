@@ -1,4 +1,4 @@
-INSERT OR UPDATE INTO fires
+INSERT OR REPLACE INTO fires
 (
     id, 
     satellite,
