@@ -76,9 +76,12 @@ pub struct FireCode(String);
 
 impl FireCode {
     pub fn make_child_fire(&self, child_num: u32) -> FireCode {
-        assert!(child_num < 100);
+        assert!(child_num < 26);
 
-        FireCode(format!("{}{:02}", self.0, child_num))
+        let child_num = child_num + 'A' as u32;
+        let child_letter = char::from_u32(child_num).unwrap();
+
+        FireCode(format!("{}{}", self.0, child_letter))
     }
 
     pub fn num_generations(&self) -> usize {
