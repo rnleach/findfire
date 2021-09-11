@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     af.last_observed,
                     af.origin,
                     af.perimeter.clone(),
+                    af.next_child_num,
                 )?;
             }
 
@@ -96,6 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     fd.last_observed,
                     fd.origin,
                     fd.perimeter.clone(),
+                    fd.next_child_num,
                 )?;
                 active_fires.push(fd);
                 num_new_fires += 1;
@@ -129,6 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             af.last_observed,
             af.origin,
             af.perimeter.clone(),
+            af.next_child_num,
         )?;
     }
 
@@ -221,7 +224,6 @@ fn finish_this_time_step(
             // If there are several candidates, create a new fire for each with an updated code
             for candidate in fire.candidates.drain(..) {
                 let id = fire.id.make_child_fire(fire.next_child_num);
-                // TODO add the next child value to the
                 fire.next_child_num += 1;
                 associations
                     .add_association(candidate.rowid, fire.id.clone_string())
@@ -249,6 +251,7 @@ fn finish_this_time_step(
                     new_fire.last_observed,
                     new_fire.origin,
                     new_fire.perimeter.clone(),
+                    new_fire.next_child_num,
                 )?;
                 new_fires.push(new_fire);
             }

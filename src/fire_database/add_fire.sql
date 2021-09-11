@@ -5,6 +5,7 @@ INSERT OR REPLACE INTO fires
     last_observed, 
     origin_lat, 
     origin_lon, 
-    perimeter
-) VALUES (?, ?, ?, ?, ?, ?)
+    perimeter,
+    next_child
+) VALUES (?, ?, ?, ?, ?, ?, ?)
 

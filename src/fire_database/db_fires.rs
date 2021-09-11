@@ -58,11 +58,14 @@ impl<'a> FireQuery<'a> {
                 let perimeter: Polygon<f64> =
                     bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
+                let next_child = row.get(5)?;
+
                 Ok(FireRecord {
                     id,
                     last_observed,
                     origin,
                     perimeter,
+                    next_child,
                 })
             })?
             .filter_map(|res: Result<_, rusqlite::Error>| res.ok());
@@ -141,6 +144,8 @@ pub struct FireRecord {
     pub perimeter: Polygon<f64>,
     /// Point of origin (pixel first detected.
     pub origin: Point<f64>,
+    /// Next child fire number.
+    pub next_child: u32,
 }
 
 pub struct AddFireTransaction<'a> {
@@ -150,6 +155,7 @@ pub struct AddFireTransaction<'a> {
         NaiveDateTime,
         Point<f64>,
         Polygon<f64>,
+        u32,
     )>,
     db: &'a rusqlite::Connection,
 }
@@ -164,11 +170,18 @@ impl<'a> AddFireTransaction<'a> {
         last_observed: NaiveDateTime,
         origin: Point<f64>,
         perimeter: Polygon<f64>,
+        next_child: u32,
     ) -> Result<(), Box<dyn Error>> {
         let fire_id: String = fire_id.into();
 
-        self.buffer
-            .push((fire_id, satellite, last_observed, origin, perimeter));
+        self.buffer.push((
+            fire_id,
+            satellite,
+            last_observed,
+            origin,
+            perimeter,
+            next_child,
+        ));
 
         if self.buffer.len() >= BUFFER_CAPACITY {
             self.flush()?;
@@ -182,18 +195,21 @@ impl<'a> AddFireTransaction<'a> {
         self.db.execute_batch("BEGIN;")?;
         let mut stmt = self.db.prepare(include_str!("add_fire.sql"))?;
 
-        for (fire_id, satellite, last_observed, origin, perimeter) in self.buffer.drain(..) {
+        for (fire_id, satellite, last_observed, origin, perimeter, next_child) in
+            self.buffer.drain(..)
+        {
             let lat = origin.x();
             let lon = origin.y();
 
             log::trace!(
-                "'{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}'",
+                "'{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}'",
                 fire_id,
                 satellite,
                 last_observed,
                 lat,
                 lon,
-                perimeter
+                perimeter,
+                next_child
             );
 
             let perimeter = bincode::serialize(&perimeter)?;
@@ -204,6 +220,7 @@ impl<'a> AddFireTransaction<'a> {
                 &lat,
                 &lon,
                 &perimeter,
+                &next_child,
             ]) {
                 Ok(_) => {}
                 Err(err) => log::error!("{}", err),
