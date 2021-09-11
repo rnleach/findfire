@@ -17,7 +17,7 @@ const CHANNEL_SIZE: usize = 5;
 
 #[derive(Debug, Clone)]
 struct BiggestFireInfo {
-    mid_point: NaiveDateTime,
+    start: NaiveDateTime,
     satellite: &'static str,
     sector: &'static str,
     cluster: Cluster,
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let biggest_fire = db_thread.join().unwrap();
 
     let BiggestFireInfo {
-        mid_point,
+        start,
         satellite,
         sector,
         cluster:
@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::info!("Biggest fire added to database:");
     log::info!("     satellite - {:>19}", satellite);
     log::info!("        sector - {:>19}", sector);
-    log::info!("scan mid point - {:>19}", mid_point);
+    log::info!("scan start - {:>19}", start);
     log::info!("      latitude - {:>19.6}", lat);
     log::info!("     longitude - {:>19.6}", lon);
     log::info!("    power (MW) - {:>19.1}", power);
@@ -199,7 +199,7 @@ fn start_database_thread(
             let mut biggest_fire = Cluster::default();
             let mut biggest_fire_sat = "NA";
             let mut biggest_fire_sect = "NA";
-            let mut biggest_fire_mid_point_scan =
+            let mut biggest_fire_start_scan =
                 chrono::naive::NaiveDate::from_ymd(2000, 1, 1).and_hms(0, 0, 0);
 
             for cluster_list in from_analysis_thread {
@@ -208,14 +208,14 @@ fn start_database_thread(
                         biggest_fire = cluster.clone();
                         biggest_fire_sat = cluster_list.satellite;
                         biggest_fire_sect = cluster_list.sector;
-                        biggest_fire_mid_point_scan = cluster_list.mid_point;
+                        biggest_fire_start_scan = cluster_list.scan_start;
                     }
 
                     add_transaction
                         .add_cluster(
                             cluster_list.satellite,
                             cluster_list.sector,
-                            cluster_list.mid_point,
+                            cluster_list.scan_start,
                             cluster.centroid,
                             cluster.power,
                             cluster.perimeter,
@@ -227,7 +227,7 @@ fn start_database_thread(
 
             BiggestFireInfo {
                 cluster: biggest_fire,
-                mid_point: biggest_fire_mid_point_scan,
+                start: biggest_fire_start_scan,
                 satellite: biggest_fire_sat,
                 sector: biggest_fire_sect,
             }

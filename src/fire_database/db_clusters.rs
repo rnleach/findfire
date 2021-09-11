@@ -38,7 +38,7 @@ impl super::FiresDatabase {
 pub struct ClusterRecord {
     /// Row id from the database.
     pub rowid: i64,
-    /// The mid-point time of the scan this cluster was detected in.
+    /// The start time of the scan this cluster was detected in.
     pub scan_time: NaiveDateTime,
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     pub power: f64,
@@ -107,20 +107,14 @@ impl<'a> AddClustersTransaction<'a> {
         &mut self,
         satellite: &'static str,
         sector: &'static str,
-        scan_mid_point: NaiveDateTime,
+        scan_start: NaiveDateTime,
         centroid: Point<f64>,
         power: f64,
         perimeter: Polygon<f64>,
         num_points: i32,
     ) -> Result<(), Box<dyn Error>> {
         self.buffer.push((
-            satellite,
-            sector,
-            scan_mid_point,
-            centroid,
-            power,
-            perimeter,
-            num_points,
+            satellite, sector, scan_start, centroid, power, perimeter, num_points,
         ));
 
         if self.buffer.len() >= BUFFER_CAPACITY {
@@ -135,7 +129,7 @@ impl<'a> AddClustersTransaction<'a> {
         self.db.execute_batch("BEGIN;")?;
         let mut stmt = self.db.prepare(include_str!("add_cluster.sql"))?;
 
-        for (satellite, sector, scan_mid_point, centroid, power, perimeter, num_points) in
+        for (satellite, sector, scan_start, centroid, power, perimeter, num_points) in
             self.buffer.drain(..)
         {
             let lat = centroid.x();
@@ -145,7 +139,7 @@ impl<'a> AddClustersTransaction<'a> {
             let _ = stmt.execute([
                 &satellite as &dyn ToSql,
                 &sector,
-                &scan_mid_point.timestamp(),
+                &scan_start.timestamp(),
                 &lat,
                 &lon,
                 &power,

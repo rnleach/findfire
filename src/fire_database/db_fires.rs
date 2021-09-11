@@ -138,7 +138,7 @@ impl<'a> FireDataNextNewFireState<'a> {
 pub struct FireRecord {
     /// Row id from the database.
     pub id: FireCode,
-    /// The mid-point time of the scan this cluster was detected in.
+    /// The start time of the scan this cluster was detected in.
     pub last_observed: NaiveDateTime,
     /// Perimeter
     pub perimeter: Polygon<f64>,

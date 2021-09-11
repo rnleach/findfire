@@ -19,8 +19,8 @@ pub struct ClusterList {
     ///
     /// At the time of writing it will either be "G16" or "G17"
     pub satellite: &'static str,
-    /// Mid point time of the scan
-    pub mid_point: chrono::naive::NaiveDateTime,
+    /// Start time of the scan.
+    pub scan_start: chrono::naive::NaiveDateTime,
     /// List of struct Cluster objects associated with the above metadata.
     pub clusters: Vec<Cluster>,
 }
@@ -38,13 +38,13 @@ impl ClusterList {
 
         let satellite = fsat.satellite();
         let sector = fsat.sector();
-        let mid_point = fsat.scan_midpoint();
+        let scan_start = fsat.start();
 
         Ok(ClusterList {
             satellite,
             sector,
             clusters,
-            mid_point,
+            scan_start,
         })
     }
 }
