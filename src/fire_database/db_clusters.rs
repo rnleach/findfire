@@ -36,6 +36,7 @@ impl super::FiresDatabase {
 
 #[derive(Debug, Clone)]
 pub struct ClusterRecord {
+    // TODO add satellite as &'static str
     /// Row id from the database.
     pub rowid: i64,
     /// The start time of the scan this cluster was detected in.
