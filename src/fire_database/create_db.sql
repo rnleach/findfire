@@ -41,5 +41,5 @@ CREATE TABLE IF NOT EXISTS associations
     -- FOREIGN KEY (fire_id) REFERENCES fires (id)
 );
 
-PRAGMA foreign_keys = ON;
+--PRAGMA foreign_keys = ON;
 

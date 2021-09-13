@@ -305,7 +305,7 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
                 match cluster_code_associations.add_association(cluster, fire_code.clone_string()) {
                     Ok(()) => {}
                     Err(err) => {
-                        log::error!("Error adding fire to database: {}", err);
+                        log::error!("Error adding fire association to database: {}", err);
                         return;
                     }
                 }

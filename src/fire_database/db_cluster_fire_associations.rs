@@ -38,16 +38,18 @@ impl<'a> AddAssociationsTransaction<'a> {
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("Flushing associations.");
-        self.db.execute_batch("BEGIN;")?;
         let mut stmt = self
             .db
             .prepare("INSERT INTO associations (cluster_row_id, fire_id) VALUES (?, ?)")?;
+
+        self.db.execute_batch("BEGIN;")?;
 
         for (rowid, fire_id) in self.buffer.drain(..) {
             let _ = stmt.execute([&rowid as &dyn ToSql, &fire_id])?;
         }
 
         self.db.execute_batch("COMMIT;")?;
+        log::debug!("Flushed associations.");
         Ok(())
     }
 }

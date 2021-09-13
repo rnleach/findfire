@@ -192,8 +192,9 @@ impl<'a> AddFireTransaction<'a> {
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("Flushing fires.");
-        self.db.execute_batch("BEGIN;")?;
         let mut stmt = self.db.prepare(include_str!("add_fire.sql"))?;
+
+        self.db.execute_batch("BEGIN;")?;
 
         for (fire_id, satellite, last_observed, origin, perimeter, next_child) in
             self.buffer.drain(..)
@@ -228,6 +229,8 @@ impl<'a> AddFireTransaction<'a> {
         }
 
         self.db.execute_batch("COMMIT;")?;
+
+        log::debug!("Flushed fires.");
 
         Ok(())
     }
