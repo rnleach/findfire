@@ -157,7 +157,7 @@ pub struct FireRecord {
 pub struct AddFireTransaction<'a> {
     buffer: Vec<(
         FireCode,
-        &'static str,
+        Satellite,
         NaiveDateTime,
         Point<f64>,
         Polygon<f64>,
@@ -172,7 +172,7 @@ impl<'a> AddFireTransaction<'a> {
     pub fn add_fire(
         &mut self,
         fire_id: FireCode,
-        satellite: &'static str,
+        satellite: Satellite,
         last_observed: NaiveDateTime,
         origin: Point<f64>,
         perimeter: Polygon<f64>,
@@ -220,7 +220,7 @@ impl<'a> AddFireTransaction<'a> {
             let perimeter = bincode::serialize(&perimeter)?;
             match stmt.execute([
                 &fire_id.as_ref() as &dyn ToSql,
-                &satellite,
+                &Into::<&'static str>::into(satellite),
                 &last_observed.timestamp(),
                 &lat,
                 &lon,

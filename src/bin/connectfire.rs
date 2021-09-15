@@ -70,6 +70,46 @@ enum ClusterMessage {
     FinishTimeStep,
 }
 
+enum DatabaseMessage {
+    AddFire(FireData),
+    AddAssociation(FireCode, NaiveDateTime, f64, Polygon<f64>),
+}
+
+#[derive(Debug, Clone)]
+struct FireData {
+    /// Unique string to id this fire. These will use a prefix code to show which fires are related.
+    id: FireCode,
+
+    /// The satellite that this fire was detected by.
+    satellite: Satellite,
+
+    /// Original cluster center
+    origin: Point<f64>,
+
+    /// The last time stamp that this fire was observed.
+    last_observed: NaiveDateTime,
+
+    perimeter: Polygon<f64>,
+
+    /// Potential candidates for a child fire
+    candidates: Vec<Cluster>,
+
+    /// Where to start numbering future children
+    next_child_num: u32,
+}
+
+macro_rules! send_or_return {
+    ($channel:ident, $item:expr, $msg:expr) => {
+        match $channel.send($item) {
+            Ok(()) => {}
+            Err(err) => {
+                log::error!($msg, err);
+                return;
+            }
+        }
+    };
+}
+
 fn read_database<P: AsRef<Path>>(
     path_to_db: P,
     satellite: Satellite,
@@ -100,58 +140,26 @@ fn read_database<P: AsRef<Path>>(
     };
 
     for (curr_time_stamp, records) in records.group_by(|rec| rec.scan_start_time).into_iter() {
-        match to_fires_processing.send(ClusterMessage::StartTimeStep(curr_time_stamp)) {
-            Ok(()) => {}
-            Err(err) => {
-                log::error!("Error sending from read_database: {}", err);
-                return;
-            }
-        }
+        send_or_return!(
+            to_fires_processing,
+            ClusterMessage::StartTimeStep(curr_time_stamp),
+            "Error sending from read_database: {}"
+        );
 
         for record in records {
-            match to_fires_processing.send(ClusterMessage::Cluster(record)) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::error!("Error sending from read_database: {}", err);
-                    return;
-                }
-            }
+            send_or_return!(
+                to_fires_processing,
+                ClusterMessage::Cluster(record),
+                "Error sending from read_database: {}"
+            );
         }
 
-        match to_fires_processing.send(ClusterMessage::FinishTimeStep) {
-            Ok(()) => {}
-            Err(err) => {
-                log::error!("Error sending from read_database: {}", err);
-                return;
-            }
-        }
+        send_or_return!(
+            to_fires_processing,
+            ClusterMessage::FinishTimeStep,
+            "Error sending from read_database: {}"
+        );
     }
-}
-
-#[derive(Debug, Clone)]
-// TODO add satellite
-struct FireData {
-    /// Unique string to id this fire. These will use a prefix code to show which fires are related.
-    id: FireCode,
-
-    /// Original cluster center
-    origin: Point<f64>,
-
-    /// The last time stamp that this fire was observed.
-    last_observed: NaiveDateTime,
-
-    perimeter: Polygon<f64>,
-
-    /// Potential candidates for a child fire
-    candidates: Vec<Cluster>,
-
-    /// Where to start numbering future children
-    next_child_num: u32,
-}
-
-enum DatabaseMessage {
-    AddFire(FireData),
-    AddAssociation(FireCode, NaiveDateTime, f64, Polygon<f64>),
 }
 
 fn process_fires<P: AsRef<Path>>(
@@ -190,10 +198,11 @@ fn process_fires<P: AsRef<Path>>(
                         .iter()
                         .filter(|af: &&FireData| af.last_observed <= too_long_ago)
                     {
-                        // TODO check & log error
-                        db_writer
-                            .send(DatabaseMessage::AddFire(af.clone()))
-                            .unwrap();
+                        send_or_return!(
+                            db_writer,
+                            DatabaseMessage::AddFire(af.clone()),
+                            "Error sending to db_writer: {}"
+                        );
                     }
 
                     active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
@@ -216,6 +225,7 @@ fn process_fires<P: AsRef<Path>>(
                         scan_start_time,
                         perimeter,
                         power,
+                        satellite,
                         ..
                     } = record;
 
@@ -226,21 +236,20 @@ fn process_fires<P: AsRef<Path>>(
                         candidates: vec![],
                         next_child_num: 0,
                         perimeter: perimeter.clone(),
+                        satellite,
                     };
 
-                    // TODO check & log error
-                    db_writer
-                        .send(DatabaseMessage::AddFire(fd.clone()))
-                        .unwrap();
-                    // TODO check & log error
-                    db_writer
-                        .send(DatabaseMessage::AddAssociation(
-                            id,
-                            scan_start_time,
-                            power,
-                            perimeter,
-                        ))
-                        .unwrap();
+                    send_or_return!(
+                        db_writer,
+                        DatabaseMessage::AddFire(fd.clone()),
+                        "Error sending to db_writer: {}"
+                    );
+
+                    send_or_return!(
+                        db_writer,
+                        DatabaseMessage::AddAssociation(id, scan_start_time, power, perimeter),
+                        "Error sending to db_writer: {}"
+                    );
 
                     active_fires.push(fd);
                 }
@@ -288,13 +297,13 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
                     last_observed,
                     next_child_num,
                     perimeter,
+                    satellite,
                     ..
                 } = fire;
 
                 match fires.add_fire(
                     id,
-                    // TODO don't hard code "G17", get it from FireData
-                    "G17",
+                    satellite,
                     last_observed,
                     origin,
                     perimeter.clone(),
@@ -358,15 +367,16 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
                 tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter.clone());
                 std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
 
-                // TODO check res & log error
-                db_writer
-                    .send(DatabaseMessage::AddAssociation(
+                send_or_return!(
+                    db_writer,
+                    DatabaseMessage::AddAssociation(
                         fire.id.clone(),
                         candidate.scan_start_time,
                         candidate.power,
-                        candidate.perimeter,
-                    ))
-                    .unwrap();
+                        candidate.perimeter
+                    ),
+                    "Error sending to db_writer: {}"
+                );
             }
         } else {
             // If there are several candidates, create a new fire for each with an updated code
@@ -379,6 +389,7 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
                     scan_start_time,
                     perimeter,
                     power,
+                    satellite,
                     ..
                 } = candidate;
 
@@ -389,22 +400,25 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
                     last_observed: scan_start_time,
                     candidates: vec![],
                     next_child_num: 0,
+                    satellite,
                 };
 
-                // TODO check res & log error
-                db_writer
-                    .send(DatabaseMessage::AddFire(new_fire.clone()))
-                    .unwrap();
+                send_or_return!(
+                    db_writer,
+                    DatabaseMessage::AddFire(new_fire.clone()),
+                    "Error sending to db_writer: {}"
+                );
 
-                // TODO check res & log error
-                db_writer
-                    .send(DatabaseMessage::AddAssociation(
+                send_or_return!(
+                    db_writer,
+                    DatabaseMessage::AddAssociation(
                         new_fire.id.clone(),
                         scan_start_time,
                         power,
-                        perimeter,
-                    ))
-                    .unwrap();
+                        perimeter
+                    ),
+                    "Error sending to db_writer: {}"
+                );
 
                 new_fires.push(new_fire);
             }
