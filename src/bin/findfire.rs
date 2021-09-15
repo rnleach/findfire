@@ -19,7 +19,6 @@ const CHANNEL_SIZE: usize = 100;
 fn main() -> Result<(), Box<dyn Error>> {
     SimpleLogger::new()
         .with_level(LevelFilter::Info)
-        .with_module_level("findfire", LevelFilter::Debug)
         .init()?;
 
     log::trace!("Trace messages enabled.");
