@@ -341,6 +341,8 @@ fn assign_cluster_to_fire(
     for fire in active_fires
         .iter_mut()
         .rev()
+        // No mixing and matching between satllites.
+        .filter(|f| f.satellite == cluster.satellite)
         .take_while(|f| f.last_observed > too_long_ago)
     {
         if fire.perimeter.intersects(&cluster.perimeter) {
