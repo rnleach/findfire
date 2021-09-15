@@ -1,4 +1,4 @@
-pub use cluster::{Cluster, ClusterList};
+pub use cluster::Cluster;
 pub use error::{ConnectFireError, FindFireError};
 pub use fire_database::{
     AddAssociationsTransaction, AddClustersTransaction, AddFireTransaction, ClusterQuery,

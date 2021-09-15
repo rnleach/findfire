@@ -7,21 +7,13 @@ use std::{
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::LevelFilter;
-use satfire::{Cluster, ClusterList, FireSatImage, FiresDatabase};
+use satfire::{Cluster, FireSatImage, FiresDatabase};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/home/ryan/wxdata/GOESX/";
+const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
 
-const CHANNEL_SIZE: usize = 5;
-
-#[derive(Debug, Clone)]
-struct BiggestFireInfo {
-    start: NaiveDateTime,
-    satellite: &'static str,
-    sector: &'static str,
-    cluster: Cluster,
-}
+const CHANNEL_SIZE: usize = 100;
 
 fn main() -> Result<(), Box<dyn Error>> {
     SimpleLogger::new()
@@ -49,31 +41,33 @@ fn main() -> Result<(), Box<dyn Error>> {
     anal_thread.join().unwrap();
     let biggest_fire = db_thread.join().unwrap();
 
-    let BiggestFireInfo {
-        start,
+    if let Some(Cluster {
+        scan_start_time,
         satellite,
         sector,
-        cluster:
-            Cluster {
-                power,
-                centroid,
-                count,
-                ..
-            },
-    } = biggest_fire;
+        power,
+        centroid,
+        count,
+        ..
+    }) = biggest_fire
+    {
+        let (lat, lon) = (centroid.x(), centroid.y());
 
-    let (lat, lon) = (centroid.x(), centroid.y());
-
-    log::info!("");
-    log::info!("Biggest fire added to database:");
-    log::info!("     satellite - {:>19}", satellite);
-    log::info!("        sector - {:>19}", sector);
-    log::info!("scan start - {:>19}", start);
-    log::info!("      latitude - {:>19.6}", lat);
-    log::info!("     longitude - {:>19.6}", lon);
-    log::info!("    power (MW) - {:>19.1}", power);
-    log::info!("         count - {:>19}", count);
-    log::info!("");
+        log::info!("");
+        log::info!("Biggest fire added to database:");
+        log::info!("     satellite - {:>19}", satellite);
+        log::info!("        sector - {:>19}", sector);
+        log::info!("    scan start - {:>19}", scan_start_time);
+        log::info!("      latitude - {:>19.6}", lat);
+        log::info!("     longitude - {:>19.6}", lon);
+        log::info!("    power (MW) - {:>19.1}", power);
+        log::info!("         count - {:>19}", count);
+        log::info!("");
+    } else {
+        log::warn!("");
+        log::warn!("No new clusters added to the database!");
+        log::warn!("");
+    }
 
     Ok(())
 }
@@ -173,13 +167,13 @@ fn start_load_thread(
 
 fn start_analysis_thread(
     from_load_thread: Receiver<FireSatImage>,
-    to_database_thread: Sender<ClusterList>,
+    to_database_thread: Sender<Vec<Cluster>>,
 ) -> Result<JoinHandle<()>, Box<dyn Error>> {
     let jh = thread::Builder::new()
         .name("findfire-analysis".to_owned())
         .spawn(move || {
             for fire_sat_image in from_load_thread {
-                let clusters = ClusterList::from_fire_sat_image(&fire_sat_image).unwrap();
+                let clusters = Cluster::from_fire_sat_image(&fire_sat_image).unwrap();
                 to_database_thread.send(clusters).unwrap();
             }
         })?;
@@ -188,34 +182,31 @@ fn start_analysis_thread(
 }
 
 fn start_database_thread(
-    from_analysis_thread: Receiver<ClusterList>,
-) -> Result<JoinHandle<BiggestFireInfo>, Box<dyn Error>> {
+    from_analysis_thread: Receiver<Vec<Cluster>>,
+) -> Result<JoinHandle<Option<Cluster>>, Box<dyn Error>> {
     let jh = thread::Builder::new()
         .name("findfire-database".to_owned())
         .spawn(move || {
             let cluster_db = FiresDatabase::connect(DATABASE_FILE).unwrap();
             let mut add_transaction = cluster_db.add_cluster_handle().unwrap();
 
-            let mut biggest_fire = Cluster::default();
-            let mut biggest_fire_sat = "NA";
-            let mut biggest_fire_sect = "NA";
-            let mut biggest_fire_start_scan =
-                chrono::naive::NaiveDate::from_ymd(2000, 1, 1).and_hms(0, 0, 0);
+            let mut biggest_fire: Option<Cluster> = None;
 
             for cluster_list in from_analysis_thread {
-                for cluster in cluster_list.clusters {
-                    if cluster.power > biggest_fire.power {
-                        biggest_fire = cluster.clone();
-                        biggest_fire_sat = cluster_list.satellite;
-                        biggest_fire_sect = cluster_list.sector;
-                        biggest_fire_start_scan = cluster_list.scan_start;
+                for cluster in cluster_list {
+                    if let Some(ref big_fire) = biggest_fire {
+                        if big_fire.power < cluster.power {
+                            biggest_fire = Some(cluster.clone());
+                        }
+                    } else {
+                        biggest_fire = Some(cluster.clone());
                     }
 
                     add_transaction
                         .add_cluster(
-                            cluster_list.satellite,
-                            cluster_list.sector,
-                            cluster_list.scan_start,
+                            cluster.satellite,
+                            cluster.sector,
+                            cluster.scan_start_time,
                             cluster.centroid,
                             cluster.power,
                             cluster.perimeter,
@@ -225,12 +216,7 @@ fn start_database_thread(
                 }
             }
 
-            BiggestFireInfo {
-                cluster: biggest_fire,
-                start: biggest_fire_start_scan,
-                satellite: biggest_fire_sat,
-                sector: biggest_fire_sect,
-            }
+            biggest_fire
         })?;
 
     Ok(jh)
