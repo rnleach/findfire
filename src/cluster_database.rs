@@ -33,9 +33,12 @@ impl ClustersDatabase {
 
     pub fn find_latest_cluster(
         &self,
-        satellite: &str,
-        sector: &str,
+        satellite: Satellite,
+        sector: Sector,
     ) -> Result<NaiveDateTime, Box<dyn Error>> {
+        let satellite = Into::<&'static str>::into(satellite);
+        let sector = Into::<&'static str>::into(sector);
+
         let latest: NaiveDateTime = self.db.query_row(
             include_str!("cluster_database/find_latest_cluster.sql"),
             &[satellite, sector],
