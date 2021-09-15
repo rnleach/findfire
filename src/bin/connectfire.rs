@@ -8,10 +8,11 @@ use geo::{
 };
 use itertools::Itertools;
 use log::LevelFilter;
-use satfire::{ClusterRecord, FireCode, FiresDatabase};
+use satfire::{ClusterRecord, ClustersDatabase, FireCode, FiresDatabase};
 use simple_logger::SimpleLogger;
 
-const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
+const CLUSTERS_DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
+const FIRES_DATABASE_FILE: &'static str = "/home/ryan/wxdata/connectfire.sqlite";
 const DAYS_FOR_FIRE_OUT: i64 = 21;
 const CHANNEL_SIZE: usize = 1_000;
 
@@ -30,19 +31,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let reader_jh = thread::Builder::new()
         .name("reader-connectfire".to_owned())
         .spawn(move || {
-            read_database(DATABASE_FILE, "G17", to_fires_processing);
+            read_database(CLUSTERS_DATABASE_FILE, "G17", to_fires_processing);
         })?;
 
     let processing_jh = thread::Builder::new()
         .name("processing-connectfire".to_owned())
         .spawn(move || {
-            process_fires(DATABASE_FILE, cluster_msgs, db_writer);
+            process_fires(FIRES_DATABASE_FILE, cluster_msgs, db_writer);
         })?;
 
     let writer_jh = thread::Builder::new()
         .name("writer-connectfire".to_owned())
         .spawn(move || {
-            write_to_database(DATABASE_FILE, db_messages);
+            write_to_database(FIRES_DATABASE_FILE, db_messages);
         })?;
 
     match reader_jh.join() {
@@ -74,7 +75,7 @@ fn read_database<P: AsRef<Path>>(
     satellite: &'static str,
     to_fires_processing: Sender<ClusterMessage>,
 ) {
-    let fires_db = match FiresDatabase::connect(path_to_db) {
+    let clusters_db = match ClustersDatabase::connect(path_to_db) {
         Ok(db) => db,
         Err(err) => {
             log::error!("Error connecting to read database: {}", err);
@@ -82,7 +83,7 @@ fn read_database<P: AsRef<Path>>(
         }
     };
 
-    let mut records = match fires_db.cluster_query_handle() {
+    let mut records = match clusters_db.cluster_query_handle() {
         Ok(records) => records,
         Err(err) => {
             log::error!("Error querying data base to read cluster records: {}", err);

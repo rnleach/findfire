@@ -7,7 +7,7 @@ use std::{
 use chrono::NaiveDateTime;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::LevelFilter;
-use satfire::{Cluster, FireSatImage, FiresDatabase};
+use satfire::{Cluster, ClustersDatabase, FireSatImage};
 use simple_logger::SimpleLogger;
 
 const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn start_path_generation_thread(
     to_load_thread: Sender<walkdir::DirEntry>,
 ) -> Result<JoinHandle<()>, Box<dyn Error>> {
-    let cluster_db = FiresDatabase::connect(DATABASE_FILE)?;
+    let cluster_db = ClustersDatabase::connect(DATABASE_FILE)?;
 
     let mut most_recent: HashMap<String, NaiveDateTime> = HashMap::new();
 
@@ -193,7 +193,7 @@ fn start_database_thread(
     let jh = thread::Builder::new()
         .name("findfire-database".to_owned())
         .spawn(move || {
-            let cluster_db = FiresDatabase::connect(DATABASE_FILE).unwrap();
+            let cluster_db = ClustersDatabase::connect(DATABASE_FILE).unwrap();
             let mut add_transaction = cluster_db.add_cluster_handle().unwrap();
 
             let mut biggest_fire: Option<Cluster> = None;

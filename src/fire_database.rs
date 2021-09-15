@@ -4,8 +4,6 @@ pub struct FiresDatabase {
     db: rusqlite::Connection,
 }
 
-mod db_clusters;
-pub use db_clusters::{AddClustersTransaction, ClusterQuery, ClusterRecord};
 mod db_fires;
 pub use db_fires::{AddFireTransaction, FireCode, FireDataNextNewFireState, FireQuery, FireRecord};
 mod db_cluster_fire_associations;
@@ -18,7 +16,7 @@ impl FiresDatabase {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_CREATE,
         )?;
 
-        conn.execute_batch(include_str!("fire_database/create_db.sql"))?;
+        conn.execute_batch(include_str!("fire_database/create_fires_db.sql"))?;
 
         Ok(FiresDatabase { db: conn })
     }

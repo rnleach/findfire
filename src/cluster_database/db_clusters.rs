@@ -6,7 +6,7 @@ use geo::{point, Point, Polygon};
 use rusqlite::ToSql;
 use std::error::Error;
 
-impl super::FiresDatabase {
+impl super::ClustersDatabase {
     pub fn add_cluster_handle(&self) -> Result<AddClustersTransaction, Box<dyn Error>> {
         Ok(AddClustersTransaction {
             buffer: Vec::with_capacity(BUFFER_CAPACITY),
