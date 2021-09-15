@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS meta
 
 CREATE TABLE IF NOT EXISTS associations
 (
-    cluster_row_id INTEGER,
-    fire_id        TEXT
+    fire_id         TEXT    NOT NULL,
+    scan_start_time INTEGER NOT NULL,
+    power           REAL    NOT NULL,
+    perimeter       BLOB    NOT NULL
 );
 

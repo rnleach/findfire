@@ -5,7 +5,7 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
-use crate::error::SatFireError;
+use crate::{error::SatFireError, Satellite};
 use chrono::NaiveDateTime;
 use geo::{point, Point, Polygon};
 use rusqlite::{Connection, ToSql};
@@ -41,11 +41,11 @@ pub struct FireQuery<'a>(rusqlite::Statement<'a>);
 impl<'a> FireQuery<'a> {
     pub fn records_for(
         &mut self,
-        satellite: &str,
+        satellite: Satellite,
     ) -> Result<impl Iterator<Item = FireRecord> + '_, Box<dyn Error>> {
         let rows = self
             .0
-            .query_and_then(&[satellite], |row| {
+            .query_and_then(&[Into::<&'static str>::into(satellite)], |row| {
                 let id: FireCode = FireCode(row.get(0)?);
                 let last_observed: NaiveDateTime =
                     chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(1)?, 0);
@@ -93,6 +93,12 @@ impl FireCode {
 
     pub fn clone_string(&self) -> String {
         self.0.clone()
+    }
+}
+
+impl AsRef<str> for FireCode {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -150,7 +156,7 @@ pub struct FireRecord {
 
 pub struct AddFireTransaction<'a> {
     buffer: Vec<(
-        String,
+        FireCode,
         &'static str,
         NaiveDateTime,
         Point<f64>,
@@ -163,17 +169,15 @@ pub struct AddFireTransaction<'a> {
 const BUFFER_CAPACITY: usize = 100_000;
 
 impl<'a> AddFireTransaction<'a> {
-    pub fn add_fire<S: Into<String>>(
+    pub fn add_fire(
         &mut self,
-        fire_id: S,
+        fire_id: FireCode,
         satellite: &'static str,
         last_observed: NaiveDateTime,
         origin: Point<f64>,
         perimeter: Polygon<f64>,
         next_child: u32,
     ) -> Result<(), Box<dyn Error>> {
-        let fire_id: String = fire_id.into();
-
         self.buffer.push((
             fire_id,
             satellite,
@@ -215,7 +219,7 @@ impl<'a> AddFireTransaction<'a> {
 
             let perimeter = bincode::serialize(&perimeter)?;
             match stmt.execute([
-                &fire_id as &dyn ToSql,
+                &fire_id.as_ref() as &dyn ToSql,
                 &satellite,
                 &last_observed.timestamp(),
                 &lat,

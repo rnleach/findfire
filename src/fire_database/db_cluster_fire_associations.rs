@@ -1,9 +1,12 @@
 /*! Methods and types to support querying the clusters table of the database. */
 
+use crate::FireCode;
+use chrono::NaiveDateTime;
+use geo::Polygon;
 use rusqlite::{Connection, ToSql};
 use std::error::Error;
 
-const BUFFER_SIZE: usize = 100_000;
+const BUFFER_SIZE: usize = 1_000;
 
 impl super::FiresDatabase {
     pub fn add_association_handle(&self) -> Result<AddAssociationsTransaction, Box<dyn Error>> {
@@ -15,19 +18,19 @@ impl super::FiresDatabase {
 }
 
 pub struct AddAssociationsTransaction<'a> {
-    buffer: Vec<(i64, String)>,
+    buffer: Vec<(FireCode, NaiveDateTime, f64, Polygon<f64>)>,
     db: &'a Connection,
 }
 
 impl<'a> AddAssociationsTransaction<'a> {
-    pub fn add_association<S: Into<String>>(
+    pub fn add_association(
         &mut self,
-        rowid: i64,
-        fire_id: S,
+        fire_id: FireCode,
+        scan_time: NaiveDateTime,
+        power: f64,
+        perimeter: Polygon<f64>,
     ) -> Result<(), Box<dyn Error>> {
-        let fire_id: String = fire_id.into();
-
-        self.buffer.push((rowid, fire_id));
+        self.buffer.push((fire_id, scan_time, power, perimeter));
 
         if self.buffer.len() >= BUFFER_SIZE {
             self.flush()?;
@@ -38,14 +41,19 @@ impl<'a> AddAssociationsTransaction<'a> {
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("Flushing associations.");
-        let mut stmt = self
-            .db
-            .prepare("INSERT INTO associations (cluster_row_id, fire_id) VALUES (?, ?)")?;
+        let mut stmt = self.db.prepare(include_str!("add_association.sql"))?;
 
         self.db.execute_batch("BEGIN;")?;
 
-        for (rowid, fire_id) in self.buffer.drain(..) {
-            let _ = stmt.execute([&rowid as &dyn ToSql, &fire_id])?;
+        for (fire_id, scan_time, power, perimeter) in self.buffer.drain(..) {
+            let perimeter = bincode::serialize(&perimeter)?;
+
+            let _ = stmt.execute([
+                &fire_id.as_ref() as &dyn ToSql,
+                &scan_time.timestamp(),
+                &power,
+                &perimeter,
+            ])?;
         }
 
         self.db.execute_batch("COMMIT;")?;

@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS clusters
 (
-  rowid       INTEGER PRIMARY KEY AUTOINCREMENT,
   satellite   TEXT    NOT NULL,
   sector      TEXT    NOT NULL,
   start_time  INTEGER NOT NULL,

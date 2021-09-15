@@ -8,7 +8,7 @@ use geo::{
 };
 use itertools::Itertools;
 use log::LevelFilter;
-use satfire::{ClusterRecord, ClustersDatabase, FireCode, FiresDatabase};
+use satfire::{Cluster, ClustersDatabase, FireCode, FiresDatabase, Satellite};
 use simple_logger::SimpleLogger;
 
 const CLUSTERS_DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let reader_jh = thread::Builder::new()
         .name("reader-connectfire".to_owned())
         .spawn(move || {
-            read_database(CLUSTERS_DATABASE_FILE, "G17", to_fires_processing);
+            read_database(CLUSTERS_DATABASE_FILE, Satellite::G17, to_fires_processing);
         })?;
 
     let processing_jh = thread::Builder::new()
@@ -66,13 +66,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 enum ClusterMessage {
     StartTimeStep(NaiveDateTime),
-    Cluster(ClusterRecord),
+    Cluster(Cluster),
     FinishTimeStep,
 }
 
 fn read_database<P: AsRef<Path>>(
     path_to_db: P,
-    satellite: &'static str,
+    satellite: Satellite,
     to_fires_processing: Sender<ClusterMessage>,
 ) {
     let clusters_db = match ClustersDatabase::connect(path_to_db) {
@@ -99,7 +99,7 @@ fn read_database<P: AsRef<Path>>(
         }
     };
 
-    for (curr_time_stamp, records) in records.group_by(|rec| rec.scan_time).into_iter() {
+    for (curr_time_stamp, records) in records.group_by(|rec| rec.scan_start_time).into_iter() {
         match to_fires_processing.send(ClusterMessage::StartTimeStep(curr_time_stamp)) {
             Ok(()) => {}
             Err(err) => {
@@ -143,7 +143,7 @@ struct FireData {
     perimeter: Polygon<f64>,
 
     /// Potential candidates for a child fire
-    candidates: Vec<ClusterRecord>,
+    candidates: Vec<Cluster>,
 
     /// Where to start numbering future children
     next_child_num: u32,
@@ -151,7 +151,7 @@ struct FireData {
 
 enum DatabaseMessage {
     AddFire(FireData),
-    AddAssociation(i64, FireCode),
+    AddAssociation(FireCode, NaiveDateTime, f64, Polygon<f64>),
 }
 
 fn process_fires<P: AsRef<Path>>(
@@ -211,20 +211,21 @@ fn process_fires<P: AsRef<Path>>(
                         .get_next_fire_id()
                         .expect("Ran out of fire ID #'s!");
 
-                    let ClusterRecord {
+                    let Cluster {
                         centroid,
-                        scan_time,
+                        scan_start_time,
                         perimeter,
+                        power,
                         ..
                     } = record;
 
                     let fd = FireData {
                         id: id.clone(),
                         origin: centroid,
-                        last_observed: scan_time,
+                        last_observed: scan_start_time,
                         candidates: vec![],
                         next_child_num: 0,
-                        perimeter,
+                        perimeter: perimeter.clone(),
                     };
 
                     // TODO check & log error
@@ -233,7 +234,12 @@ fn process_fires<P: AsRef<Path>>(
                         .unwrap();
                     // TODO check & log error
                     db_writer
-                        .send(DatabaseMessage::AddAssociation(record.rowid, id))
+                        .send(DatabaseMessage::AddAssociation(
+                            id,
+                            scan_start_time,
+                            power,
+                            perimeter,
+                        ))
                         .unwrap();
 
                     active_fires.push(fd);
@@ -286,7 +292,7 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
                 } = fire;
 
                 match fires.add_fire(
-                    id.clone_string(),
+                    id,
                     // TODO don't hard code "G17", get it from FireData
                     "G17",
                     last_observed,
@@ -302,8 +308,10 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
                 }
             }
 
-            DatabaseMessage::AddAssociation(cluster, fire_code) => {
-                match cluster_code_associations.add_association(cluster, fire_code.clone_string()) {
+            DatabaseMessage::AddAssociation(fire_code, scan_time, power, perimeter) => {
+                match cluster_code_associations
+                    .add_association(fire_code, scan_time, power, perimeter)
+                {
                     Ok(()) => {}
                     Err(err) => {
                         log::error!("Error adding fire association to database: {}", err);
@@ -318,9 +326,9 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
 /// Return the ClusterRecord if it couldn't be assigned somewhere else
 fn assign_cluster_to_fire(
     active_fires: &mut Vec<FireData>,
-    cluster: ClusterRecord,
+    cluster: Cluster,
     too_long_ago: NaiveDateTime,
-) -> Option<ClusterRecord> {
+) -> Option<Cluster> {
     for fire in active_fires
         .iter_mut()
         .rev()
@@ -344,17 +352,19 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
         if fire.candidates.len() == 1 {
             // If there is only 1 child fire, update the radius & last observed date
             for candidate in fire.candidates.drain(..) {
-                fire.last_observed = candidate.scan_time;
+                fire.last_observed = candidate.scan_start_time;
 
                 std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
-                tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter);
+                tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter.clone());
                 std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
 
                 // TODO check res & log error
                 db_writer
                     .send(DatabaseMessage::AddAssociation(
-                        candidate.rowid,
                         fire.id.clone(),
+                        candidate.scan_start_time,
+                        candidate.power,
+                        candidate.perimeter,
                     ))
                     .unwrap();
             }
@@ -364,18 +374,19 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
                 let id = fire.id.make_child_fire(fire.next_child_num);
                 fire.next_child_num += 1;
 
-                let ClusterRecord {
+                let Cluster {
                     centroid,
-                    scan_time,
+                    scan_start_time,
                     perimeter,
+                    power,
                     ..
                 } = candidate;
 
                 let new_fire = FireData {
                     id,
                     origin: centroid,
-                    perimeter,
-                    last_observed: scan_time,
+                    perimeter: perimeter.clone(),
+                    last_observed: scan_start_time,
                     candidates: vec![],
                     next_child_num: 0,
                 };
@@ -388,8 +399,10 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
                 // TODO check res & log error
                 db_writer
                     .send(DatabaseMessage::AddAssociation(
-                        candidate.rowid,
                         new_fire.id.clone(),
+                        scan_start_time,
+                        power,
+                        perimeter,
                     ))
                     .unwrap();
 

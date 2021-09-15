@@ -1,9 +1,12 @@
 /*! Methods and types to support querying the clusters database. */
-use std::{error::Error, path::Path};
-use crate::satellite::{Satellite, Sector};
+use crate::{
+    cluster::Cluster,
+    satellite::{Satellite, Sector},
+};
 use chrono::NaiveDateTime;
 use geo::{point, Point, Polygon};
 use rusqlite::ToSql;
+use std::{error::Error, path::Path, str::FromStr};
 
 pub struct ClustersDatabase {
     db: rusqlite::Connection,
@@ -43,24 +46,11 @@ impl ClustersDatabase {
     }
 
     pub fn cluster_query_handle(&self) -> Result<ClusterQuery, Box<dyn Error>> {
-        let stmt = self.db.prepare(include_str!("cluster_database/get_clusters.sql"))?;
+        let stmt = self
+            .db
+            .prepare(include_str!("cluster_database/get_clusters.sql"))?;
         Ok(ClusterQuery(stmt))
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct ClusterRecord {
-    // TODO add satellite and sector
-    /// The database rowid
-    pub rowid: i64,
-    /// The start time of the scan this cluster was detected in.
-    pub scan_time: NaiveDateTime,
-    /// Total (sum) of the fire power of the points in the cluster in megawatts.
-    pub power: f64,
-    /// Perimeter
-    pub perimeter: Polygon<f64>,
-    /// Centroid
-    pub centroid: Point<f64>,
 }
 
 //pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
@@ -69,30 +59,35 @@ pub struct ClusterQuery<'a>(rusqlite::Statement<'a>);
 impl<'a> ClusterQuery<'a> {
     pub fn records_for(
         &mut self,
-        satellite: &str,
-    ) -> Result<impl Iterator<Item = ClusterRecord> + '_, Box<dyn Error>> {
+        satellite: Satellite,
+    ) -> Result<impl Iterator<Item = Cluster> + '_, Box<dyn Error>> {
         let rows = self
             .0
-            .query_and_then(&[satellite], |row| {
-                let rowid: i64 = row.get(0)?;
-                let scan_time: NaiveDateTime =
-                    chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(1)?, 0);
-                let lat: f64 = row.get(2)?;
-                let lon: f64 = row.get(3)?;
+            .query_and_then(&[Into::<&'static str>::into(satellite)], |row| {
+                let satellite = Satellite::from_str(row.get_ref(0)?.as_str()?).unwrap();
+                let sector = Sector::from_str(row.get_ref(1)?.as_str()?).unwrap();
+                let scan_start_time: NaiveDateTime =
+                    chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(2)?, 0);
+                let lat: f64 = row.get(3)?;
+                let lon: f64 = row.get(4)?;
                 let centroid = point!(x: lat, y: lon);
-                let power: f64 = row.get(4)?;
+                let power: f64 = row.get(5)?;
 
-                let pblob = row.get_ref(5)?.as_blob()?;
+                let pblob = row.get_ref(6)?.as_blob()?;
 
                 let perimeter: Polygon<f64> =
                     bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
-                Ok(ClusterRecord {
-                    rowid,
-                    scan_time,
+                let count = row.get(7)?;
+
+                Ok(Cluster {
+                    satellite,
+                    sector,
+                    scan_start_time,
                     power,
                     perimeter,
                     centroid,
+                    count,
                 })
             })?
             .filter_map(|res: Result<_, rusqlite::Error>| res.ok());
@@ -142,7 +137,9 @@ impl<'a> AddClustersTransaction<'a> {
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("Flushing clusters.");
         self.db.execute_batch("BEGIN;")?;
-        let mut stmt = self.db.prepare(include_str!("cluster_database/add_cluster.sql"))?;
+        let mut stmt = self
+            .db
+            .prepare(include_str!("cluster_database/add_cluster.sql"))?;
 
         for (satellite, sector, scan_start, centroid, power, perimeter, num_points) in
             self.buffer.drain(..)
