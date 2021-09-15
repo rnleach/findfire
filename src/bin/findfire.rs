@@ -17,9 +17,7 @@ const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
 const CHANNEL_SIZE: usize = 100;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    SimpleLogger::new()
-        .with_level(LevelFilter::Info)
-        .init()?;
+    SimpleLogger::new().with_level(LevelFilter::Info).init()?;
 
     log::trace!("Trace messages enabled.");
     log::debug!("Debug messages enabled.");
@@ -147,7 +145,15 @@ fn generate_paths(to_load_thread: Sender<walkdir::DirEntry>) {
         .into_iter()
         .filter_map(|res| res.ok())
         // Ignore directories, WalkDir will take care of recursing into them.
-        .filter(|entry| entry.path().is_file())
+        .filter(|entry| {
+            let path = entry.path();
+
+            if path.is_dir() && entry.depth() <= 3 {
+                log::info!("Processing directory {:?}", entry.path());
+            }
+
+            path.is_file()
+        })
         // Get the file name
         .map(|entry| {
             let fname: String = entry.file_name().to_string_lossy().to_string();
