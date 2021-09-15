@@ -64,3 +64,7 @@ the NetCDF4 to detect these properties internally.
 
 #### serde and bincode
  Serde to serialize the fire perimeters in bincode for storing in the sqlite database.
+
+#### strum
+ Convenient way to switch between enum objects and the strings stored in the database.
+

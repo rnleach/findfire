@@ -6,6 +6,7 @@ pub use fire_database::{
 };
 pub use firepoint::FirePoint;
 pub use firesatimage::FireSatImage;
+pub use satellite::{Satellite, Sector};
 
 /**************************************************************************************************
  * Private Implementation
@@ -15,3 +16,4 @@ mod error;
 mod fire_database;
 mod firepoint;
 mod firesatimage;
+mod satellite;

@@ -55,8 +55,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         log::info!("");
         log::info!("Biggest fire added to database:");
-        log::info!("     satellite - {:>19}", satellite);
-        log::info!("        sector - {:>19}", sector);
+        log::info!(
+            "     satellite - {:>19}",
+            Into::<&'static str>::into(satellite)
+        );
+        log::info!(
+            "        sector - {:>19}",
+            Into::<&'static str>::into(sector)
+        );
         log::info!("    scan start - {:>19}", scan_start_time);
         log::info!("      latitude - {:>19.6}", lat);
         log::info!("     longitude - {:>19.6}", lon);

@@ -1,4 +1,8 @@
-use crate::{error::FindFireError, firepoint::FirePoint};
+use crate::{
+    error::FindFireError,
+    firepoint::FirePoint,
+    satellite::{Satellite, Sector},
+};
 
 use std::{error::Error, path::Path};
 
@@ -7,8 +11,8 @@ use gdal::{raster::Buffer, Dataset};
 
 pub struct FireSatImage {
     dataset: Dataset,
-    satellite: &'static str,
-    sector: &'static str,
+    satellite: Satellite,
+    sector: Sector,
     start: NaiveDateTime,
     end: NaiveDateTime,
 }
@@ -111,11 +115,11 @@ impl FireSatImage {
         self.start + (self.end - self.start) / 2
     }
 
-    pub fn satellite(&self) -> &'static str {
+    pub fn satellite(&self) -> Satellite {
         self.satellite
     }
 
-    pub fn sector(&self) -> &'static str {
+    pub fn sector(&self) -> Sector {
         self.sector
     }
 
@@ -163,15 +167,15 @@ impl FireSatImage {
         }
     }
 
-    fn find_satellite_name(fname: &str) -> Result<&'static str, Box<dyn Error>> {
+    fn find_satellite_name(fname: &str) -> Result<Satellite, Box<dyn Error>> {
         // Satellites
         const G16: &str = "G16";
         const G17: &str = "G17";
 
         if fname.contains(G16) {
-            Ok(G16)
+            Ok(Satellite::G16)
         } else if fname.contains(G17) {
-            Ok(G17)
+            Ok(Satellite::G17)
         } else {
             Err(Box::new(FindFireError {
                 msg: "Invalid file name, no satellite description.",
@@ -179,18 +183,18 @@ impl FireSatImage {
         }
     }
 
-    fn find_sector_name(fname: &str) -> Result<&'static str, Box<dyn Error>> {
+    fn find_sector_name(fname: &str) -> Result<Sector, Box<dyn Error>> {
         // Sectors
         const CONUS: &str = "FDCC";
         const FULL_DISK: &str = "FDCF";
         const MESO: &str = "FDCM";
 
         if fname.contains(CONUS) {
-            Ok(CONUS)
+            Ok(Sector::Conus)
         } else if fname.contains(FULL_DISK) {
-            Ok(FULL_DISK)
+            Ok(Sector::FullDisk)
         } else if fname.contains(MESO) {
-            Ok(MESO)
+            Ok(Sector::Meso)
         } else {
             Err(Box::new(FindFireError {
                 msg: "Invalid file name, no satellite sector description.",

@@ -4,7 +4,11 @@
  * A cluster describes the aggregate properties of a connected group (or cluster) of FirePoint
  * objects.
  */
-use crate::{firepoint::FirePoint, FireSatImage};
+use crate::{
+    firepoint::FirePoint,
+    satellite::{Satellite, Sector},
+    FireSatImage,
+};
 use chrono::NaiveDateTime;
 use geo::{
     algorithm::{centroid::Centroid, concave_hull::ConcaveHull},
@@ -18,9 +22,9 @@ use std::{error::Error, iter::FromIterator};
 #[derive(Clone, Debug)]
 pub struct Cluster {
     /// The satellite that this cluster was analyzed from.
-    pub satellite: &'static str,
+    pub satellite: Satellite,
     /// The scan sector this cluster was analyzed from.
-    pub sector: &'static str,
+    pub sector: Sector,
     /// The start time of the scan this cluster was detected on.
     pub scan_start_time: NaiveDateTime,
     /// Perimeter
@@ -54,8 +58,8 @@ impl Cluster {
     fn from_fire_points(
         mut points: Vec<FirePoint>,
         scan_start_time: NaiveDateTime,
-        satellite: &'static str,
-        sector: &'static str,
+        satellite: Satellite,
+        sector: Sector,
     ) -> Vec<Self> {
         let mut clusters: Vec<Self> = vec![];
         let mut cluster_points: Vec<Point<f64>> = vec![];

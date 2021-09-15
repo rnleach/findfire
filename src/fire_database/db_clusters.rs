@@ -1,10 +1,10 @@
 /*! Methods and types to support querying the clusters table of the database. */
 
-use std::error::Error;
-
+use crate::satellite::{Satellite, Sector};
 use chrono::NaiveDateTime;
 use geo::{point, Point, Polygon};
 use rusqlite::ToSql;
+use std::error::Error;
 
 impl super::FiresDatabase {
     pub fn add_cluster_handle(&self) -> Result<AddClustersTransaction, Box<dyn Error>> {
@@ -36,8 +36,8 @@ impl super::FiresDatabase {
 
 #[derive(Debug, Clone)]
 pub struct ClusterRecord {
-    // TODO add satellite as &'static str
-    /// Row id from the database.
+    // TODO add satellite and sector
+    /// The database rowid
     pub rowid: i64,
     /// The start time of the scan this cluster was detected in.
     pub scan_time: NaiveDateTime,
@@ -90,8 +90,8 @@ impl<'a> ClusterQuery<'a> {
 //pub struct AddClustersTransaction<'a>(rusqlite::Statement<'a>, &'a rusqlite::Connection);
 pub struct AddClustersTransaction<'a> {
     buffer: Vec<(
-        &'static str,
-        &'static str,
+        Satellite,
+        Sector,
         NaiveDateTime,
         Point<f64>,
         f64,
@@ -101,13 +101,13 @@ pub struct AddClustersTransaction<'a> {
     db: &'a rusqlite::Connection,
 }
 
-const BUFFER_CAPACITY: usize = 100_000;
+const BUFFER_CAPACITY: usize = 1_000;
 
 impl<'a> AddClustersTransaction<'a> {
     pub fn add_cluster(
         &mut self,
-        satellite: &'static str,
-        sector: &'static str,
+        satellite: Satellite,
+        sector: Sector,
         scan_start: NaiveDateTime,
         centroid: Point<f64>,
         power: f64,
@@ -138,8 +138,8 @@ impl<'a> AddClustersTransaction<'a> {
 
             let perimeter = bincode::serialize(&perimeter)?;
             let _ = stmt.execute([
-                &satellite as &dyn ToSql,
-                &sector,
+                &Into::<&'static str>::into(satellite) as &dyn ToSql,
+                &Into::<&'static str>::into(sector),
                 &scan_start.timestamp(),
                 &lat,
                 &lon,
