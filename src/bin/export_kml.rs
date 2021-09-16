@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use kml::{
-    types::{Geometry, Placemark, Polygon},
+    types::{Element, Geometry, Placemark, PolyStyle, Polygon, Style},
     Kml, KmlWriter,
 };
 use log::LevelFilter;
@@ -8,8 +8,8 @@ use satfire::{FiresDatabase, Satellite};
 use simple_logger::SimpleLogger;
 use std::{collections::HashMap, error::Error, fs::File};
 
-const FIRES_DATABASE_FILE: &'static str = "/Users/ryan/wxdata/connectfire.sqlite";
-const OUTPUT_FILE: &'static str = "/Users/ryan/wxdata/connectfire.kml";
+const FIRES_DATABASE_FILE: &'static str = "/home/ryan/wxdata/connectfire.sqlite";
+const OUTPUT_FILE: &'static str = "/home/ryan/wxdata/connectfire.kml";
 
 fn main() -> Result<(), Box<dyn Error>> {
     SimpleLogger::new().with_level(LevelFilter::Debug).init()?;
@@ -28,11 +28,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let fdb = FiresDatabase::connect(FIRES_DATABASE_FILE)?;
     let mut fires = fdb.read_fires_handle()?;
     let fires = fires
-        .records_for(Satellite::G16)?
+        .records_for(Satellite::G17)?
         .filter(|fr| fr.last_observed > start)
         .filter(|fr| fr.last_observed < end);
 
     let mut elements = vec![];
+
+    let poly_style = PolyStyle {
+        color: "7F0000FF".to_owned(),
+        ..PolyStyle::default()
+    };
+
+    let poly_style = Kml::Style(Style {
+        id: "fire".to_owned(),
+        poly: Some(poly_style),
+        ..Style::default()
+    });
 
     for (i, fr) in fires.enumerate() {
         let geometry = Some(Geometry::Polygon(Polygon::from(fr.perimeter)));
@@ -42,6 +53,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             geometry,
             name,
             description,
+            children: vec![Element {
+                name: "styleUrl".into(),
+                content: Some("#fire".into()),
+                ..Element::default()
+            }],
             ..Placemark::default()
         };
 
@@ -52,8 +68,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let doc = Kml::Document {
+    let mut folder_atts = HashMap::new();
+    folder_atts.insert("name".into(), "GOES Fire Detections".into());
+
+    let folder = Kml::Folder {
         elements,
+        attrs: folder_atts,
+    };
+
+    let doc = Kml::Document {
+        elements: vec![folder, poly_style],
         attrs: HashMap::new(),
     };
 

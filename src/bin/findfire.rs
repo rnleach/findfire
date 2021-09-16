@@ -11,8 +11,8 @@ use satfire::{Cluster, ClustersDatabase, FireSatImage, Satellite, Sector};
 use simple_logger::SimpleLogger;
 use strum::IntoEnumIterator;
 
-const DATABASE_FILE: &'static str = "/Users/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/Volumes/MET2/GOESX/";
+const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
+const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
 
 const CHANNEL_SIZE: usize = 100;
 
