@@ -89,9 +89,14 @@ impl FireSatImage {
                     // Convert to lat-lon
                     let _ = trans.transform_coords(&mut xp, &mut yp, &mut zp);
 
+                    for i in 0..xp.len() {
+                        debug_assert!(yp[i] >= -180.0 && yp[i] <= 180.0);
+                        debug_assert!(xp[i] >= -90.0 && xp[i] <= 90.0);
+                    }
+
                     points.push(FirePoint {
-                        lats: yp,
-                        lons: xp,
+                        lats: xp,
+                        lons: yp,
                         power,
                         x: i as isize,
                         y: j as isize,

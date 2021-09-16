@@ -88,7 +88,7 @@ impl Cluster {
                 .iter()
                 .cloned()
                 .zip(curr_pt.lons.iter().cloned())
-                .map(|(lat, lon)| point!(x: lat, y: lon))
+                .map(|(lat, lon)| point!(x: lon, y: lat))
                 .for_each(|pnt| cluster_points.push(pnt));
 
             cluster_index_coords.push((curr_pt.x, curr_pt.y));
@@ -128,7 +128,7 @@ impl Cluster {
             }
 
             let multi_pnt = geo::MultiPoint::from_iter(cluster_points.iter().cloned());
-            let perimeter = multi_pnt.concave_hull(2.0);
+            let perimeter = multi_pnt.concave_hull(1.0);
             let centroid = multi_pnt.centroid().unwrap();
             let curr_clust = Cluster {
                 satellite,
