@@ -68,12 +68,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mut folder_atts = HashMap::new();
-    folder_atts.insert("name".into(), "GOES Fire Detections".into());
+    let folder_name: Kml<f64> = Kml::Element(Element {
+        name: "name".into(),
+        content: Some("GOES Fire Detections".into()),
+        ..Element::default()
+    });
+
+    elements.push(folder_name);
 
     let folder = Kml::Folder {
         elements,
-        attrs: folder_atts,
+        attrs: HashMap::new(),
     };
 
     let doc = Kml::Document {
