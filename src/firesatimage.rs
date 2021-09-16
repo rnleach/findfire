@@ -76,8 +76,13 @@ impl FireSatImage {
                     let ii = i as f64;
                     let jj = j as f64;
 
-                    let mut xp: [f64; 4] = [ii - 0.5, ii + 0.5, ii + 0.5, ii - 0.5];
-                    let mut yp: [f64; 4] = [jj + 0.5, jj + 0.5, jj - 0.5, jj - 0.5];
+                    // FUDGE factor so polygons overlap.
+                    const FUDGE: f64 = 1.00;
+                    // Distance to edge of cell in index space. Points are at center of area.
+                    const EDGE: f64 = 0.5 * FUDGE;
+
+                    let mut xp: [f64; 4] = [ii - EDGE, ii + EDGE, ii + EDGE, ii - EDGE];
+                    let mut yp: [f64; 4] = [jj + EDGE, jj + EDGE, jj - EDGE, jj - EDGE];
                     let mut zp: [f64; 4] = [0.0; 4];
 
                     // Convert from array indexes to geo coodinate scan angle radians

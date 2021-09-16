@@ -93,42 +93,50 @@ impl Cluster {
 
             cluster_index_coords.push((curr_pt.x, curr_pt.y));
 
-            for j in (i + 1)..points.len() {
-                // Skip NULL_PT values
-                if points[j].x == 0 && points[j].y == 0 {
-                    continue;
-                }
+            loop {
+                let mut some_found = false;
+                for j in (i + 1)..points.len() {
+                    // Skip NULL_PT values
+                    if points[j].x == 0 && points[j].y == 0 {
+                        continue;
+                    }
 
-                let mut in_cluster = false;
-                for (x, y) in &cluster_index_coords {
-                    let dx = (x - points[j].x).abs();
-                    let dy = (y - points[j].y).abs();
+                    let mut in_cluster = false;
+                    for (x, y) in &cluster_index_coords {
+                        let dx = (x - points[j].x).abs();
+                        let dy = (y - points[j].y).abs();
 
-                    if dx <= 1 && dy <= 1 {
-                        in_cluster = true;
-                        break;
+                        if dx <= 1 && dy <= 1 {
+                            in_cluster = true;
+                            break;
+                        }
+                    }
+
+                    if in_cluster {
+                        let candidate = std::mem::replace(&mut points[j], NULL_PT);
+                        count += 1;
+                        power += candidate.power;
+
+                        candidate
+                            .lats
+                            .iter()
+                            .cloned()
+                            .zip(candidate.lons.iter().cloned())
+                            .map(|(lat, lon)| point!(x: lon, y: lat))
+                            .for_each(|pnt| cluster_points.push(pnt));
+
+                        cluster_index_coords.push((candidate.x, candidate.y));
+                        some_found = true;
                     }
                 }
 
-                if in_cluster {
-                    let candidate = std::mem::replace(&mut points[j], NULL_PT);
-                    count += 1;
-                    power += candidate.power;
-
-                    candidate
-                        .lats
-                        .iter()
-                        .cloned()
-                        .zip(candidate.lons.iter().cloned())
-                        .map(|(lat, lon)| point!(x: lon, y: lat))
-                        .for_each(|pnt| cluster_points.push(pnt));
-
-                    cluster_index_coords.push((candidate.x, candidate.y));
+                if !some_found {
+                    break;
                 }
             }
 
             let multi_pnt = geo::MultiPoint::from_iter(cluster_points.iter().cloned());
-            let perimeter = multi_pnt.concave_hull(1.0);
+            let perimeter = multi_pnt.concave_hull(1.25);
             let centroid = multi_pnt.centroid().unwrap();
             let curr_clust = Cluster {
                 satellite,
