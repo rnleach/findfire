@@ -34,11 +34,21 @@ impl super::FiresDatabase {
             buffer: Vec::with_capacity(BUFFER_CAPACITY),
         })
     }
+
+    pub fn read_fires_handle(&self) -> Result<FireQuery, Box<dyn Error>> {
+        FireQuery::new(&self.db)
+    }
 }
 
 pub struct FireQuery<'a>(rusqlite::Statement<'a>);
 
 impl<'a> FireQuery<'a> {
+    fn new(conn: &'a Connection) -> Result<Self, Box<dyn Error>> {
+        let stmt = conn.prepare(include_str!("query_fires.sql"))?;
+
+        Ok(Self(stmt))
+    }
+
     pub fn records_for(
         &mut self,
         satellite: Satellite,
