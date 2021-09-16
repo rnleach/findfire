@@ -61,7 +61,7 @@ impl<'a> FireQuery<'a> {
                     chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(1)?, 0);
                 let lat: f64 = row.get(2)?;
                 let lon: f64 = row.get(3)?;
-                let origin = point!(x: lat, y: lon);
+                let origin = point!(x: lon, y: lat);
 
                 let pblob = row.get_ref(4)?.as_blob()?;
 
@@ -213,8 +213,8 @@ impl<'a> AddFireTransaction<'a> {
         for (fire_id, satellite, last_observed, origin, perimeter, next_child) in
             self.buffer.drain(..)
         {
-            let lat = origin.x();
-            let lon = origin.y();
+            let lon = origin.x();
+            let lat = origin.y();
 
             log::trace!(
                 "'{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}'",

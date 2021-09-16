@@ -73,7 +73,7 @@ impl<'a> ClusterQuery<'a> {
                     chrono::NaiveDateTime::from_timestamp(row.get::<_, i64>(2)?, 0);
                 let lat: f64 = row.get(3)?;
                 let lon: f64 = row.get(4)?;
-                let centroid = point!(x: lat, y: lon);
+                let centroid = point!(x: lon, y: lat);
                 let power: f64 = row.get(5)?;
 
                 let pblob = row.get_ref(6)?.as_blob()?;
@@ -147,8 +147,8 @@ impl<'a> AddClustersTransaction<'a> {
         for (satellite, sector, scan_start, centroid, power, perimeter, num_points) in
             self.buffer.drain(..)
         {
-            let lat = centroid.x();
-            let lon = centroid.y();
+            let lon = centroid.x();
+            let lat = centroid.y();
 
             let perimeter = bincode::serialize(&perimeter)?;
             let _ = stmt.execute([

@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::error!("Error messages enabled.");
 
     let start = NaiveDate::from_ymd(2018, 1, 1).and_hms(0, 0, 0);
-    let end = NaiveDate::from_ymd(2018, 2, 1).and_hms(0, 0, 0);
+    let end = NaiveDate::from_ymd(2022, 1, 1).and_hms(0, 0, 0);
 
     log::info!("start -> end : {} -> {}", start, end);
 

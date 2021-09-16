@@ -11,8 +11,8 @@ use satfire::{Cluster, ClustersDatabase, FireSatImage, Satellite, Sector};
 use simple_logger::SimpleLogger;
 use strum::IntoEnumIterator;
 
-const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
+const DATABASE_FILE: &'static str = "/Users/ryan/wxdata/findfire.sqlite";
+const DATA_DIR: &'static str = "/Volumes/MET2/GOESX/";
 
 const CHANNEL_SIZE: usize = 100;
 
@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 count,
                 ..
             } = biggest_fire;
-            let (lat, lon) = (centroid.x(), centroid.y());
+            let (lon, lat) = (centroid.x(), centroid.y());
 
             log::info!("");
             log::info!("Biggest fire added to database:");

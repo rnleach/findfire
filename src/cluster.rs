@@ -120,7 +120,7 @@ impl Cluster {
                         .iter()
                         .cloned()
                         .zip(candidate.lons.iter().cloned())
-                        .map(|(lat, lon)| point!(x: lat, y: lon))
+                        .map(|(lat, lon)| point!(x: lon, y: lat))
                         .for_each(|pnt| cluster_points.push(pnt));
 
                     cluster_index_coords.push((candidate.x, candidate.y));

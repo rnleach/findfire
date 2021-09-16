@@ -90,8 +90,8 @@ impl FireSatImage {
                     let _ = trans.transform_coords(&mut xp, &mut yp, &mut zp);
 
                     points.push(FirePoint {
-                        lats: xp,
-                        lons: yp,
+                        lats: yp,
+                        lons: xp,
                         power,
                         x: i as isize,
                         y: j as isize,
