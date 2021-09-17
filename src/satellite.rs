@@ -8,7 +8,10 @@ pub enum Satellite {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, IntoStaticStr, EnumString, Display, EnumIter)]
 pub enum Sector {
+    #[strum(serialize = "FDCM")]
     Meso,
+    #[strum(serialize = "FDCC")]
     Conus,
+    #[strum(serialize = "FDCF")]
     FullDisk,
 }
