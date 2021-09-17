@@ -322,10 +322,12 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
 }
 
 /// Return the ClusterRecord if it couldn't be assigned somewhere else
-fn assign_cluster_to_fire(assignments: &mut Vec<(usize, Cluster)>, active_fires: &KdIndexTree<FireData>, cluster: Cluster) -> Option<Cluster> {
-
+fn assign_cluster_to_fire(
+    assignments: &mut Vec<(usize, Cluster)>,
+    active_fires: &KdIndexTree<FireData>,
+    cluster: Cluster,
+) -> Option<Cluster> {
     if let Some(fire_idx) = active_fires.nearest(&cluster) {
-
         let idx = *fire_idx.item;
         let fire = &active_fires.item(idx);
 
@@ -338,7 +340,11 @@ fn assign_cluster_to_fire(assignments: &mut Vec<(usize, Cluster)>, active_fires:
     Some(cluster)
 }
 
-fn finish_this_time_step(fires: &mut Vec<FireData>, assignments: &mut Vec<(usize, Cluster)>, db_writer: &Sender<DatabaseMessage>) {
+fn finish_this_time_step(
+    fires: &mut Vec<FireData>,
+    assignments: &mut Vec<(usize, Cluster)>,
+    db_writer: &Sender<DatabaseMessage>,
+) {
     let mut tmp_polygon: Polygon<f64> = polygon!();
 
     for (i, cluster) in assignments.drain(..) {
@@ -358,7 +364,7 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, assignments: &mut Vec<(usize
                 cluster.perimeter
             ),
             "Error sending to db_writer: {}"
-            );
+        );
     }
 
     assert!(assignments.is_empty());
