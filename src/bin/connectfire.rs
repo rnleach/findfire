@@ -10,6 +10,7 @@ use geo::{
     line_string, polygon, MultiPolygon, Point, Polygon,
 };
 use itertools::Itertools;
+use kd_tree::{KdIndexTree, KdIndexTreeN, KdPoint};
 use log::LevelFilter;
 use satfire::{Cluster, ClustersDatabase, FireCode, FiresDatabase, Satellite};
 use simple_logger::SimpleLogger;
@@ -67,12 +68,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-enum ClusterMessage {
-    StartTimeStep(NaiveDateTime),
-    Cluster(Cluster),
-    FinishTimeStep,
-}
-
 enum DatabaseMessage {
     AddFire(FireData),
     AddAssociation(FireCode, NaiveDateTime, f64, Polygon<f64>),
@@ -98,6 +93,19 @@ struct FireData {
     candidates: Vec<Cluster>,
 }
 
+impl KdPoint for FireData {
+    type Scalar = f64;
+    type Dim = typenum::U2;
+
+    fn at(&self, k: usize) -> Self::Scalar {
+        match k {
+            0 => self.origin.x(),
+            1 => self.origin.y(),
+            _ => unreachable!(),
+        }
+    }
+}
+
 macro_rules! send_or_return {
     ($channel:ident, $item:expr, $msg:expr) => {
         match $channel.send($item) {
@@ -113,7 +121,7 @@ macro_rules! send_or_return {
 fn read_database<P: AsRef<Path>>(
     path_to_db: P,
     satellite: Satellite,
-    to_fires_processing: Sender<ClusterMessage>,
+    to_fires_processing: Sender<Cluster>,
 ) {
     let clusters_db = match ClustersDatabase::connect(path_to_db) {
         Ok(db) => db,
@@ -139,24 +147,10 @@ fn read_database<P: AsRef<Path>>(
         }
     };
 
-    for (curr_time_stamp, records) in records.group_by(|rec| rec.scan_start_time).into_iter() {
+    for record in records {
         send_or_return!(
             to_fires_processing,
-            ClusterMessage::StartTimeStep(curr_time_stamp),
-            "Error sending from read_database: {}"
-        );
-
-        for record in records {
-            send_or_return!(
-                to_fires_processing,
-                ClusterMessage::Cluster(record),
-                "Error sending from read_database: {}"
-            );
-        }
-
-        send_or_return!(
-            to_fires_processing,
-            ClusterMessage::FinishTimeStep,
+            record,
             "Error sending from read_database: {}"
         );
     }
@@ -164,7 +158,7 @@ fn read_database<P: AsRef<Path>>(
 
 fn process_fires<P: AsRef<Path>>(
     path_to_db: P,
-    clusters_msgs: Receiver<ClusterMessage>,
+    clusters_msgs: Receiver<Cluster>,
     db_writer: Sender<DatabaseMessage>,
 ) {
     let fires_db = match FiresDatabase::connect(path_to_db) {
@@ -185,76 +179,70 @@ fn process_fires<P: AsRef<Path>>(
 
     let mut active_fires = vec![];
     let mut last_purge: NaiveDateTime = chrono::NaiveDate::from_ymd(1900, 1, 1).and_hms(0, 0, 0);
-    let mut too_long_ago = last_purge;
 
-    for msg in clusters_msgs {
-        match msg {
-            ClusterMessage::StartTimeStep(curr_time_stamp) => {
-                // Update flags for this time step
-                too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
+    for (curr_time_stamp, clusters) in clusters_msgs
+        .into_iter()
+        .group_by(|cluster| cluster.scan_start_time)
+        .into_iter()
+    {
+        // Update flags for this time step
+        let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
 
-                if curr_time_stamp - last_purge > Duration::days(1) {
-                    merge_fires(&mut active_fires, &db_writer);
+        if curr_time_stamp - last_purge > Duration::days(1) {
+            merge_fires(&mut active_fires, &db_writer);
 
-                    for af in active_fires
-                        .iter()
-                        .filter(|af: &&FireData| af.last_observed <= too_long_ago)
-                    {
-                        send_or_return!(
-                            db_writer,
-                            DatabaseMessage::AddFire(af.clone()),
-                            "Error sending to db_writer: {}"
-                        );
-                    }
-
-                    active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
-
-                    last_purge = curr_time_stamp;
-                }
+            for af in active_fires
+                .iter()
+                .filter(|af: &&FireData| af.last_observed <= too_long_ago)
+            {
+                send_or_return!(
+                    db_writer,
+                    DatabaseMessage::AddFire(af.clone()),
+                    "Error sending to db_writer: {}"
+                );
             }
 
-            ClusterMessage::Cluster(record) => {
-                // Try to assign it as a canidate member to a fire, but if that fails, create a new fire.
-                if let Some(record) =
-                    assign_cluster_to_fire(&mut active_fires, record, too_long_ago)
-                {
-                    let id = next_fire_state
-                        .get_next_fire_id()
-                        .expect("Ran out of fire ID #'s!");
+            active_fires.retain(|f: &FireData| f.last_observed > too_long_ago);
 
-                    let Cluster {
-                        centroid,
-                        scan_start_time,
-                        perimeter,
-                        power,
-                        satellite,
-                        ..
-                    } = record;
+            last_purge = curr_time_stamp;
+        }
 
-                    let fd = FireData {
-                        id: id.clone(),
-                        origin: centroid,
-                        last_observed: scan_start_time,
-                        candidates: vec![],
-                        perimeter: perimeter.clone(),
-                        satellite,
-                    };
+        for record in clusters {
+            if let Some(record) = assign_cluster_to_fire(&mut active_fires, record) {
+                let id = next_fire_state
+                    .get_next_fire_id()
+                    .expect("Ran out of fire ID #'s!");
 
-                    send_or_return!(
-                        db_writer,
-                        DatabaseMessage::AddAssociation(id, scan_start_time, power, perimeter),
-                        "Error sending to db_writer: {}"
-                    );
+                let Cluster {
+                    centroid,
+                    scan_start_time,
+                    perimeter,
+                    power,
+                    satellite,
+                    ..
+                } = record;
 
-                    active_fires.push(fd);
-                }
-            }
+                let fd = FireData {
+                    id: id.clone(),
+                    origin: centroid,
+                    last_observed: scan_start_time,
+                    candidates: vec![],
+                    perimeter: perimeter.clone(),
+                    satellite,
+                };
 
-            ClusterMessage::FinishTimeStep => {
-                // Finish this time step
-                finish_this_time_step(&mut active_fires, &db_writer);
+                send_or_return!(
+                    db_writer,
+                    DatabaseMessage::AddAssociation(id, scan_start_time, power, perimeter),
+                    "Error sending to db_writer: {}"
+                );
+
+                active_fires.push(fd);
             }
         }
+
+        // Finish this time step
+        finish_this_time_step(&mut active_fires, &db_writer);
     }
 
     merge_fires(&mut active_fires, &db_writer);
@@ -329,17 +317,12 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
 }
 
 /// Return the ClusterRecord if it couldn't be assigned somewhere else
-fn assign_cluster_to_fire(
-    active_fires: &mut Vec<FireData>,
-    cluster: Cluster,
-    too_long_ago: NaiveDateTime,
-) -> Option<Cluster> {
+fn assign_cluster_to_fire(active_fires: &mut Vec<FireData>, cluster: Cluster) -> Option<Cluster> {
     for fire in active_fires
         .iter_mut()
         .rev()
         // No mixing and matching between satllites.
         .filter(|f| f.satellite == cluster.satellite)
-        .take_while(|f| f.last_observed > too_long_ago)
     {
         if fire.perimeter.intersects(&cluster.perimeter) {
             fire.candidates.push(cluster);

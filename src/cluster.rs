@@ -14,6 +14,7 @@ use geo::{
     algorithm::{centroid::Centroid, concave_hull::ConcaveHull},
     point, Point, Polygon,
 };
+use kd_tree::KdPoint;
 use std::{error::Error, iter::FromIterator};
 
 /**
@@ -35,6 +36,19 @@ pub struct Cluster {
     pub power: f64,
     /// The number of points that are in this cluster.
     pub count: i32,
+}
+
+impl KdPoint for Cluster {
+    type Scalar = f64;
+    type Dim = typenum::U2;
+
+    fn at(&self, k: usize) -> Self::Scalar {
+        match k {
+            0 => self.centroid.x(),
+            1 => self.centroid.y(),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Cluster {
