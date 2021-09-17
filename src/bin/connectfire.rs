@@ -3,7 +3,10 @@ use std::{error::Error, path::Path, thread};
 use chrono::{Duration, NaiveDateTime};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use geo::{
-    algorithm::{concave_hull::ConcaveHull, intersects::Intersects},
+    algorithm::{
+        chamberlain_duquette_area::ChamberlainDuquetteArea, concave_hull::ConcaveHull,
+        intersects::Intersects,
+    },
     line_string, polygon, MultiPolygon, Point, Polygon,
 };
 use itertools::Itertools;
@@ -191,6 +194,8 @@ fn process_fires<P: AsRef<Path>>(
                 too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
 
                 if curr_time_stamp - last_purge > Duration::days(1) {
+                    merge_fires(&mut active_fires, &db_writer);
+
                     for af in active_fires
                         .iter()
                         .filter(|af: &&FireData| af.last_observed <= too_long_ago)
@@ -252,6 +257,7 @@ fn process_fires<P: AsRef<Path>>(
         }
     }
 
+    merge_fires(&mut active_fires, &db_writer);
     for fire in active_fires.drain(..) {
         send_or_return!(
             db_writer,
@@ -366,6 +372,55 @@ fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseM
                 "Error sending to db_writer: {}"
             );
         }
+    }
+}
+
+fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
+    let mut idxs_to_remove = vec![];
+    for i in 0..fires.len() {
+        if idxs_to_remove.contains(&i) {
+            continue;
+        }
+
+        for j in (i + 1)..fires.len() {
+            if idxs_to_remove.contains(&j) {
+                continue;
+            }
+
+            if fires[i].perimeter.intersects(&fires[j].perimeter) {
+                let mut tmp_polygon = polygon!();
+
+                if fires[i].perimeter.chamberlain_duquette_unsigned_area()
+                    > fires[j].perimeter.chamberlain_duquette_unsigned_area()
+                {
+                    idxs_to_remove.push(j);
+
+                    std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
+                    tmp_polygon = merge_polygons(tmp_polygon, fires[j].perimeter.clone());
+                    std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
+                } else {
+                    idxs_to_remove.push(i);
+
+                    std::mem::swap(&mut tmp_polygon, &mut fires[j].perimeter);
+                    tmp_polygon = merge_polygons(tmp_polygon, fires[i].perimeter.clone());
+                    std::mem::swap(&mut tmp_polygon, &mut fires[j].perimeter);
+                }
+            }
+        }
+    }
+
+    if !idxs_to_remove.is_empty() {
+        log::info!("Merged {} fires into a larger fire.", idxs_to_remove.len());
+    }
+
+    // Remove fires that were smaller when merged.
+    for idx in idxs_to_remove.into_iter().rev() {
+        let fire = fires.swap_remove(idx);
+        send_or_return!(
+            db_writer,
+            DatabaseMessage::AddFire(fire),
+            "Error sending to db_writer: {}"
+        );
     }
 }
 
