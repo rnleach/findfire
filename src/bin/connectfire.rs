@@ -10,7 +10,7 @@ use geo::{
     line_string, polygon, MultiPolygon, Point, Polygon,
 };
 use itertools::Itertools;
-use kd_tree::{KdIndexTree, KdIndexTreeN, KdPoint};
+use kd_tree::{KdIndexTree, KdPoint};
 use log::LevelFilter;
 use satfire::{Cluster, ClustersDatabase, FireCode, FiresDatabase, Satellite};
 use simple_logger::SimpleLogger;
@@ -178,6 +178,8 @@ fn process_fires<P: AsRef<Path>>(
     };
 
     let mut active_fires = vec![];
+    let mut new_fires = vec![];
+    let mut assignments = vec![];
     let mut last_purge: NaiveDateTime = chrono::NaiveDate::from_ymd(1900, 1, 1).and_hms(0, 0, 0);
 
     for (curr_time_stamp, clusters) in clusters_msgs
@@ -207,8 +209,9 @@ fn process_fires<P: AsRef<Path>>(
             last_purge = curr_time_stamp;
         }
 
+        let kdtree = KdIndexTree::build_by_ordered_float(&active_fires);
         for record in clusters {
-            if let Some(record) = assign_cluster_to_fire(&mut active_fires, record) {
+            if let Some(record) = assign_cluster_to_fire(&mut assignments, &kdtree, record) {
                 let id = next_fire_state
                     .get_next_fire_id()
                     .expect("Ran out of fire ID #'s!");
@@ -237,12 +240,14 @@ fn process_fires<P: AsRef<Path>>(
                     "Error sending to db_writer: {}"
                 );
 
-                active_fires.push(fd);
+                new_fires.push(fd);
             }
         }
 
+        active_fires.extend(new_fires.drain(..));
+
         // Finish this time step
-        finish_this_time_step(&mut active_fires, &db_writer);
+        finish_this_time_step(&mut active_fires, &mut assignments, &db_writer);
     }
 
     merge_fires(&mut active_fires, &db_writer);
@@ -317,15 +322,15 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
 }
 
 /// Return the ClusterRecord if it couldn't be assigned somewhere else
-fn assign_cluster_to_fire(active_fires: &mut Vec<FireData>, cluster: Cluster) -> Option<Cluster> {
-    for fire in active_fires
-        .iter_mut()
-        .rev()
-        // No mixing and matching between satllites.
-        .filter(|f| f.satellite == cluster.satellite)
-    {
+fn assign_cluster_to_fire(assignments: &mut Vec<(usize, Cluster)>, active_fires: &KdIndexTree<FireData>, cluster: Cluster) -> Option<Cluster> {
+
+    if let Some(fire_idx) = active_fires.nearest(&cluster) {
+
+        let idx = *fire_idx.item;
+        let fire = &active_fires.item(idx);
+
         if fire.perimeter.intersects(&cluster.perimeter) {
-            fire.candidates.push(cluster);
+            assignments.push((idx, cluster));
             return None;
         }
     }
@@ -333,29 +338,30 @@ fn assign_cluster_to_fire(active_fires: &mut Vec<FireData>, cluster: Cluster) ->
     Some(cluster)
 }
 
-fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
+fn finish_this_time_step(fires: &mut Vec<FireData>, assignments: &mut Vec<(usize, Cluster)>, db_writer: &Sender<DatabaseMessage>) {
     let mut tmp_polygon: Polygon<f64> = polygon!();
 
-    for fire in fires.iter_mut().filter(|f| !f.candidates.is_empty()) {
-        for candidate in fire.candidates.drain(..) {
-            fire.last_observed = candidate.scan_start_time;
+    for (i, cluster) in assignments.drain(..) {
+        let fire = &mut fires[i];
+        fire.last_observed = cluster.scan_start_time;
 
-            std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
-            tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter.clone());
-            std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
+        std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
+        tmp_polygon = merge_polygons(tmp_polygon, cluster.perimeter.clone());
+        std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
 
-            send_or_return!(
-                db_writer,
-                DatabaseMessage::AddAssociation(
-                    fire.id.clone(),
-                    candidate.scan_start_time,
-                    candidate.power,
-                    candidate.perimeter
-                ),
-                "Error sending to db_writer: {}"
+        send_or_return!(
+            db_writer,
+            DatabaseMessage::AddAssociation(
+                fire.id.clone(),
+                cluster.scan_start_time,
+                cluster.power,
+                cluster.perimeter
+            ),
+            "Error sending to db_writer: {}"
             );
-        }
     }
+
+    assert!(assignments.is_empty());
 }
 
 fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
@@ -392,6 +398,7 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
         }
     }
 
+    idxs_to_remove.sort();
     if !idxs_to_remove.is_empty() {
         log::info!("Merged {} fires into a larger fire.", idxs_to_remove.len());
     }
