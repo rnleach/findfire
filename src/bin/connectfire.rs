@@ -3,11 +3,8 @@ use std::{error::Error, path::Path, thread};
 use chrono::{Duration, NaiveDateTime};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use geo::{
-    algorithm::{
-        chamberlain_duquette_area::ChamberlainDuquetteArea, concave_hull::ConcaveHull,
-        intersects::Intersects,
-    },
-    line_string, polygon, MultiPolygon, Point, Polygon,
+    algorithm::{chamberlain_duquette_area::ChamberlainDuquetteArea, intersects::Intersects},
+    line_string, polygon, MultiPolygon, Point,
 };
 use itertools::Itertools;
 use kd_tree::{KdIndexTree, KdPoint};
@@ -70,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 enum DatabaseMessage {
     AddFire(FireData),
-    AddAssociation(FireCode, NaiveDateTime, f64, Polygon<f64>),
+    AddAssociation(FireCode, NaiveDateTime, f64, MultiPolygon<f64>),
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +84,7 @@ struct FireData {
     /// The last time stamp that this fire was observed.
     last_observed: NaiveDateTime,
 
-    perimeter: Polygon<f64>,
+    perimeter: MultiPolygon<f64>,
 
     /// Potential candidates for a child fire
     candidates: Vec<Cluster>,
@@ -345,7 +342,7 @@ fn finish_this_time_step(
     assignments: &mut Vec<(usize, Cluster)>,
     db_writer: &Sender<DatabaseMessage>,
 ) {
-    let mut tmp_polygon: Polygon<f64> = polygon!();
+    let mut tmp_polygon: MultiPolygon<f64> = MultiPolygon::from(vec![polygon!()]);
 
     for (i, cluster) in assignments.drain(..) {
         let fire = &mut fires[i];
@@ -391,9 +388,18 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
             let candidate = &fires[j];
 
             if curr_fire.perimeter.intersects(&candidate.perimeter) {
-                if curr_fire.perimeter.chamberlain_duquette_unsigned_area()
-                    > candidate.perimeter.chamberlain_duquette_unsigned_area()
-                {
+                let curr_fire_area: f64 = curr_fire
+                    .perimeter
+                    .iter()
+                    .map(|p| p.chamberlain_duquette_unsigned_area())
+                    .sum();
+
+                let candidate_area: f64 = candidate
+                    .perimeter
+                    .iter()
+                    .map(|p| p.chamberlain_duquette_unsigned_area())
+                    .sum();
+                if curr_fire_area > candidate_area {
                     mergers.push((i, j));
                 } else {
                     mergers.push((j, i));
@@ -404,7 +410,7 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
     drop(kdtree);
 
     let mut idxs_to_remove = vec![];
-    let mut tmp_polygon = polygon!();
+    let mut tmp_polygon = MultiPolygon::from(vec![polygon!()]);
     for (i, j) in mergers {
         if idxs_to_remove.contains(&i) || idxs_to_remove.contains(&j) {
             // Already merged somewhere
@@ -431,7 +437,10 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
     }
 }
 
-fn merge_polygons(left: Polygon<f64>, right: Polygon<f64>) -> Polygon<f64> {
-    let mp = MultiPolygon::from(vec![left, right]);
-    mp.concave_hull(2.0)
+fn merge_polygons(left: MultiPolygon<f64>, right: MultiPolygon<f64>) -> MultiPolygon<f64> {
+    let mut merged = left.0;
+    merged.extend(right.0);
+
+    merged.dedup();
+    MultiPolygon::from(merged)
 }

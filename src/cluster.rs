@@ -11,8 +11,7 @@ use crate::{
 };
 use chrono::NaiveDateTime;
 use geo::{
-    algorithm::{centroid::Centroid, concave_hull::ConcaveHull},
-    point, Point, Polygon,
+    algorithm::centroid::Centroid, point, Coordinate, LineString, MultiPolygon, Point, Polygon,
 };
 use kd_tree::KdPoint;
 use std::{error::Error, iter::FromIterator};
@@ -29,7 +28,7 @@ pub struct Cluster {
     /// The start time of the scan this cluster was detected on.
     pub scan_start_time: NaiveDateTime,
     /// Perimeter
-    pub perimeter: Polygon<f64>,
+    pub perimeter: MultiPolygon<f64>,
     /// Centroid
     pub centroid: Point<f64>,
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
@@ -76,8 +75,8 @@ impl Cluster {
         sector: Sector,
     ) -> Vec<Self> {
         let mut clusters: Vec<Self> = vec![];
-        let mut cluster_points: Vec<Point<f64>> = vec![];
         let mut cluster_index_coords: Vec<(isize, isize)> = vec![];
+        let mut cluster_polys: Vec<Polygon<f64>> = vec![];
 
         const NULL_PT: FirePoint = FirePoint {
             x: 0,
@@ -97,13 +96,15 @@ impl Cluster {
             let mut count = 1;
             let mut power = curr_pt.power;
 
-            curr_pt
+            let poly: LineString<_> = curr_pt
                 .lats
                 .iter()
                 .cloned()
                 .zip(curr_pt.lons.iter().cloned())
-                .map(|(lat, lon)| point!(x: lon, y: lat))
-                .for_each(|pnt| cluster_points.push(pnt));
+                .map(|(lat, lon)| Coordinate { x: lon, y: lat })
+                .collect();
+
+            cluster_polys.push(Polygon::new(poly, vec![]));
 
             cluster_index_coords.push((curr_pt.x, curr_pt.y));
 
@@ -131,13 +132,15 @@ impl Cluster {
                         count += 1;
                         power += candidate.power;
 
-                        candidate
+                        let poly: LineString<_> = candidate
                             .lats
                             .iter()
                             .cloned()
                             .zip(candidate.lons.iter().cloned())
-                            .map(|(lat, lon)| point!(x: lon, y: lat))
-                            .for_each(|pnt| cluster_points.push(pnt));
+                            .map(|(lat, lon)| Coordinate { x: lon, y: lat })
+                            .collect();
+
+                        cluster_polys.push(Polygon::new(poly, vec![]));
 
                         cluster_index_coords.push((candidate.x, candidate.y));
                         some_found = true;
@@ -149,9 +152,9 @@ impl Cluster {
                 }
             }
 
-            let multi_pnt = geo::MultiPoint::from_iter(cluster_points.iter().cloned());
-            let perimeter = multi_pnt.concave_hull(1.25);
-            let centroid = multi_pnt.centroid().unwrap();
+            let perimeter = MultiPolygon::from_iter(cluster_polys.drain(..));
+            let centroid = perimeter.centroid().unwrap_or(point!(x: 0.0, y: 0.0));
+
             let curr_clust = Cluster {
                 satellite,
                 sector,
@@ -163,7 +166,6 @@ impl Cluster {
             };
 
             clusters.push(curr_clust);
-            cluster_points.truncate(0);
             cluster_index_coords.truncate(0);
         }
 

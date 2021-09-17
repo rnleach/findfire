@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use kml::{
-    types::{Element, Geometry, Placemark, PolyStyle, Polygon, Style},
+    types::{Element, Geometry, MultiGeometry, Placemark, PolyStyle, Style},
     Kml, KmlWriter,
 };
 use log::LevelFilter;
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     for (i, fr) in fires.enumerate() {
-        let geometry = Some(Geometry::Polygon(Polygon::from(fr.perimeter)));
+        let geometry = Some(Geometry::MultiGeometry(MultiGeometry::from(fr.perimeter)));
         let name = Some(fr.id.clone_string());
         let description = Some(format!("last_observed: {}", fr.last_observed));
         let placemark = Placemark {

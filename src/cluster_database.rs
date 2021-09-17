@@ -4,7 +4,7 @@ use crate::{
     satellite::{Satellite, Sector},
 };
 use chrono::NaiveDateTime;
-use geo::{point, Point, Polygon};
+use geo::{point, MultiPolygon, Point};
 use rusqlite::ToSql;
 use std::{error::Error, path::Path, str::FromStr};
 
@@ -78,7 +78,7 @@ impl<'a> ClusterQuery<'a> {
 
                 let pblob = row.get_ref(6)?.as_blob()?;
 
-                let perimeter: Polygon<f64> =
+                let perimeter: MultiPolygon<f64> =
                     bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
                 let count = row.get(7)?;
@@ -107,7 +107,7 @@ pub struct AddClustersTransaction<'a> {
         NaiveDateTime,
         Point<f64>,
         f64,
-        Polygon<f64>,
+        MultiPolygon<f64>,
         i32,
     )>,
     db: &'a rusqlite::Connection,
@@ -123,7 +123,7 @@ impl<'a> AddClustersTransaction<'a> {
         scan_start: NaiveDateTime,
         centroid: Point<f64>,
         power: f64,
-        perimeter: Polygon<f64>,
+        perimeter: MultiPolygon<f64>,
         num_points: i32,
     ) -> Result<(), Box<dyn Error>> {
         self.buffer.push((

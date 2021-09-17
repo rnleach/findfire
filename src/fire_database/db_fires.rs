@@ -7,7 +7,7 @@ use std::{
 
 use crate::{error::SatFireError, Satellite};
 use chrono::NaiveDateTime;
-use geo::{point, Point, Polygon};
+use geo::{point, MultiPolygon, Point};
 use rusqlite::{Connection, ToSql};
 
 impl super::FiresDatabase {
@@ -65,7 +65,7 @@ impl<'a> FireQuery<'a> {
 
                 let pblob = row.get_ref(4)?.as_blob()?;
 
-                let perimeter: Polygon<f64> =
+                let perimeter: MultiPolygon<f64> =
                     bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
                 Ok(FireRecord {
@@ -154,13 +154,19 @@ pub struct FireRecord {
     /// The start time of the scan this cluster was detected in.
     pub last_observed: NaiveDateTime,
     /// Perimeter
-    pub perimeter: Polygon<f64>,
+    pub perimeter: MultiPolygon<f64>,
     /// Point of origin (pixel first detected.
     pub origin: Point<f64>,
 }
 
 pub struct AddFireTransaction<'a> {
-    buffer: Vec<(FireCode, Satellite, NaiveDateTime, Point<f64>, Polygon<f64>)>,
+    buffer: Vec<(
+        FireCode,
+        Satellite,
+        NaiveDateTime,
+        Point<f64>,
+        MultiPolygon<f64>,
+    )>,
     db: &'a rusqlite::Connection,
 }
 
@@ -173,7 +179,7 @@ impl<'a> AddFireTransaction<'a> {
         satellite: Satellite,
         last_observed: NaiveDateTime,
         origin: Point<f64>,
-        perimeter: Polygon<f64>,
+        perimeter: MultiPolygon<f64>,
     ) -> Result<(), Box<dyn Error>> {
         self.buffer
             .push((fire_id, satellite, last_observed, origin, perimeter));

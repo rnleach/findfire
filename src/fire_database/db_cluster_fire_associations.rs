@@ -2,7 +2,7 @@
 
 use crate::FireCode;
 use chrono::NaiveDateTime;
-use geo::Polygon;
+use geo::MultiPolygon;
 use rusqlite::{Connection, ToSql};
 use std::error::Error;
 
@@ -18,7 +18,7 @@ impl super::FiresDatabase {
 }
 
 pub struct AddAssociationsTransaction<'a> {
-    buffer: Vec<(FireCode, NaiveDateTime, f64, Polygon<f64>)>,
+    buffer: Vec<(FireCode, NaiveDateTime, f64, MultiPolygon<f64>)>,
     db: &'a Connection,
 }
 
@@ -28,7 +28,7 @@ impl<'a> AddAssociationsTransaction<'a> {
         fire_id: FireCode,
         scan_time: NaiveDateTime,
         power: f64,
-        perimeter: Polygon<f64>,
+        perimeter: MultiPolygon<f64>,
     ) -> Result<(), Box<dyn Error>> {
         self.buffer.push((fire_id, scan_time, power, perimeter));
 
