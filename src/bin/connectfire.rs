@@ -371,43 +371,54 @@ fn finish_this_time_step(
 }
 
 fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
-    let mut idxs_to_remove = vec![];
-    for i in 0..fires.len() {
-        if idxs_to_remove.contains(&i) {
-            continue;
-        }
+    let mut mergers = vec![];
 
-        for j in (i + 1)..fires.len() {
-            if idxs_to_remove.contains(&j) {
+    let kdtree = KdIndexTree::build_by_ordered_float(&fires);
+    for i in 0..fires.len() {
+        let curr_fire = &fires[i];
+
+        let candidates: Vec<usize> = kdtree
+            .nearests(curr_fire, 2)
+            .into_iter()
+            .map(|x| *x.item)
+            .collect();
+
+        for j in candidates {
+            if j == i {
                 continue;
             }
 
-            if fires[i].perimeter.intersects(&fires[j].perimeter) {
-                let mut tmp_polygon = polygon!();
+            let candidate = &fires[j];
 
-                if fires[i].perimeter.chamberlain_duquette_unsigned_area()
-                    > fires[j].perimeter.chamberlain_duquette_unsigned_area()
+            if curr_fire.perimeter.intersects(&candidate.perimeter) {
+                if curr_fire.perimeter.chamberlain_duquette_unsigned_area()
+                    > candidate.perimeter.chamberlain_duquette_unsigned_area()
                 {
-                    idxs_to_remove.push(j);
-
-                    std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
-                    tmp_polygon = merge_polygons(tmp_polygon, fires[j].perimeter.clone());
-                    std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
+                    mergers.push((i, j));
                 } else {
-                    idxs_to_remove.push(i);
-
-                    std::mem::swap(&mut tmp_polygon, &mut fires[j].perimeter);
-                    tmp_polygon = merge_polygons(tmp_polygon, fires[i].perimeter.clone());
-                    std::mem::swap(&mut tmp_polygon, &mut fires[j].perimeter);
+                    mergers.push((j, i));
                 }
             }
         }
     }
+    drop(kdtree);
+
+    let mut idxs_to_remove = vec![];
+    let mut tmp_polygon = polygon!();
+    for (i, j) in mergers {
+        if idxs_to_remove.contains(&i) || idxs_to_remove.contains(&j) {
+            // Already merged somewhere
+            continue;
+        }
+
+        idxs_to_remove.push(j);
+
+        std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
+        tmp_polygon = merge_polygons(tmp_polygon, fires[j].perimeter.clone());
+        std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
+    }
 
     idxs_to_remove.sort();
-    if !idxs_to_remove.is_empty() {
-        log::info!("Merged {} fires into a larger fire.", idxs_to_remove.len());
-    }
 
     // Remove fires that were smaller when merged.
     for idx in idxs_to_remove.into_iter().rev() {
