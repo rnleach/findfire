@@ -40,7 +40,7 @@ impl<'a> AddAssociationsTransaction<'a> {
     }
 
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
-        log::debug!("Flushing associations.");
+        log::trace!("Flushing associations.");
         let mut stmt = self.db.prepare(include_str!("add_association.sql"))?;
 
         self.db.execute_batch("BEGIN;")?;
@@ -57,7 +57,7 @@ impl<'a> AddAssociationsTransaction<'a> {
         }
 
         self.db.execute_batch("COMMIT;")?;
-        log::debug!("Flushed associations.");
+        log::trace!("Flushed associations.");
         Ok(())
     }
 }

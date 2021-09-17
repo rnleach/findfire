@@ -93,9 +93,6 @@ struct FireData {
 
     /// Potential candidates for a child fire
     candidates: Vec<Cluster>,
-
-    /// Where to start numbering future children
-    next_child_num: u32,
 }
 
 macro_rules! send_or_return {
@@ -234,7 +231,6 @@ fn process_fires<P: AsRef<Path>>(
                         origin: centroid,
                         last_observed: scan_start_time,
                         candidates: vec![],
-                        next_child_num: 0,
                         perimeter: perimeter.clone(),
                         satellite,
                     };
@@ -297,20 +293,12 @@ fn write_to_database<P: AsRef<Path>>(path_to_db: P, messages: Receiver<DatabaseM
                     id,
                     origin,
                     last_observed,
-                    next_child_num,
                     perimeter,
                     satellite,
                     ..
                 } = fire;
 
-                match fires.add_fire(
-                    id,
-                    satellite,
-                    last_observed,
-                    origin,
-                    perimeter.clone(),
-                    next_child_num,
-                ) {
+                match fires.add_fire(id, satellite, last_observed, origin, perimeter.clone()) {
                     Ok(()) => {}
                     Err(err) => {
                         log::error!("Error adding fire to database: {}", err);
@@ -357,79 +345,28 @@ fn assign_cluster_to_fire(
 }
 
 fn finish_this_time_step(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
-    let mut new_fires = vec![];
-
     let mut tmp_polygon: Polygon<f64> = polygon!();
 
     for fire in fires.iter_mut().filter(|f| !f.candidates.is_empty()) {
-        if fire.candidates.len() == 1 {
-            // If there is only 1 child fire, update the radius & last observed date
-            for candidate in fire.candidates.drain(..) {
-                fire.last_observed = candidate.scan_start_time;
+        for candidate in fire.candidates.drain(..) {
+            fire.last_observed = candidate.scan_start_time;
 
-                std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
-                tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter.clone());
-                std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
+            std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
+            tmp_polygon = merge_polygons(tmp_polygon, candidate.perimeter.clone());
+            std::mem::swap(&mut tmp_polygon, &mut fire.perimeter);
 
-                send_or_return!(
-                    db_writer,
-                    DatabaseMessage::AddAssociation(
-                        fire.id.clone(),
-                        candidate.scan_start_time,
-                        candidate.power,
-                        candidate.perimeter
-                    ),
-                    "Error sending to db_writer: {}"
-                );
-            }
-        } else {
-            // If there are several candidates, create a new fire for each with an updated code
-            for candidate in fire.candidates.drain(..) {
-                let id = fire.id.make_child_fire(fire.next_child_num);
-                fire.next_child_num += 1;
-
-                let Cluster {
-                    centroid,
-                    scan_start_time,
-                    perimeter,
-                    power,
-                    satellite,
-                    ..
-                } = candidate;
-
-                let new_fire = FireData {
-                    id,
-                    origin: centroid,
-                    perimeter: perimeter.clone(),
-                    last_observed: scan_start_time,
-                    candidates: vec![],
-                    next_child_num: 0,
-                    satellite,
-                };
-
-                send_or_return!(
-                    db_writer,
-                    DatabaseMessage::AddFire(new_fire.clone()),
-                    "Error sending to db_writer: {}"
-                );
-
-                send_or_return!(
-                    db_writer,
-                    DatabaseMessage::AddAssociation(
-                        new_fire.id.clone(),
-                        scan_start_time,
-                        power,
-                        perimeter
-                    ),
-                    "Error sending to db_writer: {}"
-                );
-
-                new_fires.push(new_fire);
-            }
+            send_or_return!(
+                db_writer,
+                DatabaseMessage::AddAssociation(
+                    fire.id.clone(),
+                    candidate.scan_start_time,
+                    candidate.power,
+                    candidate.perimeter
+                ),
+                "Error sending to db_writer: {}"
+            );
         }
     }
-
-    fires.extend(new_fires);
 }
 
 fn merge_polygons(left: Polygon<f64>, right: Polygon<f64>) -> Polygon<f64> {

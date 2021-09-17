@@ -5,8 +5,7 @@ CREATE TABLE IF NOT EXISTS fires
     last_observed INTEGER NOT NULL,
     origin_lat    REAL    NOT NULL,
     origin_lon    REAL    NOT NULL,
-    perimeter     BLOB    NOT NULL,
-    next_child    INTEGER NOT NULL
+    perimeter     BLOB    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS meta
