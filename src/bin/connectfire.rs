@@ -13,7 +13,7 @@ use simple_logger::SimpleLogger;
 
 const CLUSTERS_DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
 const FIRES_DATABASE_FILE: &'static str = "/home/ryan/wxdata/connectfire.sqlite";
-const DAYS_FOR_FIRE_OUT: i64 = 21;
+const DAYS_FOR_FIRE_OUT: i64 = 60;
 const CHANNEL_SIZE: usize = 1_000;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -241,12 +241,6 @@ fn process_fires<P: AsRef<Path>>(
 
                     send_or_return!(
                         db_writer,
-                        DatabaseMessage::AddFire(fd.clone()),
-                        "Error sending to db_writer: {}"
-                    );
-
-                    send_or_return!(
-                        db_writer,
                         DatabaseMessage::AddAssociation(id, scan_start_time, power, perimeter),
                         "Error sending to db_writer: {}"
                     );
@@ -260,6 +254,14 @@ fn process_fires<P: AsRef<Path>>(
                 finish_this_time_step(&mut active_fires, &db_writer);
             }
         }
+    }
+
+    for fire in active_fires.drain(..) {
+        send_or_return!(
+            db_writer,
+            DatabaseMessage::AddFire(fire),
+            "Error sending to db_writer: {}"
+        );
     }
 }
 
