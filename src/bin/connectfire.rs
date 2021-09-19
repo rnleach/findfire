@@ -385,8 +385,8 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
             .nearests(curr_fire, 4)
             .into_iter()
             .map(|x| *x.item)
-            // This would be the same one we're working on!
-            .filter(|&j| j != i) 
+            // We've already compared fires with indexes less than or equal to this one
+            .filter(|&j| j > i) 
             // This fire has already been marked to merge
             // See how this is handled below with a log message.
             //.filter(|j| idxs_to_remove.contains(j)) 
