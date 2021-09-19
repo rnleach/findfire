@@ -369,25 +369,44 @@ fn finish_this_time_step(
 
 fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
     let mut mergers = vec![];
+    let mut idxs_to_remove = vec![];
 
     let kdtree = KdIndexTree::build_by_ordered_float(&fires);
     for i in 0..fires.len() {
+
+        // This polygon was already marked for merging into another one.
+        if idxs_to_remove.contains(&i) {
+            continue;
+        }
+
         let curr_fire = &fires[i];
 
         let candidates: Vec<usize> = kdtree
-            .nearests(curr_fire, 2)
+            .nearests(curr_fire, 4)
             .into_iter()
             .map(|x| *x.item)
+            // This would be the same one we're working on!
+            .filter(|&j| j != i) 
+            // This fire has already been marked to merge
+            // See how this is handled below with a log message.
+            //.filter(|j| idxs_to_remove.contains(j)) 
             .collect();
 
         for j in candidates {
-            if j == i {
-                continue;
-            }
 
             let candidate = &fires[j];
 
             if curr_fire.perimeter.intersects(&candidate.perimeter) {
+
+                // This fire was already marked to merge with another fire! So we must have 
+                // multiple overlaps. This should get picked up on the next round, but let's 
+                // log it for now and see if it's a case we should maybe handle better in the
+                // future. 
+                if idxs_to_remove.contains(&j) {
+                    log::warn!("Detected need for double merger, but not doing it!");
+                    continue;
+                }
+
                 let curr_fire_area: f64 = curr_fire
                     .perimeter
                     .iter()
@@ -401,23 +420,18 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
                     .sum();
                 if curr_fire_area > candidate_area {
                     mergers.push((i, j));
+                    idxs_to_remove.push(j);
                 } else {
                     mergers.push((j, i));
+                    idxs_to_remove.push(i);
                 }
             }
         }
     }
     drop(kdtree);
 
-    let mut idxs_to_remove = vec![];
     let mut tmp_polygon = MultiPolygon::from(vec![polygon!()]);
     for (i, j) in mergers {
-        if idxs_to_remove.contains(&i) || idxs_to_remove.contains(&j) {
-            // Already merged somewhere
-            continue;
-        }
-
-        idxs_to_remove.push(j);
 
         std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
         tmp_polygon = merge_polygons(tmp_polygon, fires[j].perimeter.clone());
