@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use kml::{
-    types::{Element, Geometry, Placemark, PolyStyle, Polygon, Style},
+    types::{Element, Geometry, MultiGeometry, Placemark, PolyStyle, Style},
     Kml, KmlWriter,
 };
 use log::LevelFilter;
@@ -8,8 +8,8 @@ use satfire::{FiresDatabase, Satellite};
 use simple_logger::SimpleLogger;
 use std::{collections::HashMap, error::Error, fs::File};
 
-const FIRES_DATABASE_FILE: &'static str = "/home/ryan/wxdata/connectfire.sqlite";
-const OUTPUT_FILE: &'static str = "/home/ryan/wxdata/connectfire.kml";
+const FIRES_DATABASE_FILE: &str = "/home/ryan/wxdata/connectfire.sqlite";
+const OUTPUT_FILE: &str = "/home/ryan/wxdata/connectfire.kml";
 
 fn main() -> Result<(), Box<dyn Error>> {
     SimpleLogger::new().with_level(LevelFilter::Debug).init()?;
@@ -35,8 +35,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut elements = vec![];
 
     let poly_style = PolyStyle {
+        id: "fire_poly".to_owned(),
         color: "7F0000FF".to_owned(),
-        ..PolyStyle::default()
+        fill: true,
+        outline: false,
+        color_mode: kml::types::ColorMode::Default,
     };
 
     let poly_style = Kml::Style(Style {
@@ -46,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     for (i, fr) in fires.enumerate() {
-        let geometry = Some(Geometry::Polygon(Polygon::from(fr.perimeter)));
+        let geometry = Some(Geometry::MultiGeometry(MultiGeometry::from(fr.perimeter)));
         let name = Some(fr.id.clone_string());
         let description = Some(format!("last_observed: {}", fr.last_observed));
         let placemark = Placemark {

@@ -81,6 +81,11 @@ impl FireSatImage {
                     // Distance to edge of cell in index space. Points are at center of area.
                     const EDGE: f64 = 0.5 * FUDGE;
 
+                    // NOTE: the order of ± in the arrays is important to enforce counter clockwise
+                    // winding of the ensuing polygons. It doesn't seem that way at first, but
+                    // because of the nuance of how GDAL transform coords swaps coordinates around
+                    // to create lat-lon from x-y (instead of lon-lat from x-y), this is how it
+                    // actually works.
                     let mut xp: [f64; 4] = [ii - EDGE, ii + EDGE, ii + EDGE, ii - EDGE];
                     let mut yp: [f64; 4] = [jj + EDGE, jj + EDGE, jj - EDGE, jj - EDGE];
                     let mut zp: [f64; 4] = [0.0; 4];

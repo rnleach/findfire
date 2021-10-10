@@ -11,8 +11,8 @@ use satfire::{Cluster, ClustersDatabase, FireSatImage, Satellite, Sector};
 use simple_logger::SimpleLogger;
 use strum::IntoEnumIterator;
 
-const DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &'static str = "/media/ryan/SAT/GOESX/";
+const DATABASE_FILE: &str = "/home/ryan/wxdata/findfire.sqlite";
+const DATA_DIR: &str = "/media/ryan/SAT/GOESX/";
 
 const CHANNEL_SIZE: usize = 100;
 
@@ -76,7 +76,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 sector,
                 power,
                 centroid,
-                count,
                 ..
             } = biggest_fire;
             let (lon, lat) = (centroid.x(), centroid.y());
@@ -95,7 +94,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             log::info!("      latitude - {:>19.6}", lat);
             log::info!("     longitude - {:>19.6}", lon);
             log::info!("    power (MW) - {:>19.1}", power);
-            log::info!("         count - {:>19}", count);
             log::info!("");
         }
         Ok(None) => {
@@ -181,7 +179,7 @@ fn generate_paths(to_load_thread: Sender<walkdir::DirEntry>) {
                 }
             }
 
-            let scan_start: NaiveDateTime = match FireSatImage::find_start_time(&fname) {
+            let scan_start: NaiveDateTime = match FireSatImage::find_start_time(fname) {
                 Ok(st) => st,
                 Err(err) => {
                     log::error!("Error parsing file name: {}\n   {}", fname, err);
@@ -286,7 +284,6 @@ fn write_to_db(from_analysis_thread: Receiver<Vec<Cluster>>) -> Option<Cluster> 
                 cluster.centroid,
                 cluster.power,
                 cluster.perimeter,
-                cluster.count,
             ) {
                 Ok(()) => {}
                 Err(err) => {

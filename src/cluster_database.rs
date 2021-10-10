@@ -4,7 +4,7 @@ use crate::{
     satellite::{Satellite, Sector},
 };
 use chrono::NaiveDateTime;
-use geo::{point, Point, Polygon};
+use geo::{point, MultiPolygon, Point};
 use rusqlite::ToSql;
 use std::{error::Error, path::Path, str::FromStr};
 
@@ -78,10 +78,8 @@ impl<'a> ClusterQuery<'a> {
 
                 let pblob = row.get_ref(6)?.as_blob()?;
 
-                let perimeter: Polygon<f64> =
-                    bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
-
-                let count = row.get(7)?;
+                let perimeter: MultiPolygon<f64> =
+                    bincode::deserialize(pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
                 Ok(Cluster {
                     satellite,
@@ -90,7 +88,6 @@ impl<'a> ClusterQuery<'a> {
                     power,
                     perimeter,
                     centroid,
-                    count,
                 })
             })?
             .filter_map(|res: Result<_, rusqlite::Error>| res.ok());
@@ -107,8 +104,7 @@ pub struct AddClustersTransaction<'a> {
         NaiveDateTime,
         Point<f64>,
         f64,
-        Polygon<f64>,
-        i32,
+        MultiPolygon<f64>,
     )>,
     db: &'a rusqlite::Connection,
 }
@@ -123,12 +119,10 @@ impl<'a> AddClustersTransaction<'a> {
         scan_start: NaiveDateTime,
         centroid: Point<f64>,
         power: f64,
-        perimeter: Polygon<f64>,
-        num_points: i32,
+        perimeter: MultiPolygon<f64>,
     ) -> Result<(), Box<dyn Error>> {
-        self.buffer.push((
-            satellite, sector, scan_start, centroid, power, perimeter, num_points,
-        ));
+        self.buffer
+            .push((satellite, sector, scan_start, centroid, power, perimeter));
 
         if self.buffer.len() >= BUFFER_CAPACITY {
             self.flush()?;
@@ -144,9 +138,7 @@ impl<'a> AddClustersTransaction<'a> {
             .db
             .prepare(include_str!("cluster_database/add_cluster.sql"))?;
 
-        for (satellite, sector, scan_start, centroid, power, perimeter, num_points) in
-            self.buffer.drain(..)
-        {
+        for (satellite, sector, scan_start, centroid, power, perimeter) in self.buffer.drain(..) {
             let lon = centroid.x();
             let lat = centroid.y();
 
@@ -158,7 +150,6 @@ impl<'a> AddClustersTransaction<'a> {
                 &lat,
                 &lon,
                 &power,
-                &num_points,
                 &perimeter,
             ])?;
         }
