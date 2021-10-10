@@ -6,7 +6,6 @@ INSERT OR IGNORE INTO clusters
     lat, 
     lon, 
     power, 
-    cell_count,
-    perimeter
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    geometry
+) VALUES (?, ?, ?, ?, ?, ?, ?)
 

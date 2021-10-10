@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS fires
     last_observed INTEGER NOT NULL,
     origin_lat    REAL    NOT NULL,
     origin_lon    REAL    NOT NULL,
-    perimeter     BLOB    NOT NULL
+    geometry      BLOB    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS meta
@@ -19,6 +19,6 @@ CREATE TABLE IF NOT EXISTS associations
     fire_id         TEXT    NOT NULL,
     scan_start_time INTEGER NOT NULL,
     power           REAL    NOT NULL,
-    perimeter       BLOB    NOT NULL
+    geometry        BLOB    NOT NULL
 );
 

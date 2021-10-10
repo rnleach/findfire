@@ -33,8 +33,6 @@ pub struct Cluster {
     pub centroid: Point<f64>,
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     pub power: f64,
-    /// The number of points that are in this cluster.
-    pub count: i32,
 }
 
 impl KdPoint for Cluster {
@@ -93,7 +91,6 @@ impl Cluster {
 
             let curr_pt = std::mem::replace(&mut points[i], NULL_PT);
 
-            let mut count = 1;
             let mut power = curr_pt.power;
 
             let poly: LineString<_> = curr_pt
@@ -110,16 +107,16 @@ impl Cluster {
 
             loop {
                 let mut some_found = false;
-                for j in (i + 1)..points.len() {
+                for point in points.iter_mut().skip(i) {
                     // Skip NULL_PT values
-                    if points[j].x == 0 && points[j].y == 0 {
+                    if point.x == 0 && point.y == 0 {
                         continue;
                     }
 
                     let mut in_cluster = false;
                     for (x, y) in &cluster_index_coords {
-                        let dx = (x - points[j].x).abs();
-                        let dy = (y - points[j].y).abs();
+                        let dx = (x - point.x).abs();
+                        let dy = (y - point.y).abs();
 
                         if dx <= 1 && dy <= 1 {
                             in_cluster = true;
@@ -128,8 +125,7 @@ impl Cluster {
                     }
 
                     if in_cluster {
-                        let candidate = std::mem::replace(&mut points[j], NULL_PT);
-                        count += 1;
+                        let candidate = std::mem::replace(point, NULL_PT);
                         power += candidate.power;
 
                         let poly: LineString<_> = candidate
@@ -153,13 +149,14 @@ impl Cluster {
             }
 
             let perimeter = MultiPolygon::from_iter(cluster_polys.drain(..));
-            let centroid = perimeter.centroid().unwrap_or(point!(x: 0.0, y: 0.0));
+            let centroid = perimeter
+                .centroid()
+                .unwrap_or_else(|| point!(x: 0.0, y: 0.0));
 
             let curr_clust = Cluster {
                 satellite,
                 sector,
                 scan_start_time,
-                count,
                 power,
                 perimeter,
                 centroid,

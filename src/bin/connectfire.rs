@@ -1,10 +1,14 @@
 use std::{error::Error, path::Path, thread};
 
+use approx::AbsDiffEq;
 use chrono::{Duration, NaiveDateTime};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use geo::{
-    algorithm::{chamberlain_duquette_area::ChamberlainDuquetteArea, intersects::Intersects},
-    line_string, polygon, MultiPolygon, Point,
+    algorithm::{
+        centroid::Centroid, chamberlain_duquette_area::ChamberlainDuquetteArea,
+        intersects::Intersects,
+    },
+    line_string, polygon, Coordinate, MultiPolygon, Point, Polygon,
 };
 use itertools::Itertools;
 use kd_tree::{KdIndexTree, KdPoint};
@@ -12,13 +16,17 @@ use log::LevelFilter;
 use satfire::{Cluster, ClustersDatabase, FireCode, FiresDatabase, Satellite};
 use simple_logger::SimpleLogger;
 
-const CLUSTERS_DATABASE_FILE: &'static str = "/home/ryan/wxdata/findfire.sqlite";
-const FIRES_DATABASE_FILE: &'static str = "/home/ryan/wxdata/connectfire.sqlite";
+const CLUSTERS_DATABASE_FILE: &str = "/home/ryan/wxdata/findfire.sqlite";
+const FIRES_DATABASE_FILE: &str = "/home/ryan/wxdata/connectfire.sqlite";
 const DAYS_FOR_FIRE_OUT: i64 = 60;
 const CHANNEL_SIZE: usize = 1_000;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    SimpleLogger::new().with_level(LevelFilter::Debug).init()?;
+    SimpleLogger::new()
+        .with_level(LevelFilter::Info)
+        .with_module_level("connectfire", LevelFilter::Trace)
+        .with_module_level("satfire", LevelFilter::Trace)
+        .init()?;
 
     log::trace!("Trace messages enabled.");
     log::debug!("Debug messages enabled.");
@@ -184,6 +192,7 @@ fn process_fires<P: AsRef<Path>>(
         .group_by(|cluster| cluster.scan_start_time)
         .into_iter()
     {
+        log::trace!("curr_time_stamp: {}", curr_time_stamp);
         // Update flags for this time step
         let too_long_ago = curr_time_stamp - Duration::days(DAYS_FOR_FIRE_OUT);
 
@@ -205,6 +214,8 @@ fn process_fires<P: AsRef<Path>>(
 
             last_purge = curr_time_stamp;
         }
+
+        debug_assert!(assignments.is_empty() && new_fires.is_empty());
 
         let kdtree = KdIndexTree::build_by_ordered_float(&active_fires);
         for record in clusters {
@@ -241,10 +252,10 @@ fn process_fires<P: AsRef<Path>>(
             }
         }
 
-        active_fires.extend(new_fires.drain(..));
-
         // Finish this time step
         finish_this_time_step(&mut active_fires, &mut assignments, &db_writer);
+
+        active_fires.append(&mut new_fires);
     }
 
     merge_fires(&mut active_fires, &db_writer);
@@ -371,9 +382,8 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
     let mut mergers = vec![];
     let mut idxs_to_remove = vec![];
 
-    let kdtree = KdIndexTree::build_by_ordered_float(&fires);
+    let kdtree = KdIndexTree::build_by_ordered_float(fires);
     for i in 0..fires.len() {
-
         // This polygon was already marked for merging into another one.
         if idxs_to_remove.contains(&i) {
             continue;
@@ -386,22 +396,20 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
             .into_iter()
             .map(|x| *x.item)
             // We've already compared fires with indexes less than or equal to this one
-            .filter(|&j| j > i) 
+            .filter(|&j| j > i)
             // This fire has already been marked to merge
             // See how this is handled below with a log message.
-            //.filter(|j| idxs_to_remove.contains(j)) 
+            //.filter(|j| idxs_to_remove.contains(j))
             .collect();
 
         for j in candidates {
-
             let candidate = &fires[j];
 
             if curr_fire.perimeter.intersects(&candidate.perimeter) {
-
-                // This fire was already marked to merge with another fire! So we must have 
-                // multiple overlaps. This should get picked up on the next round, but let's 
+                // This fire was already marked to merge with another fire! So we must have
+                // multiple overlaps. This should get picked up on the next round, but let's
                 // log it for now and see if it's a case we should maybe handle better in the
-                // future. 
+                // future.
                 if idxs_to_remove.contains(&j) {
                     log::warn!("Detected need for double merger, but not doing it!");
                     continue;
@@ -432,13 +440,12 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
 
     let mut tmp_polygon = MultiPolygon::from(vec![polygon!()]);
     for (i, j) in mergers {
-
         std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
         tmp_polygon = merge_polygons(tmp_polygon, fires[j].perimeter.clone());
         std::mem::swap(&mut tmp_polygon, &mut fires[i].perimeter);
     }
 
-    idxs_to_remove.sort();
+    idxs_to_remove.sort_unstable();
 
     // Remove fires that were smaller when merged.
     for idx in idxs_to_remove.into_iter().rev() {
@@ -452,9 +459,23 @@ fn merge_fires(fires: &mut Vec<FireData>, db_writer: &Sender<DatabaseMessage>) {
 }
 
 fn merge_polygons(left: MultiPolygon<f64>, right: MultiPolygon<f64>) -> MultiPolygon<f64> {
-    let mut merged = left.0;
-    merged.extend(right.0);
+    let mut merged: Vec<Polygon<f64>> =
+        Vec::with_capacity(left.iter().count() + right.iter().count());
+    let mut centroids: Vec<Coordinate<f64>> = Vec::with_capacity(merged.capacity());
 
-    merged.dedup();
+    let polygon_iter = left.into_iter().chain(right.into_iter());
+
+    for (pgon, centroid) in
+        polygon_iter.filter_map(|pgon| pgon.centroid().map(|centroid| (pgon, centroid.0)))
+    {
+        if !centroids
+            .iter()
+            .any(|coord| coord.abs_diff_eq(&centroid, 1.0e-6))
+        {
+            merged.push(pgon);
+            centroids.push(centroid);
+        }
+    }
+
     MultiPolygon::from(merged)
 }

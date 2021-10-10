@@ -66,7 +66,7 @@ impl<'a> FireQuery<'a> {
                 let pblob = row.get_ref(4)?.as_blob()?;
 
                 let perimeter: MultiPolygon<f64> =
-                    bincode::deserialize(&pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
+                    bincode::deserialize(pblob).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
                 Ok(FireRecord {
                     id,
@@ -200,16 +200,6 @@ impl<'a> AddFireTransaction<'a> {
         for (fire_id, satellite, last_observed, origin, perimeter) in self.buffer.drain(..) {
             let lon = origin.x();
             let lat = origin.y();
-
-            log::trace!(
-                "'{:?}' '{:?}' '{:?}' '{:?}' '{:?}' '{:?}'",
-                fire_id,
-                satellite,
-                last_observed,
-                lat,
-                lon,
-                perimeter,
-            );
 
             let perimeter = bincode::serialize(&perimeter)?;
             match stmt.execute([
