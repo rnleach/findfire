@@ -11,8 +11,8 @@ longitude, and total fire power in megawatts.
 We rely on the file naming convention used by the NOAA Big Data initiative to detect satellite, 
 sector, scan start, and scan end times. 
 
-Currently all directories and "options" are hard coded in the bin files. In the future there may
-be configuration files and/or command line arguments.
+Currently all directories and "options" are hard coded in the executable files. In the future there
+may be configuration files and/or command line arguments.
 
 ## Programs
 
@@ -28,4 +28,4 @@ be configuration files and/or command line arguments.
 
 ### export_kml
  Exports the results of connect fire as a kml file for viewing. Currently only exports the final
- fire perimeters, but theres a lot that could be done here.
+ fire perimeters, but there's a lot that could be done here.
