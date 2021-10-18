@@ -12,7 +12,7 @@ use simple_logger::SimpleLogger;
 use strum::IntoEnumIterator;
 
 const DATABASE_FILE: &str = "/home/ryan/wxdata/findfire.sqlite";
-const DATA_DIR: &str = "/media/ryan/SAT/GOESX/";
+const DATA_DIR: &str = "/media/ryan/SAT/GOES/";
 
 const CHANNEL_SIZE: usize = 100;
 
@@ -146,7 +146,7 @@ fn generate_paths(to_load_thread: Sender<walkdir::DirEntry>) {
         .filter(|entry| {
             let path = entry.path();
 
-            if path.is_dir() && entry.depth() <= 3 {
+            if path.is_dir() {
                 log::info!("Processing directory {:?}", entry.path());
             }
 

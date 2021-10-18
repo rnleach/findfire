@@ -40,6 +40,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let reader_jh = thread::Builder::new()
         .name("reader-connectfire".to_owned())
         .spawn(move || {
+            let to_fires_processing = to_fires_processing;
+            read_database(
+                CLUSTERS_DATABASE_FILE,
+                Satellite::G16,
+                to_fires_processing.clone(),
+            );
             read_database(CLUSTERS_DATABASE_FILE, Satellite::G17, to_fires_processing);
         })?;
 
@@ -335,13 +341,15 @@ fn assign_cluster_to_fire(
     active_fires: &KdIndexTree<FireData>,
     cluster: Cluster,
 ) -> Option<Cluster> {
-    for fire_idx in active_fires.nearests(&cluster, 5) {
+    for fire_idx in active_fires.nearests(&cluster, 8) {
         let idx = *fire_idx.item;
         let fire = &active_fires.item(idx);
 
-        if fire.perimeter.intersects(&cluster.perimeter) {
-            assignments.push((idx, cluster));
-            return None;
+        if fire.satellite == cluster.satellite {
+            if fire.perimeter.intersects(&cluster.perimeter) {
+                assignments.push((idx, cluster));
+                return None;
+            }
         }
     }
 
