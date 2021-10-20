@@ -21,7 +21,6 @@
  * A1A A1B A2A1 A2A2 A2B1 A2B2
  */
 struct Wildfire {
-    long int rowid;
     double lat;
     double lon;
     double radius;

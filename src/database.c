@@ -13,7 +13,6 @@ cluster_db_connect(char const *path)
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error connecting to %s", path);
 
     char *query = "CREATE TABLE IF NOT EXISTS clusters(          \n"
-                  "rowid      INTEGER PRIMARY KEY AUTOINCREMENT, \n"
                   "satellite  TEXT    NOT NULL,                  \n"
                   "sector     TEXT    NOT NULL,                  \n"
                   "start_time INTEGER NOT NULL,                  \n"
