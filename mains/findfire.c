@@ -23,7 +23,7 @@
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
-char const *data_dir = "/media/ryan/SAT/GOESX";
+char const *data_dir = "/home/ryan/wxdata/GOESX";
 
 static void
 program_initialization()

@@ -1,11 +1,7 @@
 #pragma once
 
 #include <assert.h>
-#include <math.h>
-#include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 /*-------------------------------------------------------------------------------------------------
@@ -26,100 +22,41 @@
 /*-------------------------------------------------------------------------------------------------
  *                                     File name handling.
  *-----------------------------------------------------------------------------------------------*/
-static inline char const *
-file_ext(const char *fname)
-{
-    const char *dot = strrchr(fname, '.');
-    if (!dot || dot == fname)
-        return "";
-    return dot + 1;
-}
+/** Find the file extension.
+ *
+ * Finds the part of the path after the last '.' in the file name (fname).
+ *
+ * \returns A pointer into the original fname to the start of the extension. If the file name 
+ * doesn't contain a '.' character, then it returns a pointer to an empty string, "".
+ */
+char const * file_ext(const char *fname);
 
-static inline char const *
-get_file_name(char const *full_path)
-{
-    const char *slash = strrchr(full_path, '/');
-    if (!slash) {
-        return full_path;
-    }
-
-    return slash + 1;
-}
+/** Find the file name in a path.
+ *
+ * \returns a pointer to the first character after the last '/' character. This is not guaranteed
+ * to be a file name, it could be a directory if the path didn't include a file name. If there is 
+ * no '/' character in the path, then it returns the whole path.
+ */
+char const * get_file_name(char const *full_path);
 
 /*-------------------------------------------------------------------------------------------------
  *                                     Time parsing.
  *-----------------------------------------------------------------------------------------------*/
-static inline time_t
-parse_time_string(char const *tstr)
-{
-    char buff[5] = {0};
+/** Parse a date-time from a substring from a file name.
+ *
+ * The GOES data stored via the NOAA Big Data initiative is stored in files that include the 
+ * scan start and end times in the file names. The format of that time stamp is YYYYJJJHHMMSS, 
+ * where:
+ *     YYYY is the year
+ *     JJJ is the day of the year (1-366)
+ *     HH is the hour of the day (0-23)
+ *     MM is the minute of the hour (0-59)
+ *     SS is the seconds of the minute (0-59)
+ *
+ * \param tstr is a pointer to the first character of the time stamp, that is the first 'Y' in the
+ * YYYYJJJHHMMSS format described above.
+ *
+ * \returns a unix timestamp.
+ */
+time_t parse_time_string(char const *tstr);
 
-    memcpy(buff, tstr, 4);
-    int year = atoi(buff);
-    bool leap_year = year % 4 == 0;
-    if (leap_year && year % 100 == 0) {
-        leap_year = false;
-    }
-    if (!leap_year && year % 400 == 0) {
-        leap_year = true;
-    }
-    year -= 1900;
-
-    memset(buff, 0, sizeof(buff));
-    memcpy(buff, tstr + 4, 3);
-    int doy = atoi(buff);
-    int month = 0;
-    int day = 0;
-    for (int i = 1; i < 12; i++) {
-        int days_in_month = 31;
-        if (i == 2) {
-            if (leap_year) {
-                days_in_month = 29;
-            } else {
-                days_in_month = 28;
-            }
-        }
-        if (i == 4 || i == 6 || i == 9 || i == 11) {
-            days_in_month = 30;
-        }
-
-        if (doy > days_in_month) {
-            month = i;
-            doy -= days_in_month;
-        } else {
-            day = doy;
-            break;
-        }
-    }
-
-    memset(buff, 0, sizeof(buff));
-    memcpy(buff, tstr + 7, 2);
-    int hour = atoi(buff);
-
-    memset(buff, 0, sizeof(buff));
-    memcpy(buff, tstr + 9, 2);
-    int min = atoi(buff);
-
-    memset(buff, 0, sizeof(buff));
-    memcpy(buff, tstr + 11, 2);
-    int sec = atoi(buff);
-
-    struct tm parsed_time = {0};
-
-    parsed_time.tm_year = year;
-    parsed_time.tm_mon = month;
-    parsed_time.tm_mday = day;
-    parsed_time.tm_hour = hour;
-    parsed_time.tm_min = min;
-    parsed_time.tm_sec = sec;
-
-    // TODO: Add debug assert for time being less than now and greater than some start period
-    // for the GOES-R/S imagery.
-    assert(month < 12);
-    assert(day <= 31);
-    assert(hour < 24);
-    assert(min < 60);
-    assert(sec < 60);
-
-    return mktime(&parsed_time);
-}
