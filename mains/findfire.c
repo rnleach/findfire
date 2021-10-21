@@ -1,6 +1,7 @@
 #include "util.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -75,6 +76,10 @@ main()
     char biggest_sector[5] = {0};
     time_t biggest_start = 0;
     time_t biggest_end = 0;
+    unsigned int min_num_clusters = UINT_MAX;
+    unsigned int max_num_clusters = 0;
+    double max_total_power = 0.0;
+    time_t time_of_max_total_power = 0;
 
     time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
 
@@ -108,6 +113,23 @@ main()
                         biggest_end = clusters.end;
                     }
                 }
+
+                unsigned int num_clust = cluster_list_length(&clusters);
+
+                if (num_clust > max_num_clusters) {
+                    max_num_clusters = num_clust;
+                }
+
+                if (num_clust < min_num_clusters) {
+                    min_num_clusters = num_clust;
+                }
+
+                double total_power = cluster_list_total_power(&clusters);
+                if (total_power > max_total_power) {
+                    max_total_power = total_power;
+                    time_of_max_total_power = clusters.start;
+                }
+
             } else {
                 printf("    Error processing file.\n");
             }
@@ -125,6 +147,9 @@ main()
     char end_str[128] = {0};
     ctime_r(&biggest_end, end_str);
 
+    char max_pwr_time_str[128] = {0};
+    ctime_r(&time_of_max_total_power, max_pwr_time_str);
+
     printf("\n\nCluster analysis metadata:\n"
            "     satellite: %s\n"
            "        sector: %s\n"
@@ -133,10 +158,16 @@ main()
            "           Lat: %10.6lf\n"
            "           Lon: %11.6lf\n"
            "         Count: %2d\n"
-           "        Radius: %06.3lfkm\n"
-           "         Power: %5.0lfMW\n",
+           "        Radius: %06.3lf km\n"
+           "         Power: %5.0lf MW\n\n"
+           "          Overall Stats:\n"
+           "           Min Clusters: %u\n"
+           "           Max Clusters: %u\n"
+           "        Max Total Power: %.0lf GW\n"
+           "Time of Max Total Power: %s\n\n",
            biggest_sat, biggest_sector, start_str, end_str, biggest_fire.lat, biggest_fire.lon,
-           biggest_fire.count, biggest_fire.radius, biggest_fire.power);
+           biggest_fire.count, biggest_fire.radius, biggest_fire.power, min_num_clusters,
+           max_num_clusters, max_total_power / 100.0, max_pwr_time_str);
 
     rc = EXIT_SUCCESS;
 

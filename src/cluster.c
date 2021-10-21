@@ -219,3 +219,20 @@ cluster_desc_cmp(const void *ap, const void *bp)
         return 1;
     return 0;
 }
+
+unsigned int
+cluster_list_length(struct ClusterList tgt[static 1])
+{
+    return tgt->clusters->len;
+}
+
+double
+cluster_list_total_power(struct ClusterList tgt[static 1])
+{
+    double sum = 0.0;
+    for(unsigned int i = 0; i < tgt->clusters->len; i++){
+        sum += g_array_index(tgt->clusters, struct Cluster, i).power;
+    }
+
+    return sum;
+}

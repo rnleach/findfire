@@ -95,3 +95,14 @@ void cluster_list_clear(struct ClusterList *tgt);
  * \brief Parse the file name and find the scan start time.
  */
 char const *cluster_find_start_time(char const *fname);
+
+/**
+ * \brief Get the number of items in the ClusterList. 
+ */
+unsigned int cluster_list_length(struct ClusterList tgt[static 1]);
+
+/**
+ * \brief Get the total fire power of all the clusters in this list.
+ */
+double cluster_list_total_power(struct ClusterList tgt[static 1]);
+
