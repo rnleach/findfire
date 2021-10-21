@@ -104,3 +104,113 @@ parse_time_string(char const *tstr)
 
     return mktime(&parsed_time);
 }
+
+/*-------------------------------------------------------------------------------------------------
+ *                                     Walk a Directory Tree
+ *-----------------------------------------------------------------------------------------------*/
+
+struct DirWalkState
+dir_walk_new_with_root(char const *root)
+{
+    DIR *dir = opendir(root);
+    Stopif(!dir, exit(EXIT_FAILURE), "Error opening root directory: %s", root);
+
+    char *root_copy = 0;
+    int num_chars = asprintf(&root_copy, "%s", root);
+    Stopif(num_chars <= 0, exit(EXIT_FAILURE), "Unable to copy root path: %s", root);
+
+    return (struct DirWalkState){
+        .stack = {[0] = dir}, .paths = {[0] = root_copy}, .top = 0, .current_entry_path = {0}};
+}
+
+void
+dir_walk_destroy(struct DirWalkState done[static 1])
+{
+    for (unsigned int i = 0; i <= done->top; i++) {
+        closedir(done->stack[i]);
+        free(done->paths[i]);
+        done->paths[i] = 0;
+    }
+
+    done->top = 0;
+}
+
+static void
+dir_walk_state_pop(struct DirWalkState state[static 1])
+{
+    assert(state->top > 0);
+
+    if (state->stack[state->top]) {
+        closedir(state->stack[state->top]);
+    }
+
+    if (state->paths[state->top]) {
+        free(state->paths[state->top]);
+    }
+
+    state->paths[state->top] = 0;
+    state->top--;
+
+    return;
+}
+
+static void
+dir_walk_state_push(struct DirWalkState state[static 1], struct dirent entry[static 1])
+{
+    assert(entry->d_type == DT_DIR);
+
+    state->top++;
+
+    Stopif(state->top >= sizeof(state->stack), state->top--, "Stack too deep, skipping: %s/%s",
+           state->paths[state->top - 1], entry->d_name);
+
+    int chars_printed =
+        asprintf(&state->paths[state->top], "%s/%s", state->paths[state->top - 1], entry->d_name);
+    Stopif(chars_printed < 0, exit(EXIT_FAILURE), "Error saving path to next level.");
+
+    state->stack[state->top] = opendir(state->paths[state->top]);
+
+    Stopif(!state->stack[state->top], dir_walk_state_pop(state), "Error opening directory: %s/%s",
+           state->paths[state->top], entry->d_name);
+
+    return;
+}
+
+static bool
+dir_walk_state_set_current_entry_path(struct DirWalkState state[static 1],
+                                      struct dirent entry[static 1])
+{
+    int chars_printed = snprintf(state->current_entry_path, sizeof(state->current_entry_path),
+                                 "%s/%s", state->paths[state->top], entry->d_name);
+
+    Stopif(chars_printed >= sizeof(state->current_entry_path), return false,
+           "File name buffer too small, skipping: %s/%s", state->paths[state->top], entry->d_name);
+
+    return true;
+}
+
+char const *
+dir_walk_next_path(struct DirWalkState state[static 1])
+{
+    struct dirent *entry = 0;
+    do {
+        entry = readdir(state->stack[state->top]);
+
+        while (!entry && state->top != 0) {
+            dir_walk_state_pop(state);
+            entry = readdir(state->stack[state->top]);
+        }
+
+        if (entry && entry->d_type == DT_DIR && entry->d_name[0] != '.') {
+            dir_walk_state_push(state, entry);
+        } else if (entry && entry->d_type == DT_REG) {
+
+            if (dir_walk_state_set_current_entry_path(state, entry)) {
+                return &state->current_entry_path[0];
+            }
+        }
+    } while (entry);
+
+    // If we get here, we've run out of entries.
+    return 0;
+}

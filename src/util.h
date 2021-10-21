@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <time.h>
 
+#include <dirent.h>
+
 /*-------------------------------------------------------------------------------------------------
  *                                        Error handling.
  *-----------------------------------------------------------------------------------------------*/
@@ -59,4 +61,39 @@ char const * get_file_name(char const *full_path);
  * \returns a unix timestamp.
  */
 time_t parse_time_string(char const *tstr);
+
+/*-------------------------------------------------------------------------------------------------
+ *                                     Walk a Directory Tree
+ *-----------------------------------------------------------------------------------------------*/
+/* The maximum depth of the directory tree. */
+#define DIR_STACK_DEPTH 10
+#define MAX_PATH_LEN 256
+
+/** A stack to keep track of the state while we walk a directory tree.
+ *
+ * Order doesn't matter (inorder, preorder, postorder, level order). This just visits every file
+ * in a directory tree starting with the given root.
+ */
+struct DirWalkState {
+    DIR *stack[DIR_STACK_DEPTH];
+    char *paths[DIR_STACK_DEPTH];
+    char current_entry_path[MAX_PATH_LEN];
+    unsigned int top;
+};
+
+#undef DIR_STACK_DEPTH
+#undef MAX_PATH_LEN
+
+/** Create a new DirWalkState rooted at the given path. */
+struct DirWalkState dir_walk_new_with_root(char const *root);
+
+/** Cleanup and free any allocated memory associated with the DirWalkState. */
+void dir_walk_destroy(struct DirWalkState done[static 1]);
+
+/** Get the next regular file entry.
+ *
+ * Directiories are not returned, only regular files. If a directory is encountered it will be 
+ * added to the stack and all files under that root will be returned.
+ */
+char const *dir_walk_next_path(struct DirWalkState stck[static 1]);
 
