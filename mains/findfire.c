@@ -13,7 +13,7 @@
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
-char const *data_dir = "/home/ryan/wxdata/GOESX";
+char const *data_dir = "/media/ryan/SAT/GOES";
 
 static void
 program_initialization()
@@ -38,8 +38,8 @@ skip_path(char const *path, time_t newest_scan_start_time)
         return true;
     }
 
-    if (strstr(path, "FDCF")) {
-        // Skip full disk for now, I don't have many of those and they are much larger.
+    if (strstr(path, "FDCC")) {
+        // Skip CONUS for now.
         return true;
     }
 
@@ -71,15 +71,37 @@ main()
     add_stmt = cluster_db_prepare_to_add(cluster_db);
     Stopif(!add_stmt, goto CLEANUP_AND_EXIT, "Error preparing add statement.");
 
+    // Stats on the most powerfull individual cluster.
     struct Cluster biggest_fire = {0};
     char biggest_sat[4] = {0};
     char biggest_sector[5] = {0};
     time_t biggest_start = 0;
     time_t biggest_end = 0;
+
+    // Stats about the powerful satellite image, or one with the most...
+    char min_num_clusters_sat[4] = {0};
+    char min_num_clusters_sector[5] = {0};
     unsigned int min_num_clusters = UINT_MAX;
+    time_t min_num_clusters_start = 0;
+    time_t min_num_clusters_end = 0;
+
+    char max_num_clusters_sat[4] = {0};
+    char max_num_clusters_sector[5] = {0};
     unsigned int max_num_clusters = 0;
+    time_t max_num_clusters_start = 0;
+    time_t max_num_clusters_end = 0;
+
+    char max_total_power_sat[4] = {0};
+    char max_total_power_sector[5] = {0};
     double max_total_power = 0.0;
-    time_t time_of_max_total_power = 0;
+    time_t max_total_power_start = 0;
+    time_t max_total_power_end = 0;
+
+    char min_total_power_sat[4] = {0};
+    char min_total_power_sector[5] = {0};
+    double min_total_power = HUGE_VAL;
+    time_t min_total_power_start = 0;
+    time_t min_total_power_end = 0;
 
     time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
 
@@ -118,16 +140,35 @@ main()
 
                 if (num_clust > max_num_clusters) {
                     max_num_clusters = num_clust;
+                    memcpy(max_num_clusters_sat, clusters.satellite, 3);
+                    memcpy(max_num_clusters_sector, clusters.sector, 4);
+                    max_num_clusters_start = clusters.start;
+                    max_num_clusters_end = clusters.end;
                 }
 
                 if (num_clust < min_num_clusters) {
                     min_num_clusters = num_clust;
+                    memcpy(min_num_clusters_sat, clusters.satellite, 3);
+                    memcpy(min_num_clusters_sector, clusters.sector, 4);
+                    min_num_clusters_start = clusters.start;
+                    min_num_clusters_end = clusters.end;
                 }
 
                 double total_power = cluster_list_total_power(&clusters);
                 if (total_power > max_total_power) {
                     max_total_power = total_power;
-                    time_of_max_total_power = clusters.start;
+                    memcpy(max_total_power_sat, clusters.satellite, 3);
+                    memcpy(max_total_power_sector, clusters.sector, 4);
+                    max_total_power_start = clusters.start;
+                    max_total_power_end = clusters.end;
+                }
+
+                if (total_power < min_total_power) {
+                    min_total_power = total_power;
+                    memcpy(min_total_power_sat, clusters.satellite, 3);
+                    memcpy(min_total_power_sector, clusters.sector, 4);
+                    min_total_power_start = clusters.start;
+                    min_total_power_end = clusters.end;
                 }
 
             } else {
@@ -147,9 +188,6 @@ main()
     char end_str[128] = {0};
     ctime_r(&biggest_end, end_str);
 
-    char max_pwr_time_str[128] = {0};
-    ctime_r(&time_of_max_total_power, max_pwr_time_str);
-
     printf("\n\nCluster analysis metadata:\n"
            "     satellite: %s\n"
            "        sector: %s\n"
@@ -159,15 +197,61 @@ main()
            "           Lon: %11.6lf\n"
            "         Count: %2d\n"
            "        Radius: %06.3lf km\n"
-           "         Power: %5.0lf MW\n\n"
-           "          Overall Stats:\n"
-           "           Min Clusters: %u\n"
-           "           Max Clusters: %u\n"
-           "        Max Total Power: %.0lf GW\n"
-           "Time of Max Total Power: %s\n\n",
+           "         Power: %5.0lf MW\n\n",
            biggest_sat, biggest_sector, start_str, end_str, biggest_fire.lat, biggest_fire.lon,
-           biggest_fire.count, biggest_fire.radius, biggest_fire.power, min_num_clusters,
-           max_num_clusters, max_total_power / 100.0, max_pwr_time_str);
+           biggest_fire.count, biggest_fire.radius, biggest_fire.power);
+
+    ctime_r(&max_total_power_start, start_str);
+    ctime_r(&max_total_power_end, end_str);
+
+    printf("\n\n"
+           "Max Image Power Stats:\n"
+           "            satellite: %s\n"
+           "               sector: %s\n"
+           "                start: %s"
+           "                  end: %s"
+           "      Max Total Power: %.0lf GW\n\n",
+           max_total_power_sat, max_total_power_sector, start_str, end_str,
+           max_total_power / 100.0);
+
+    ctime_r(&min_total_power_start, start_str);
+    ctime_r(&min_total_power_end, end_str);
+
+    printf("\n\n"
+           "Min Image Power Stats:\n"
+           "            satellite: %s\n"
+           "               sector: %s\n"
+           "                start: %s"
+           "                  end: %s"
+           "      Min Total Power: %.0lf MW\n\n",
+           min_total_power_sat, min_total_power_sector, start_str, end_str,
+           min_total_power);
+
+    ctime_r(&max_num_clusters_start, start_str);
+    ctime_r(&max_num_clusters_end, end_str);
+
+    printf("\n\n"
+           "Max Image Number Clusters:\n"
+           "                satellite: %s\n"
+           "                   sector: %s\n"
+           "                    start: %s"
+           "                      end: %s"
+           "           Total Clusters: %u\n\n",
+           max_num_clusters_sat, max_num_clusters_sector, start_str, end_str,
+           max_num_clusters);
+
+    ctime_r(&min_num_clusters_start, start_str);
+    ctime_r(&min_num_clusters_end, end_str);
+
+    printf("\n\n"
+           "Min Image Number Clusters:\n"
+           "                satellite: %s\n"
+           "                   sector: %s\n"
+           "                    start: %s"
+           "                      end: %s"
+           "           Total Clusters: %u\n\n",
+           min_num_clusters_sat, min_num_clusters_sector, start_str, end_str,
+           min_num_clusters);
 
     rc = EXIT_SUCCESS;
 
