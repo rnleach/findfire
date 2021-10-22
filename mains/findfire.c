@@ -57,6 +57,219 @@ skip_path(char const *path, time_t newest_scan_start_time)
     return false;
 }
 
+struct ClusterStats {
+    struct Cluster biggest_fire;
+    char biggest_sat[4];
+    char biggest_sector[5];
+    time_t biggest_start;
+    time_t biggest_end;
+};
+
+static struct ClusterStats
+cluster_stats_new(void)
+{
+    return (struct ClusterStats){
+        .biggest_fire = {0},
+        .biggest_sat = {0},
+        .biggest_sector = {0},
+        .biggest_start = 0,
+        .biggest_end = 0,
+    };
+}
+
+static struct ClusterStats
+cluster_stats_update(struct ClusterStats stats, char const sat[static 4],
+                     char const sector[static 5], time_t start, time_t end, struct Cluster *cluster)
+{
+    if (cluster->power > stats.biggest_fire.power) {
+        stats.biggest_fire = *cluster;
+        memcpy(stats.biggest_sat, sat, 3);
+        memcpy(stats.biggest_sector, sector, 4);
+        stats.biggest_start = start;
+        stats.biggest_end = end;
+    }
+
+    return stats;
+}
+
+static void
+cluster_stats_print(struct ClusterStats stats)
+{
+    char start_str[128] = {0};
+    ctime_r(&stats.biggest_start, start_str);
+    char end_str[128] = {0};
+    ctime_r(&stats.biggest_end, end_str);
+
+    printf("\n\nCluster analysis metadata:\n"
+           "     satellite: %s\n"
+           "        sector: %s\n"
+           "         start: %s"
+           "           end: %s"
+           "           Lat: %10.6lf\n"
+           "           Lon: %11.6lf\n"
+           "         Count: %2d\n"
+           "        Radius: %06.3lf km\n"
+           "         Power: %5.0lf MW\n",
+           stats.biggest_sat, stats.biggest_sector, start_str, end_str, stats.biggest_fire.lat,
+           stats.biggest_fire.lon, stats.biggest_fire.count, stats.biggest_fire.radius,
+           stats.biggest_fire.power);
+}
+
+struct ClusterListStats {
+    char min_num_clusters_sat[4];
+    char min_num_clusters_sector[5];
+    unsigned int min_num_clusters;
+    time_t min_num_clusters_start;
+    time_t min_num_clusters_end;
+
+    char max_num_clusters_sat[4];
+    char max_num_clusters_sector[5];
+    unsigned int max_num_clusters;
+    time_t max_num_clusters_start;
+    time_t max_num_clusters_end;
+
+    char max_total_power_sat[4];
+    char max_total_power_sector[5];
+    double max_total_power;
+    time_t max_total_power_start;
+    time_t max_total_power_end;
+
+    char min_total_power_sat[4];
+    char min_total_power_sector[5];
+    double min_total_power;
+    time_t min_total_power_start;
+    time_t min_total_power_end;
+};
+
+static struct ClusterListStats
+cluster_list_stats_new(void)
+{
+    return (struct ClusterListStats){
+        .min_num_clusters_sat = {0},
+        .min_num_clusters_sector = {0},
+        .min_num_clusters = UINT_MAX,
+        .min_num_clusters_start = 0,
+        .min_num_clusters_end = 0,
+
+        .max_num_clusters_sat = {0},
+        .max_num_clusters_sector = {0},
+        .max_num_clusters = 0,
+        .max_num_clusters_start = 0,
+        .max_num_clusters_end = 0,
+
+        .max_total_power_sat = {0},
+        .max_total_power_sector = {0},
+        .max_total_power = 0.0,
+        .max_total_power_start = 0,
+        .max_total_power_end = 0,
+
+        .min_total_power_sat = {0},
+        .min_total_power_sector = {0},
+        .min_total_power = HUGE_VAL,
+        .min_total_power_start = 0,
+        .min_total_power_end = 0,
+    };
+}
+
+static struct ClusterListStats
+cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *clusters)
+{
+    unsigned int num_clust = cluster_list_length(clusters);
+
+    if (num_clust > clstats.max_num_clusters) {
+        clstats.max_num_clusters = num_clust;
+        memcpy(clstats.max_num_clusters_sat, clusters->satellite, 3);
+        memcpy(clstats.max_num_clusters_sector, clusters->sector, 4);
+        clstats.max_num_clusters_start = clusters->start;
+        clstats.max_num_clusters_end = clusters->end;
+    }
+
+    if (num_clust < clstats.min_num_clusters) {
+        clstats.min_num_clusters = num_clust;
+        memcpy(clstats.min_num_clusters_sat, clusters->satellite, 3);
+        memcpy(clstats.min_num_clusters_sector, clusters->sector, 4);
+        clstats.min_num_clusters_start = clusters->start;
+        clstats.min_num_clusters_end = clusters->end;
+    }
+
+    double total_power = cluster_list_total_power(clusters);
+    if (total_power > clstats.max_total_power) {
+        clstats.max_total_power = total_power;
+        memcpy(clstats.max_total_power_sat, clusters->satellite, 3);
+        memcpy(clstats.max_total_power_sector, clusters->sector, 4);
+        clstats.max_total_power_start = clusters->start;
+        clstats.max_total_power_end = clusters->end;
+    }
+
+    if (total_power < clstats.min_total_power) {
+        clstats.min_total_power = total_power;
+        memcpy(clstats.min_total_power_sat, clusters->satellite, 3);
+        memcpy(clstats.min_total_power_sector, clusters->sector, 4);
+        clstats.min_total_power_start = clusters->start;
+        clstats.min_total_power_end = clusters->end;
+    }
+
+    return clstats;
+}
+
+static void
+cluster_list_stats_print(struct ClusterListStats clstats)
+{
+    char start_str[128] = {0};
+    ctime_r(&clstats.max_total_power_start, start_str);
+    char end_str[128] = {0};
+    ctime_r(&clstats.max_total_power_end, end_str);
+
+    printf("\n\n"
+           "Max Image Power Stats:\n"
+           "            satellite: %s\n"
+           "               sector: %s\n"
+           "                start: %s"
+           "                  end: %s"
+           "      Max Total Power: %.0lf GW\n\n",
+           clstats.max_total_power_sat, clstats.max_total_power_sector, start_str, end_str,
+           clstats.max_total_power / 100.0);
+
+    ctime_r(&clstats.min_total_power_start, start_str);
+    ctime_r(&clstats.min_total_power_end, end_str);
+
+    printf("\n\n"
+           "Min Image Power Stats:\n"
+           "            satellite: %s\n"
+           "               sector: %s\n"
+           "                start: %s"
+           "                  end: %s"
+           "      Min Total Power: %.0lf MW\n\n",
+           clstats.min_total_power_sat, clstats.min_total_power_sector, start_str, end_str,
+           clstats.min_total_power);
+
+    ctime_r(&clstats.max_num_clusters_start, start_str);
+    ctime_r(&clstats.max_num_clusters_end, end_str);
+
+    printf("\n\n"
+           "Max Image Number Clusters:\n"
+           "                satellite: %s\n"
+           "                   sector: %s\n"
+           "                    start: %s"
+           "                      end: %s"
+           "           Total Clusters: %u\n\n",
+           clstats.max_num_clusters_sat, clstats.max_num_clusters_sector, start_str, end_str,
+           clstats.max_num_clusters);
+
+    ctime_r(&clstats.min_num_clusters_start, start_str);
+    ctime_r(&clstats.min_num_clusters_end, end_str);
+
+    printf("\n\n"
+           "Min Image Number Clusters:\n"
+           "                satellite: %s\n"
+           "                   sector: %s\n"
+           "                    start: %s"
+           "                      end: %s"
+           "           Total Clusters: %u\n\n",
+           clstats.min_num_clusters_sat, clstats.min_num_clusters_sector, start_str, end_str,
+           clstats.min_num_clusters);
+}
+
 int
 main()
 {
@@ -72,36 +285,10 @@ main()
     Stopif(!add_stmt, goto CLEANUP_AND_EXIT, "Error preparing add statement.");
 
     // Stats on the most powerfull individual cluster.
-    struct Cluster biggest_fire = {0};
-    char biggest_sat[4] = {0};
-    char biggest_sector[5] = {0};
-    time_t biggest_start = 0;
-    time_t biggest_end = 0;
+    struct ClusterStats cluster_stats = cluster_stats_new();
 
     // Stats about the powerful satellite image, or one with the most...
-    char min_num_clusters_sat[4] = {0};
-    char min_num_clusters_sector[5] = {0};
-    unsigned int min_num_clusters = UINT_MAX;
-    time_t min_num_clusters_start = 0;
-    time_t min_num_clusters_end = 0;
-
-    char max_num_clusters_sat[4] = {0};
-    char max_num_clusters_sector[5] = {0};
-    unsigned int max_num_clusters = 0;
-    time_t max_num_clusters_start = 0;
-    time_t max_num_clusters_end = 0;
-
-    char max_total_power_sat[4] = {0};
-    char max_total_power_sector[5] = {0};
-    double max_total_power = 0.0;
-    time_t max_total_power_start = 0;
-    time_t max_total_power_end = 0;
-
-    char min_total_power_sat[4] = {0};
-    char min_total_power_sector[5] = {0};
-    double min_total_power = HUGE_VAL;
-    time_t min_total_power_start = 0;
-    time_t min_total_power_end = 0;
+    struct ClusterListStats clstats = cluster_list_stats_new();
 
     time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
 
@@ -127,49 +314,12 @@ main()
                                                      curr_clust->radius, curr_clust->count);
                     Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
 
-                    if (curr_clust->power > biggest_fire.power) {
-                        biggest_fire = *curr_clust;
-                        memcpy(biggest_sat, clusters.satellite, 3);
-                        memcpy(biggest_sector, clusters.sector, 4);
-                        biggest_start = clusters.start;
-                        biggest_end = clusters.end;
-                    }
+                    cluster_stats =
+                        cluster_stats_update(cluster_stats, clusters.satellite, clusters.sector,
+                                             clusters.start, clusters.end, curr_clust);
                 }
 
-                unsigned int num_clust = cluster_list_length(&clusters);
-
-                if (num_clust > max_num_clusters) {
-                    max_num_clusters = num_clust;
-                    memcpy(max_num_clusters_sat, clusters.satellite, 3);
-                    memcpy(max_num_clusters_sector, clusters.sector, 4);
-                    max_num_clusters_start = clusters.start;
-                    max_num_clusters_end = clusters.end;
-                }
-
-                if (num_clust < min_num_clusters) {
-                    min_num_clusters = num_clust;
-                    memcpy(min_num_clusters_sat, clusters.satellite, 3);
-                    memcpy(min_num_clusters_sector, clusters.sector, 4);
-                    min_num_clusters_start = clusters.start;
-                    min_num_clusters_end = clusters.end;
-                }
-
-                double total_power = cluster_list_total_power(&clusters);
-                if (total_power > max_total_power) {
-                    max_total_power = total_power;
-                    memcpy(max_total_power_sat, clusters.satellite, 3);
-                    memcpy(max_total_power_sector, clusters.sector, 4);
-                    max_total_power_start = clusters.start;
-                    max_total_power_end = clusters.end;
-                }
-
-                if (total_power < min_total_power) {
-                    min_total_power = total_power;
-                    memcpy(min_total_power_sat, clusters.satellite, 3);
-                    memcpy(min_total_power_sector, clusters.sector, 4);
-                    min_total_power_start = clusters.start;
-                    min_total_power_end = clusters.end;
-                }
+                clstats = cluster_list_stats_update(clstats, &clusters);
 
             } else {
                 printf("    Error processing file.\n");
@@ -183,75 +333,8 @@ main()
 
     dir_walk_destroy(&dir_walk_state);
 
-    char start_str[128] = {0};
-    ctime_r(&biggest_start, start_str);
-    char end_str[128] = {0};
-    ctime_r(&biggest_end, end_str);
-
-    printf("\n\nCluster analysis metadata:\n"
-           "     satellite: %s\n"
-           "        sector: %s\n"
-           "         start: %s"
-           "           end: %s"
-           "           Lat: %10.6lf\n"
-           "           Lon: %11.6lf\n"
-           "         Count: %2d\n"
-           "        Radius: %06.3lf km\n"
-           "         Power: %5.0lf MW\n\n",
-           biggest_sat, biggest_sector, start_str, end_str, biggest_fire.lat, biggest_fire.lon,
-           biggest_fire.count, biggest_fire.radius, biggest_fire.power);
-
-    ctime_r(&max_total_power_start, start_str);
-    ctime_r(&max_total_power_end, end_str);
-
-    printf("\n\n"
-           "Max Image Power Stats:\n"
-           "            satellite: %s\n"
-           "               sector: %s\n"
-           "                start: %s"
-           "                  end: %s"
-           "      Max Total Power: %.0lf GW\n\n",
-           max_total_power_sat, max_total_power_sector, start_str, end_str,
-           max_total_power / 100.0);
-
-    ctime_r(&min_total_power_start, start_str);
-    ctime_r(&min_total_power_end, end_str);
-
-    printf("\n\n"
-           "Min Image Power Stats:\n"
-           "            satellite: %s\n"
-           "               sector: %s\n"
-           "                start: %s"
-           "                  end: %s"
-           "      Min Total Power: %.0lf MW\n\n",
-           min_total_power_sat, min_total_power_sector, start_str, end_str,
-           min_total_power);
-
-    ctime_r(&max_num_clusters_start, start_str);
-    ctime_r(&max_num_clusters_end, end_str);
-
-    printf("\n\n"
-           "Max Image Number Clusters:\n"
-           "                satellite: %s\n"
-           "                   sector: %s\n"
-           "                    start: %s"
-           "                      end: %s"
-           "           Total Clusters: %u\n\n",
-           max_num_clusters_sat, max_num_clusters_sector, start_str, end_str,
-           max_num_clusters);
-
-    ctime_r(&min_num_clusters_start, start_str);
-    ctime_r(&min_num_clusters_end, end_str);
-
-    printf("\n\n"
-           "Min Image Number Clusters:\n"
-           "                satellite: %s\n"
-           "                   sector: %s\n"
-           "                    start: %s"
-           "                      end: %s"
-           "           Total Clusters: %u\n\n",
-           min_num_clusters_sat, min_num_clusters_sector, start_str, end_str,
-           min_num_clusters);
+    cluster_stats_print(cluster_stats);
+    cluster_list_stats_print(clstats);
 
     rc = EXIT_SUCCESS;
 
