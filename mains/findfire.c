@@ -63,6 +63,10 @@ struct ClusterStats {
     char biggest_sector[5];
     time_t biggest_start;
     time_t biggest_end;
+
+    unsigned num_clusters;
+    unsigned num_power_lt_1mw;
+    unsigned num_power_lt_10mw;
 };
 
 static struct ClusterStats
@@ -74,6 +78,9 @@ cluster_stats_new(void)
         .biggest_sector = {0},
         .biggest_start = 0,
         .biggest_end = 0,
+        .num_clusters = 0,
+        .num_power_lt_1mw = 0,
+        .num_power_lt_10mw = 0,
     };
 }
 
@@ -89,6 +96,16 @@ cluster_stats_update(struct ClusterStats stats, char const sat[static 4],
         stats.biggest_end = end;
     }
 
+    if (cluster->power < 1.0) {
+        stats.num_power_lt_1mw += 1;
+    }
+
+    if (cluster->power < 10.0) {
+        stats.num_power_lt_10mw += 1;
+    }
+
+    stats.num_clusters += 1;
+
     return stats;
 }
 
@@ -100,7 +117,8 @@ cluster_stats_print(struct ClusterStats stats)
     char end_str[128] = {0};
     ctime_r(&stats.biggest_end, end_str);
 
-    printf("\n\nCluster analysis metadata:\n"
+    printf("\nIndividual Cluster Stats\n\n"
+           "Most Powerfull:\n"
            "     satellite: %s\n"
            "        sector: %s\n"
            "         start: %s"
@@ -109,10 +127,18 @@ cluster_stats_print(struct ClusterStats stats)
            "           Lon: %11.6lf\n"
            "         Count: %2d\n"
            "        Radius: %06.3lf km\n"
-           "         Power: %5.0lf MW\n",
+           "         Power: %5.0lf MW\n\n"
+           "        Counts:\n"
+           "         Total: %10u\n"
+           "  Power < 1 MW: %10u\n"
+           "    Pct < 1 MW: %10u%%\n"
+           " Power < 10 MW: %10u\n"
+           "   Pct < 10 MW: %10u%%\n",
            stats.biggest_sat, stats.biggest_sector, start_str, end_str, stats.biggest_fire.lat,
            stats.biggest_fire.lon, stats.biggest_fire.count, stats.biggest_fire.radius,
-           stats.biggest_fire.power);
+           stats.biggest_fire.power, stats.num_clusters, stats.num_power_lt_1mw,
+           stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
+           stats.num_power_lt_10mw * 100 / stats.num_clusters);
 }
 
 struct ClusterListStats {
