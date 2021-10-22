@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <libgen.h>
 
 #include "firesatimage.h"
@@ -10,6 +11,9 @@
 bool
 fire_sat_image_open(char const *fname, struct FireSatImage *tgt)
 {
+    assert(fname);
+    assert(tgt);
+
     char fname_copy[1024] = {0};
     int num_printed = snprintf(fname_copy, sizeof(fname_copy), "%s", fname);
     Stopif(num_printed >= sizeof(fname_copy), return false, "File name too long: %s", fname);
@@ -35,6 +39,9 @@ fire_sat_image_open(char const *fname, struct FireSatImage *tgt)
     tgt->y_size = GDALGetRasterBandYSize(tgt->band);
     tgt->x_size = GDALGetRasterBandXSize(tgt->band);
 
+    assert(tgt->x_size > 0);
+    assert(tgt->y_size > 0);
+
     return true;
 }
 
@@ -52,6 +59,8 @@ fire_sat_image_close(struct FireSatImage *dataset)
 GArray *
 fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
 {
+    assert(fdata);
+
     GArray *buffer = 0;
     GArray *points = 0;
     OGRCoordinateTransformationH trans = 0;

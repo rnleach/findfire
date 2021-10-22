@@ -13,7 +13,7 @@
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
-char const *data_dir = "/media/ryan/SAT/GOES";
+char const *data_dir = "/home/ryan/wxdata/GOESX";
 
 static void
 program_initialization()
@@ -38,8 +38,8 @@ skip_path(char const *path, time_t newest_scan_start_time)
         return true;
     }
 
-    if (strstr(path, "FDCC")) {
-        // Skip CONUS for now.
+    if (strstr(path, "FDCF")) {
+        // Skip Full Disk
         return true;
     }
 

@@ -10,7 +10,7 @@
  */
 struct FireSatImage {
     /// Orignial file name the dataset was loaded from.
-    char fname[1024];
+    char fname[512];
     /// Handle to the dataset.
     GDALDatasetH dataset;
     /// Transform from array indexes to spatial coordinates.
