@@ -310,10 +310,10 @@ main()
     add_stmt = cluster_db_prepare_to_add(cluster_db);
     Stopif(!add_stmt, goto CLEANUP_AND_EXIT, "Error preparing add statement.");
 
-    // Stats on the most powerfull individual cluster.
+    // Stats on individual clusters.
     struct ClusterStats cluster_stats = cluster_stats_new();
 
-    // Stats about the powerful satellite image, or one with the most...
+    // Stats about satellite images.
     struct ClusterListStats clstats = cluster_list_stats_new();
 
     time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
