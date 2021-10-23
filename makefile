@@ -4,6 +4,7 @@ SOURCEDIR := $(PROJDIR)/src
 OBJDIR := $(PROJDIR)/obj
 BUILDDIR := $(PROJDIR)/build
 MAINSDIR := $(PROJDIR)/mains
+DOCDIR := $(PROJDIR)/doc
 
 # Target executable
 PROG1 = findfire
@@ -41,6 +42,7 @@ VPATH = $(SOURCEDIR)
 
 # Create a list of *.c files in DIRS
 SOURCES = $(wildcard $(SOURCEDIR)/*.c)
+HEADERS = $(wildcard $(SOURCEDIR)/*.h)
 
 # Define object files for all sources, and dependencies for all objects
 OBJS := $(subst $(SOURCEDIR), $(OBJDIR), $(SOURCES:.c=.o))
@@ -53,7 +55,7 @@ else
 	HIDE = @
 endif
 
-.PHONY: all clean directories 
+.PHONY: all clean directories doc
 
 all: makefile directories $(TARGET1) $(TARGET2)
 
@@ -81,8 +83,11 @@ directories:
 	$(HIDE)mkdir -p $(OBJDIR) 2>/dev/null
 	$(HIDE)mkdir -p $(BUILDDIR) 2>/dev/null
 
+doc: Doxyfile makefile $(SOURCES) $(HEADERS)
+	$(HIDE) doxygen 2>/dev/null
+
 clean:
-	$(HIDE)rm -rf $(OBJDIR) $(BUILDDIR) 2>/dev/null
+	$(HIDE)rm -rf $(OBJDIR) $(BUILDDIR) $(DOCDIR) 2>/dev/null
 	$(HIDE)rm $(MAINSDIR)/*.d $(MAINSDIR)/*.o
 	@echo Cleaning done!
 

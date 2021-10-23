@@ -5,6 +5,7 @@ tags
 # Project layout
 build
 obj
+doc
 
 # Prerequisites
 *.d
