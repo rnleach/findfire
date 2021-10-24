@@ -34,7 +34,7 @@ struct Coord {
  * The \param eps parameter is the maximum distance between points in the same units as the
  * coordinates that two points can have and still be considered close.
  */
-bool coord_are_close(struct Coord left, struct Coord right);
+bool coord_are_close(struct Coord left, struct Coord right, float eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         SatPixels

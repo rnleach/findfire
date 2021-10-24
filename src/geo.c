@@ -7,7 +7,7 @@
  *                                         Coordinates
  *-----------------------------------------------------------------------------------------------*/
 bool
-coord_are_close(struct Coord left, struct Coord right)
+coord_are_close(struct Coord left, struct Coord right, float eps)
 {
     assert(false);
 }
