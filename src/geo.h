@@ -25,8 +25,8 @@
  *-----------------------------------------------------------------------------------------------*/
 /** A coordinate consisting of a latitude and a longitude. */
 struct Coord {
-    float lat;
-    float lon;
+    double lat;
+    double lon;
 };
 
 /** Determine if these coordinates are close to each other.
@@ -34,7 +34,7 @@ struct Coord {
  * The \param eps parameter is the maximum distance between points in the same units as the
  * coordinates that two points can have and still be considered close.
  */
-bool coord_are_close(struct Coord left, struct Coord right, float eps);
+bool coord_are_close(struct Coord left, struct Coord right, double eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         SatPixels
@@ -52,7 +52,7 @@ struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 
 /** Are these pixels basically the same pixel. */
 bool sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1],
-                             float eps);
+                             double eps);
 
 /** Determine if satellite pixels are adjacent.
  *
@@ -63,7 +63,7 @@ bool sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel rig
  * \param eps The scale to use for comparison in the same units as the lat and lon.
  **/
 bool sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1],
-                             float eps);
+                             double eps);
 
 /** Determine if a coordinate is interior to a pixel. */
 bool sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[static 1]);

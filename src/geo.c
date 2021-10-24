@@ -1,15 +1,21 @@
 #include "geo.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <tgmath.h>
 
 /*-------------------------------------------------------------------------------------------------
  *                                         Coordinates
  *-----------------------------------------------------------------------------------------------*/
 bool
-coord_are_close(struct Coord left, struct Coord right, float eps)
+coord_are_close(struct Coord left, struct Coord right, double eps)
 {
-    assert(false);
+    double lat_diff = left.lat - right.lat;
+    double lon_diff = left.lon - right.lon;
+    double distance_squared = lat_diff * lat_diff + lon_diff * lon_diff;
+
+    return distance_squared <= (eps * eps);
 }
 
 /*-------------------------------------------------------------------------------------------------
@@ -22,13 +28,13 @@ sat_pixel_centroid(struct SatPixel pxl[static 1])
 }
 
 bool
-sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1], float eps)
+sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
     assert(false);
 }
 
 bool
-sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], float eps)
+sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
     assert(false);
 }
