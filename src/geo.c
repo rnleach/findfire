@@ -6,6 +6,60 @@
 #include <tgmath.h>
 
 /*-------------------------------------------------------------------------------------------------
+ *                                    Helper types and functions
+ *-----------------------------------------------------------------------------------------------*/
+struct Line {
+    struct Coord start;
+    struct Coord end;
+};
+
+static struct Coord
+lines_intersection(struct Line l1, struct Line l2)
+{
+    double m1 = (l1.end.lat - l1.start.lat) / (l1.end.lon - l1.start.lon);
+    double m2 = (l2.end.lat - l2.start.lat) / (l2.end.lon - l2.start.lon);
+
+    // If either is infinite, this is a vertical line and we need to improve the code to handle
+    // that. I don't think that will ever happen. But it could and we should be ready to detect it
+    // when it does!
+    assert(!isinf(m1));
+    assert(!isinf(m2));
+
+    // Parallel lines?! That should NEVER happen with out dataset.
+    assert(m1 != m2);
+
+    double x1 = l1.start.lon;
+    double y1 = l1.start.lat;
+    double x2 = l2.start.lon;
+    double y2 = l2.start.lat;
+
+    double x0 = (y2 - y1 + m1 * x1 - m2 * x2) / (m1 - m2);
+    double y0 = m1 * (x0 - x1) + y1;
+
+    // Assume that the intersection lies in the range of the original lines for our usecase.
+    assert(y0 <= fmax(l1.start.lat, l1.end.lat));
+    assert(y0 <= fmax(l2.start.lat, l2.end.lat));
+    assert(y0 >= fmin(l1.start.lat, l1.end.lat));
+    assert(y0 >= fmin(l2.start.lat, l2.end.lat));
+
+    assert(x0 <= fmax(l1.start.lon, l1.end.lon));
+    assert(x0 <= fmax(l2.start.lon, l2.end.lon));
+    assert(x0 >= fmin(l1.start.lon, l1.end.lon));
+    assert(x0 >= fmin(l2.start.lon, l2.end.lon));
+
+    return (struct Coord){.lat = y0, .lon = x0};
+}
+
+static struct Coord
+triangle_centroid(struct Coord v1, struct Coord v2, struct Coord v3)
+{
+    double avg_lat = (v1.lat + v2.lat + v3.lat) / 3.0;
+    double avg_lon = (v1.lon + v2.lon + v3.lon) / 3.0;
+
+    return (struct Coord){.lat = avg_lat, .lon = avg_lon};
+}
+
+/*-------------------------------------------------------------------------------------------------
  *                                         Coordinates
  *-----------------------------------------------------------------------------------------------*/
 bool
@@ -24,7 +78,25 @@ coord_are_close(struct Coord left, struct Coord right, double eps)
 struct Coord
 sat_pixel_centroid(struct SatPixel pxl[static 1])
 {
-    assert(false);
+    /* Steps to calculatule the centroid of a quadrilateral.
+     *
+     *  1) Break the quadrilateral into two triangles by creating a diagonal.
+     *  2) Calculate the centroid of each triangle by taking the average of it's 3 Coords
+     *  3) Create a line connecting the centroids of each triangle.
+     *  4) Repeat the process by creating the other diagonal.
+     *  5) Find the intersection of the two resulting lines, that is the centroid of the
+     *     quadrilateral.
+     */
+
+    struct Coord t1_c = triangle_centroid(pxl->ul, pxl->ll, pxl->lr);
+    struct Coord t2_c = triangle_centroid(pxl->ul, pxl->ur, pxl->lr);
+    struct Line diag1_centroids = {.start = t1_c, .end = t2_c};
+
+    struct Coord t3_c = triangle_centroid(pxl->ul, pxl->ll, pxl->ur);
+    struct Coord t4_c = triangle_centroid(pxl->lr, pxl->ur, pxl->ll);
+    struct Line diag2_centroids = {.start = t3_c, .end = t4_c};
+
+    return lines_intersection(diag1_centroids, diag2_centroids);
 }
 
 bool

@@ -47,7 +47,11 @@ struct SatPixel {
     struct Coord ur;
 };
 
-/** Calculate the centroid of a SatPixel. */
+/** Calculate the centroid of a SatPixel.
+ *
+ * This function uses an algorithm that assumes the pixel is a quadrilateral, which is enforced
+ * by the definition of the \a SatPixel type.
+ */
 struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 
 /** Are these pixels basically the same pixel. */
