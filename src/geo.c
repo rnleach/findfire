@@ -102,7 +102,10 @@ sat_pixel_centroid(struct SatPixel pxl[static 1])
 bool
 sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
-    assert(false);
+    return coord_are_close(left->ul, right->ul, eps) 
+        && coord_are_close(left->ur, right->ur, eps)
+        && coord_are_close(left->lr, right->lr, eps)
+        && coord_are_close(left->ll, right->ll, eps);
 }
 
 bool
