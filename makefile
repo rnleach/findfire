@@ -1,16 +1,21 @@
 # Directory layout.
 PROJDIR := $(realpath $(CURDIR)/)
 SOURCEDIR := $(PROJDIR)/src
+MAINSDIR := $(PROJDIR)/mains
+TESTDIR := $(PROJDIR)/tests
+DOCDIR := $(PROJDIR)/doc
+
 OBJDIR := $(PROJDIR)/obj
 BUILDDIR := $(PROJDIR)/build
-MAINSDIR := $(PROJDIR)/mains
-DOCDIR := $(PROJDIR)/doc
 
 # Target executable
 PROG1 = findfire
 PROG2 = connectfire
+TEST  = test
 TARGET1 = $(BUILDDIR)/$(PROG1)
 TARGET2 = $(BUILDDIR)/$(PROG2)
+TEST_TARGET = $(BUILDDIR)/$(TEST)
+
 CFLAGS = -g -fPIC -flto -Wall -Werror -O3 -std=c11 -I$(SOURCEDIR)
 LDLIBS = -flto -fPIC -lm
 
@@ -55,7 +60,7 @@ else
 	HIDE = @
 endif
 
-.PHONY: all clean directories doc
+.PHONY: all clean directories test doc
 
 all: makefile directories $(TARGET1) $(TARGET2)
 
@@ -78,17 +83,27 @@ $(MAINSDIR)/%.o: $(MAINSDIR)/%.c makefile
 	@echo Building $@
 	$(HIDE)$(CC) -c $(CFLAGS) -o $@ $< -MMD
 
+$(TESTDIR)/%.o: $(TESTDIR)/%.c makefile
+	@echo Building $@
+	$(HIDE)$(CC) -c $(CFLAGS) -o $@ $< -MMD
+
 directories:
 	@echo Creating directory $<
 	$(HIDE)mkdir -p $(OBJDIR) 2>/dev/null
 	$(HIDE)mkdir -p $(BUILDDIR) 2>/dev/null
 
+test: directories makefile $(OBJS) $(TESTDIR)/$(TEST).o
+	@echo Linking $@
+	$(HIDE)$(CC) $(TESTDIR)/$(TEST).o $(OBJS) $(LDLIBS) -o $(TEST_TARGET)
+	$(HIDE) $(TEST_TARGET)
+
 doc: Doxyfile makefile $(SOURCES) $(HEADERS)
 	$(HIDE) doxygen 2>/dev/null
 
 clean:
-	$(HIDE)rm -rf $(OBJDIR) $(BUILDDIR) $(DOCDIR) 2>/dev/null
-	$(HIDE)rm $(MAINSDIR)/*.d $(MAINSDIR)/*.o
+	-$(HIDE)rm -rf $(OBJDIR) $(BUILDDIR) $(DOCDIR) 2>/dev/null
+	-$(HIDE)rm $(MAINSDIR)/*.d $(MAINSDIR)/*.o $(TARGET1) $(TARGET2)
+	-$(HIDE)rm $(TESTDIR)/*.d $(TESTDIR)/*.o $(TEST_TARGET)
 	@echo Cleaning done!
 
 #detected_OS = $(shell uname)
