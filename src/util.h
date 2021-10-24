@@ -28,26 +28,26 @@
  *
  * Finds the part of the path after the last '.' in the file name (fname).
  *
- * \returns A pointer into the original fname to the start of the extension. If the file name 
+ * \returns A pointer into the original fname to the start of the extension. If the file name
  * doesn't contain a '.' character, then it returns a pointer to an empty string, "".
  */
-char const * file_ext(const char *fname);
+char const *file_ext(const char *fname);
 
 /** Find the file name in a path.
  *
  * \returns a pointer to the first character after the last '/' character. This is not guaranteed
- * to be a file name, it could be a directory if the path didn't include a file name. If there is 
+ * to be a file name, it could be a directory if the path didn't include a file name. If there is
  * no '/' character in the path, then it returns the whole path.
  */
-char const * get_file_name(char const *full_path);
+char const *get_file_name(char const *full_path);
 
 /*-------------------------------------------------------------------------------------------------
  *                                     Time parsing.
  *-----------------------------------------------------------------------------------------------*/
 /** Parse a date-time from a substring from a file name.
  *
- * The GOES data stored via the NOAA Big Data initiative is stored in files that include the 
- * scan start and end times in the file names. The format of that time stamp is YYYYJJJHHMMSS, 
+ * The GOES data stored via the NOAA Big Data initiative is stored in files that include the
+ * scan start and end times in the file names. The format of that time stamp is YYYYJJJHHMMSS,
  * where:
  *     YYYY is the year
  *     JJJ is the day of the year (1-366)
@@ -92,8 +92,7 @@ void dir_walk_destroy(struct DirWalkState done[static 1]);
 
 /** Get the next regular file entry.
  *
- * Directiories are not returned, only regular files. If a directory is encountered it will be 
+ * Directiories are not returned, only regular files. If a directory is encountered it will be
  * added to the stack and all files under that root will be returned.
  */
 char const *dir_walk_next_path(struct DirWalkState stck[static 1]);
-

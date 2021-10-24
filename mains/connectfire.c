@@ -5,7 +5,7 @@
 /**
  * \brief A wildfire.
  *
- * The id field identify the relationship between fires, if there is on. A new fire will be have 
+ * The id field identify the relationship between fires, if there is on. A new fire will be have
  * an id starting with a letter. If a wildfire has two or more clusters identified as belonging to
  * it at a later time, it will be a new wildfire with the same id as the parent with a number
  * appended. Then if there is another generation, a letter type will be appenended. And so on it
