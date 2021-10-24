@@ -3,7 +3,8 @@
 tags
 
 # Project layout
-build
+release
+debug
 obj
 doc
 
