@@ -87,26 +87,48 @@ test_sat_pixel_contains_coord(void)
     struct Coord boundary4 = {.lat = 44.5, .lon = -120.0};
 
     // Make sure what's inside is in
-    g_assert_true(sat_pixel_contains_coord(&pxl1, &inside1));
+    g_assert_true(sat_pixel_contains_coord(&pxl1, inside1));
 
     // Make sure what's outside is out
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &outside1));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &outside2));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &outside3));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &outside4));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &outside5));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &outside6));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, outside1));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, outside2));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, outside3));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, outside4));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, outside5));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, outside6));
 
     // Make sure what lies on the boundary is NOT contained in the polygon.
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &boundary1));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &boundary2));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &boundary3));
-    g_assert_false(sat_pixel_contains_coord(&pxl1, &boundary4));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, boundary1));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, boundary2));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, boundary3));
+    g_assert_false(sat_pixel_contains_coord(&pxl1, boundary4));
 
-    // TODO: This only tests a simple square. We also need to test a skewed quadrilateral since
-    // the further away from nadir you get, the more skewed the pixels are when projected onto the
-    // earth's surface.
-    g_assert_true(false);
+    // This is a very skewed quadrilateral
+    struct SatPixel pxl2 = {.ul = (struct Coord){.lat = 3.0, .lon = 2.0},
+                            .ll = (struct Coord){.lat = 0.0, .lon = 0.0},
+                            .lr = (struct Coord){.lat = 2.0, .lon = 2.0},
+                            .ur = (struct Coord){.lat = 5.0, .lon = 4.0}};
+
+    inside1 = (struct Coord) {.lat = 2.5, .lon = 2.0};
+
+    outside1 = (struct Coord) {.lat = 2.0, .lon = 1.0};
+    outside2 = (struct Coord) {.lat = 1.0, .lon = 2.0};
+    outside3 = (struct Coord) {.lat = -1.5, .lon = -119.5};
+
+    boundary1 = (struct Coord) {.lat = 1.0, .lon = 1.0};
+    boundary2 = (struct Coord) {.lat = 4.0, .lon = 3.0};
+
+    // Make sure what's inside is in
+    g_assert_true(sat_pixel_contains_coord(&pxl2, inside1));
+
+    // Make sure what's outside is out
+    g_assert_false(sat_pixel_contains_coord(&pxl2, outside1));
+    g_assert_false(sat_pixel_contains_coord(&pxl2, outside2));
+    g_assert_false(sat_pixel_contains_coord(&pxl2, outside3));
+
+    // Make sure what lies on the boundary is NOT contained in the polygon.
+    g_assert_false(sat_pixel_contains_coord(&pxl2, boundary1));
+    g_assert_false(sat_pixel_contains_coord(&pxl2, boundary2));
 }
 
 static void

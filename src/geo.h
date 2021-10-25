@@ -58,8 +58,11 @@ struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 bool sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1],
                              double eps);
 
-/** Determine if a coordinate is interior to a pixel. */
-bool sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[static 1]);
+/** Determine if a coordinate is interior to a pixel. 
+ *
+ * Interior means that it is NOT on the boundary.
+ */
+bool sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord);
 
 /** Determine if satellite pixels overlap.
  *

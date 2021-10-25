@@ -13,41 +13,84 @@ struct Line {
     struct Coord end;
 };
 
-static struct Coord
+struct IntersectResult {
+    struct Coord intersection;
+    char const *msg;
+    bool does_intersect;
+    bool intersect_is_endpoints;
+};
+
+static struct IntersectResult
 lines_intersection(struct Line l1, struct Line l2)
 {
+    struct IntersectResult result = {.intersection = (struct Coord){.lat = NAN, .lon = NAN},
+                                     .does_intersect = false,
+                                     .intersect_is_endpoints = false,
+                                     .msg = "nothing to report"};
+
     double m1 = (l1.end.lat - l1.start.lat) / (l1.end.lon - l1.start.lon);
     double m2 = (l2.end.lat - l2.start.lat) / (l2.end.lon - l2.start.lon);
-
-    // If either is infinite, this is a vertical line and we need to improve the code to handle
-    // that. I don't think that will ever happen. But it could and we should be ready to detect it
-    // when it does!
-    assert(!isinf(m1));
-    assert(!isinf(m2));
-
-    // Parallel lines?! That should NEVER happen with out dataset.
-    assert(m1 != m2);
 
     double x1 = l1.start.lon;
     double y1 = l1.start.lat;
     double x2 = l2.start.lon;
     double y2 = l2.start.lat;
 
-    double x0 = (y2 - y1 + m1 * x1 - m2 * x2) / (m1 - m2);
-    double y0 = m1 * (x0 - x1) + y1;
+    if (m1 == m2 || (isinf(m1) && isinf(m2))) {
+        // NOTE: This also captures colinear cases.
+        result.does_intersect = false;
+        result.msg = "parallel lines";
+        return result;
+    }
 
-    // Assume that the intersection lies in the range of the original lines for our usecase.
-    assert(y0 <= fmax(l1.start.lat, l1.end.lat));
-    assert(y0 <= fmax(l2.start.lat, l2.end.lat));
-    assert(y0 >= fmin(l1.start.lat, l1.end.lat));
-    assert(y0 >= fmin(l2.start.lat, l2.end.lat));
+    double x0 = NAN;
+    double y0 = NAN;
+    if (isinf(m1)) {
+        // l1 is vertical
+        x0 = l1.start.lon;
+        y0 = m2 * (x0 - x2) + y2;
+    } else if (isinf(m2)) {
+        // l2 is vertical
+        x0 = l2.start.lon;
+        y0 = m1 * (x0 - x1) + y1;
+    } else {
+        x0 = (y2 - y1 + m1 * x1 - m2 * x2) / (m1 - m2);
+        y0 = m1 * (x0 - x1) + y1;
+    }
 
-    assert(x0 <= fmax(l1.start.lon, l1.end.lon));
-    assert(x0 <= fmax(l2.start.lon, l2.end.lon));
-    assert(x0 >= fmin(l1.start.lon, l1.end.lon));
-    assert(x0 >= fmin(l2.start.lon, l2.end.lon));
+    result.intersection = (struct Coord){.lat = y0, .lon = x0};
 
-    return (struct Coord){.lat = y0, .lon = x0};
+    if (y0 > fmax(l1.start.lat, l1.end.lat) || y0 < fmin(l1.start.lat, l1.end.lat) ||
+        x0 > fmax(l1.start.lon, l1.end.lon) || x0 < fmin(l1.start.lon, l1.end.lon)) {
+
+        // Test to make sure we are within the limits of l1
+
+        result.does_intersect = false;
+        result.msg = "intersection point outside line segment";
+    } else if (y0 > fmax(l2.start.lat, l2.end.lat)
+               // Test to make sure we are within the limits of l2
+               || y0 < fmin(l2.start.lat, l2.end.lat) || x0 > fmax(l2.start.lon, l2.end.lon) ||
+               x0 < fmin(l2.start.lon, l2.end.lon)) {
+
+        result.does_intersect = false;
+        result.msg = "intersection point outside line segment";
+    } else {
+        result.does_intersect = true;
+
+        bool is_l1_endpoint =
+            ((result.intersection.lat == l1.start.lat && result.intersection.lon == l1.start.lon) ||
+             (result.intersection.lat == l1.end.lat && result.intersection.lon == l1.end.lon));
+
+        bool is_l2_endpoint =
+            ((result.intersection.lat == l2.start.lat && result.intersection.lon == l2.start.lon) ||
+             (result.intersection.lat == l2.end.lat && result.intersection.lon == l2.end.lon));
+
+        if (is_l1_endpoint && is_l2_endpoint) {
+            result.intersect_is_endpoints = true;
+        }
+    }
+
+    return result;
 }
 
 static struct Coord
@@ -57,6 +100,34 @@ triangle_centroid(struct Coord v1, struct Coord v2, struct Coord v3)
     double avg_lon = (v1.lon + v2.lon + v3.lon) / 3.0;
 
     return (struct Coord){.lat = avg_lat, .lon = avg_lon};
+}
+
+struct BoundingBox {
+    struct Coord ll;
+    struct Coord ur;
+};
+
+static struct BoundingBox
+sat_pixel_bounding_box(struct SatPixel const pxl[static 1])
+{
+    double xmax = fmax(pxl->ur.lon, pxl->lr.lon);
+    double xmin = fmin(pxl->ul.lon, pxl->ll.lon);
+    double ymax = fmax(pxl->ur.lat, pxl->ul.lat);
+    double ymin = fmin(pxl->lr.lat, pxl->ll.lat);
+
+    struct Coord ll = {.lat = ymin, .lon = xmin};
+    struct Coord ur = {.lat = ymax, .lon = xmax};
+
+    return (struct BoundingBox){.ll = ll, .ur = ur};
+}
+
+static bool
+bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coord)
+{
+    bool lon_in_range = coord.lon < box.ur.lon && coord.lon > box.ll.lon;
+    bool lat_in_range = coord.lat < box.ur.lat && coord.lat > box.ll.lat;
+
+    return lon_in_range && lat_in_range;
 }
 
 /*-------------------------------------------------------------------------------------------------
@@ -96,22 +167,56 @@ sat_pixel_centroid(struct SatPixel pxl[static 1])
     struct Coord t4_c = triangle_centroid(pxl->lr, pxl->ur, pxl->ll);
     struct Line diag2_centroids = {.start = t3_c, .end = t4_c};
 
-    return lines_intersection(diag1_centroids, diag2_centroids);
+    struct IntersectResult res = lines_intersection(diag1_centroids, diag2_centroids);
+
+    assert(res.does_intersect);
+
+    return res.intersection;
 }
 
 bool
 sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
-    return coord_are_close(left->ul, right->ul, eps) 
-        && coord_are_close(left->ur, right->ur, eps)
-        && coord_are_close(left->lr, right->lr, eps)
-        && coord_are_close(left->ll, right->ll, eps);
+    return coord_are_close(left->ul, right->ul, eps) && coord_are_close(left->ur, right->ur, eps) &&
+           coord_are_close(left->lr, right->lr, eps) && coord_are_close(left->ll, right->ll, eps);
 }
 
 bool
-sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[static 1])
+sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord)
 {
-    assert(false);
+    // Check if it's outside the bounding box first. This is easy, and if it is,
+    // then we already know the answer.
+    struct BoundingBox const box = sat_pixel_bounding_box(pxl);
+
+    if (!bounding_box_contains_coord(box, coord)) {
+        return false;
+    }
+
+    struct Line pxl_lines[4] = {
+        (struct Line){.start = pxl->ul, .end = pxl->ur},
+        (struct Line){.start = pxl->ur, .end = pxl->lr},
+        (struct Line){.start = pxl->lr, .end = pxl->ll},
+        (struct Line){.start = pxl->ll, .end = pxl->ul},
+    };
+
+    struct Line coord_lines[4] = {
+        (struct Line){.start = coord, .end = pxl->ul},
+        (struct Line){.start = coord, .end = pxl->ur},
+        (struct Line){.start = coord, .end = pxl->ll},
+        (struct Line){.start = coord, .end = pxl->lr},
+    };
+
+    for (unsigned int i = 0; i < 4; ++i) {
+        for (unsigned int j = 0; j < 4; ++j) {
+            struct IntersectResult res = lines_intersection(pxl_lines[i], coord_lines[j]);
+
+            if (res.does_intersect && !res.intersect_is_endpoints) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 bool
