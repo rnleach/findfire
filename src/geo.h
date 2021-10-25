@@ -58,7 +58,7 @@ struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 bool sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1],
                              double eps);
 
-/** Determine if a coordinate is interior to a pixel. 
+/** Determine if a coordinate is interior to a pixel.
  *
  * Interior means that it is NOT on the boundary.
  */

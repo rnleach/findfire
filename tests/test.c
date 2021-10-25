@@ -109,14 +109,14 @@ test_sat_pixel_contains_coord(void)
                             .lr = (struct Coord){.lat = 2.0, .lon = 2.0},
                             .ur = (struct Coord){.lat = 5.0, .lon = 4.0}};
 
-    inside1 = (struct Coord) {.lat = 2.5, .lon = 2.0};
+    inside1 = (struct Coord){.lat = 2.5, .lon = 2.0};
 
-    outside1 = (struct Coord) {.lat = 2.0, .lon = 1.0};
-    outside2 = (struct Coord) {.lat = 1.0, .lon = 2.0};
-    outside3 = (struct Coord) {.lat = -1.5, .lon = -119.5};
+    outside1 = (struct Coord){.lat = 2.0, .lon = 1.0};
+    outside2 = (struct Coord){.lat = 1.0, .lon = 2.0};
+    outside3 = (struct Coord){.lat = -1.5, .lon = -119.5};
 
-    boundary1 = (struct Coord) {.lat = 1.0, .lon = 1.0};
-    boundary2 = (struct Coord) {.lat = 4.0, .lon = 3.0};
+    boundary1 = (struct Coord){.lat = 1.0, .lon = 1.0};
+    boundary2 = (struct Coord){.lat = 4.0, .lon = 3.0};
 
     // Make sure what's inside is in
     g_assert_true(sat_pixel_contains_coord(&pxl2, inside1));
