@@ -99,7 +99,7 @@ bool sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel rig
 /** A pixel list stores a list of SatPixel objects. */
 struct PixelList {
     size_t capacity;
-    size_t length;
+    size_t len;
     struct SatPixel pixels[];
 };
 
@@ -109,11 +109,8 @@ struct PixelList *pixel_list_new();
 /** Create a new PixelList with a given capacity. */
 struct PixelList *pixel_list_new_with_capacity(size_t capacity);
 
-/** Destroy a PixelList.
- *
- * Destroy the PixelList an nullify the pointer.
- */
-void pixel_list_destroy(struct PixelList *plist[static 1]);
+/** Destroy a PixelList.  */
+struct PixelList *pixel_list_destroy(struct PixelList plist[static 1]);
 
 /** Append a SatPixel to the list.
  *
@@ -128,9 +125,9 @@ struct PixelList *pixel_list_append(struct PixelList list[static 1],
 
 /** Clear the list but keep the memory in tact.
  *
- * After this call the list is basically in the same state as after calling \a pixel_list_new.
+ * After this call the list is basically in the same state as after calling pixel_list_new().
  */
-void pixel_list_clear(struct PixelList list[static 1]);
+struct PixelList *pixel_list_clear(struct PixelList list[static 1]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format

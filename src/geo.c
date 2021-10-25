@@ -1,8 +1,10 @@
 #include "geo.h"
+#include "util.h"
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <tgmath.h>
 
 /*-------------------------------------------------------------------------------------------------
@@ -390,34 +392,70 @@ sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[st
 /*-------------------------------------------------------------------------------------------------
  *                                         PixelList
  *-----------------------------------------------------------------------------------------------*/
+static struct PixelList *
+pixel_list_expand(struct PixelList plist[static 1])
+{
+    size_t new_capacity = (plist->capacity * 3) / 2;
+
+    plist = realloc(plist, sizeof(struct PixelList) + new_capacity * sizeof(struct SatPixel));
+    Stopif(!plist, exit(EXIT_FAILURE), "unable to realloc, aborting");
+    plist->capacity = new_capacity;
+
+    return plist;
+}
+
 struct PixelList *
 pixel_list_new()
 {
-    assert(false);
+    size_t const initial_capacity = 4;
+
+    return pixel_list_new_with_capacity(initial_capacity);
 }
 
 struct PixelList *
 pixel_list_new_with_capacity(size_t capacity)
 {
-    assert(false);
+    // We have to start at a minimal size of 2 for the 3/2 expansion factor to work (integer
+    // aritmetic).
+    if (capacity < 2) {
+        capacity = 2;
+    }
+
+    struct PixelList *ptr =
+        calloc(sizeof(struct PixelList) + capacity * sizeof(struct SatPixel), sizeof(char));
+
+    Stopif(!ptr, exit(EXIT_FAILURE), "unable to calloc, aborting");
+
+    ptr->capacity = capacity;
+
+    assert(ptr->len == 0);
+    return ptr;
 }
 
-void
-pixel_list_destroy(struct PixelList *plist[static 1])
+struct PixelList *
+pixel_list_destroy(struct PixelList plist[static 1])
 {
-    assert(false);
+    free(plist);
+    return 0;
 }
 
 struct PixelList *
 pixel_list_append(struct PixelList list[static 1], struct SatPixel apix[static 1])
 {
-    assert(false);
+    if (list->len == list->capacity) {
+        list = pixel_list_expand(list);
+    }
+
+    list->pixels[list->len] = *apix;
+    list->len++;
+    return list;
 }
 
-void
+struct PixelList *
 pixel_list_clear(struct PixelList list[static 1])
 {
-    assert(false);
+    list->len = 0;
+    return list;
 }
 
 /*-------------------------------------------------------------------------------------------------
