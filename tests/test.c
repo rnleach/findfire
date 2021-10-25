@@ -64,76 +64,6 @@ test_sat_pixels_approx_equal()
 }
 
 static void
-test_sat_pixels_are_adjacent(void)
-{
-    struct SatPixel pxl_nth = {.ul = (struct Coord){.lat = 46.0, .lon = -120.0},
-                               .ll = (struct Coord){.lat = 45.0, .lon = -120.0},
-                               .lr = (struct Coord){.lat = 45.0, .lon = -119.0},
-                               .ur = (struct Coord){.lat = 46.0, .lon = -119.0}};
-
-    struct SatPixel pxl_wst = {.ul = (struct Coord){.lat = 45.0000002, .lon = -121.0000002},
-                               .ll = (struct Coord){.lat = 44.0000002, .lon = -120.9999998},
-                               .lr = (struct Coord){.lat = 43.9999998, .lon = -120.0000002},
-                               .ur = (struct Coord){.lat = 44.9999998, .lon = -119.9999998}};
-
-    struct SatPixel pxl_mid = {.ul = (struct Coord){.lat = 45.0, .lon = -120.0},
-                               .ll = (struct Coord){.lat = 44.0, .lon = -120.0},
-                               .lr = (struct Coord){.lat = 44.0, .lon = -119.0},
-                               .ur = (struct Coord){.lat = 45.0, .lon = -119.0}};
-
-    struct SatPixel pxl_est = {.ul = (struct Coord){.lat = 45.0, .lon = -119.0},
-                               .ll = (struct Coord){.lat = 44.0, .lon = -119.0},
-                               .lr = (struct Coord){.lat = 44.0, .lon = -118.0},
-                               .ur = (struct Coord){.lat = 45.0, .lon = -118.0}};
-
-    struct SatPixel pxl_sth = {.ul = (struct Coord){.lat = 44.0, .lon = -120.0},
-                               .ll = (struct Coord){.lat = 43.0, .lon = -120.0},
-                               .lr = (struct Coord){.lat = 43.0, .lon = -119.0},
-                               .ur = (struct Coord){.lat = 44.0, .lon = -119.0}};
-
-    // Pixels are not adjacent to themselves.
-    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_wst, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_mid, &pxl_mid, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_est, &pxl_est, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_nth, &pxl_nth, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_sth, &pxl_sth, 1.0e-6));
-
-    // Check west-to-east (order shouldn't matter!)
-    g_assert_true(sat_pixels_are_adjacent(&pxl_wst, &pxl_mid, 1.0e-6));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_est, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_est, 1.0e-6));
-
-    // Check east-to-west (order shouldn't matter!)
-    g_assert_true(sat_pixels_are_adjacent(&pxl_est, &pxl_mid, 1.0e-6));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_wst, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_est, &pxl_wst, 1.0e-6));
-
-    // Check north-to-south (order shouldn't matter!)
-    g_assert_true(sat_pixels_are_adjacent(&pxl_nth, &pxl_mid, 1.0e-6));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_sth, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_nth, &pxl_sth, 1.0e-6));
-
-    // Check south-to-north (order shouldn't matter!)
-    g_assert_true(sat_pixels_are_adjacent(&pxl_sth, &pxl_mid, 1.0e-6));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_nth, 1.0e-6));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_sth, &pxl_nth, 1.0e-6));
-
-    // Check to make sure eps is working.
-    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_mid, 1.0e-8));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_est, 1.0e-8));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_est, 1.0e-8));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_est, &pxl_mid, 1.0e-8));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_mid, &pxl_wst, 1.0e-8));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_est, &pxl_wst, 1.0e-8));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_nth, &pxl_mid, 1.0e-8));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_sth, 1.0e-8));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_nth, &pxl_sth, 1.0e-8));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_sth, &pxl_mid, 1.0e-8));
-    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_nth, 1.0e-8));
-    g_assert_false(sat_pixels_are_adjacent(&pxl_sth, &pxl_nth, 1.0e-8));
-}
-
-static void
 test_sat_pixel_contains_coord(void)
 {
     // This is a simple square of width & height 1 degree of latitude & longitude
@@ -217,6 +147,79 @@ test_sat_pixels_overlap(void)
     g_assert_true(false);
 }
 
+static void
+test_sat_pixels_are_adjacent(void)
+{
+    struct SatPixel pxl_nth = {.ul = (struct Coord){.lat = 46.0, .lon = -120.0},
+                               .ll = (struct Coord){.lat = 45.0, .lon = -120.0},
+                               .lr = (struct Coord){.lat = 45.0, .lon = -119.0},
+                               .ur = (struct Coord){.lat = 46.0, .lon = -119.0}};
+
+    struct SatPixel pxl_wst = {.ul = (struct Coord){.lat = 45.0000002, .lon = -121.0000002},
+                               .ll = (struct Coord){.lat = 44.0000002, .lon = -120.9999998},
+                               .lr = (struct Coord){.lat = 43.9999998, .lon = -120.0000002},
+                               .ur = (struct Coord){.lat = 44.9999998, .lon = -119.9999998}};
+
+    struct SatPixel pxl_mid = {.ul = (struct Coord){.lat = 45.0, .lon = -120.0},
+                               .ll = (struct Coord){.lat = 44.0, .lon = -120.0},
+                               .lr = (struct Coord){.lat = 44.0, .lon = -119.0},
+                               .ur = (struct Coord){.lat = 45.0, .lon = -119.0}};
+
+    struct SatPixel pxl_est = {.ul = (struct Coord){.lat = 45.0, .lon = -119.0},
+                               .ll = (struct Coord){.lat = 44.0, .lon = -119.0},
+                               .lr = (struct Coord){.lat = 44.0, .lon = -118.0},
+                               .ur = (struct Coord){.lat = 45.0, .lon = -118.0}};
+
+    struct SatPixel pxl_sth = {.ul = (struct Coord){.lat = 44.0, .lon = -120.0},
+                               .ll = (struct Coord){.lat = 43.0, .lon = -120.0},
+                               .lr = (struct Coord){.lat = 43.0, .lon = -119.0},
+                               .ur = (struct Coord){.lat = 44.0, .lon = -119.0}};
+
+    // Pixels are not adjacent to themselves.
+    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_wst, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_mid, &pxl_mid, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_est, &pxl_est, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_nth, &pxl_nth, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_sth, &pxl_sth, 1.0e-6));
+
+    // Check west-to-east (order shouldn't matter!)
+    g_assert_true(sat_pixels_are_adjacent(&pxl_wst, &pxl_mid, 1.0e-6));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_est, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_est, 1.0e-6));
+
+    // Check east-to-west (order shouldn't matter!)
+    g_assert_true(sat_pixels_are_adjacent(&pxl_est, &pxl_mid, 1.0e-6));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_wst, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_est, &pxl_wst, 1.0e-6));
+
+    // Check north-to-south (order shouldn't matter!)
+    g_assert_true(sat_pixels_are_adjacent(&pxl_nth, &pxl_mid, 1.0e-6));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_sth, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_nth, &pxl_sth, 1.0e-6));
+
+    // Check south-to-north (order shouldn't matter!)
+    g_assert_true(sat_pixels_are_adjacent(&pxl_sth, &pxl_mid, 1.0e-6));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_nth, 1.0e-6));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_sth, &pxl_nth, 1.0e-6));
+
+    // Check to make sure eps is working.
+    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_mid, 1.0e-8));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_est, 1.0e-8));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_wst, &pxl_est, 1.0e-8));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_est, &pxl_mid, 1.0e-8));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_mid, &pxl_wst, 1.0e-8));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_est, &pxl_wst, 1.0e-8));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_nth, &pxl_mid, 1.0e-8));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_sth, 1.0e-8));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_nth, &pxl_sth, 1.0e-8));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_sth, &pxl_mid, 1.0e-8));
+    g_assert_true(sat_pixels_are_adjacent(&pxl_mid, &pxl_nth, 1.0e-8));
+    g_assert_false(sat_pixels_are_adjacent(&pxl_sth, &pxl_nth, 1.0e-8));
+
+    // TODO: I haven't tested the case where adjacent pixels share a single corner.
+    g_assert_true(false);
+}
+
 /*-------------------------------------------------------------------------------------------------
  *
  *                                      Main Test Runner
@@ -239,9 +242,9 @@ main(int argc, char *argv[static 1])
     // SatPixel
     g_test_add_func("/geo/sat_pixel/sat_pixel_centroid", test_sat_pixel_centroid);
     g_test_add_func("/geo/sat_pixel/sat_pixels_approx_equal", test_sat_pixels_approx_equal);
-    g_test_add_func("/geo/sat_pixel/sat_pixels_are_adjacent", test_sat_pixels_are_adjacent);
     g_test_add_func("/geo/sat_pixel/sat_pixel_contains_coord", test_sat_pixel_contains_coord);
     g_test_add_func("/geo/sat_pixel/sat_pixels_overlap", test_sat_pixels_overlap);
+    g_test_add_func("/geo/sat_pixel/sat_pixels_are_adjacent", test_sat_pixels_are_adjacent);
 
     //
     // Run tests

@@ -58,17 +58,6 @@ struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 bool sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1],
                              double eps);
 
-/** Determine if satellite pixels are adjacent.
- *
- * Adjacent is defined as having at least one corner that is close to a coordinate in the other.
- *
- * \param left a satellite pixel to check.
- * \param right the pixel to check against.
- * \param eps The scale to use for comparison in the same units as the lat and lon.
- **/
-bool sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1],
-                             double eps);
-
 /** Determine if a coordinate is interior to a pixel. */
 bool sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[static 1]);
 
@@ -77,6 +66,18 @@ bool sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[
  * Overlapping is defined as one pixel having a vertex / corner that is interior to the other one.
  */
 bool sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1]);
+
+/** Determine if satellite pixels are adjacent.
+ *
+ * Adjacent is defined as having at least one corner that is 'eps' close to a coordinate in the
+ * other. Adjacent pixels cannot overlap.
+ *
+ * \param left a satellite pixel to check.
+ * \param right the pixel to check against.
+ * \param eps The scale to use for comparison in the same units as the lat and lon.
+ **/
+bool sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1],
+                             double eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         PixelList

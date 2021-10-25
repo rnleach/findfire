@@ -109,12 +109,6 @@ sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[st
 }
 
 bool
-sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
-{
-    assert(false);
-}
-
-bool
 sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[static 1])
 {
     assert(false);
@@ -122,6 +116,12 @@ sat_pixel_contains_coord(struct SatPixel pxl[static 1], struct Coord coord[stati
 
 bool
 sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1])
+{
+    assert(false);
+}
+
+bool
+sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
     assert(false);
 }
