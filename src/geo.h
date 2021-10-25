@@ -66,9 +66,13 @@ bool sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord 
 
 /** Determine if satellite pixels overlap.
  *
- * Overlapping is defined as one pixel having a vertex / corner that is interior to the other one.
+ * Overlapping is defined as one pixel having a vertex / corner that is interior to the other one 
+ * or as pixels having edges that intersect.
+ *
+ * The eps parameter is ONLY used for checking if the SatPixels are approximately equal, it isn't
+ * used anywhere else in the algorithm.
  */
-bool sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1]);
+bool sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps);
 
 /** Determine if satellite pixels are adjacent.
  *

@@ -149,24 +149,32 @@ test_sat_pixels_overlap(void)
                             .lr = (struct Coord){.lat = 45.0, .lon = -119.0},
                             .ur = (struct Coord){.lat = 46.0, .lon = -119.0}};
 
-    // pixels are always overlapping them selves.
-    g_assert_true(sat_pixels_overlap(&pxl1, &pxl1));
-    g_assert_true(sat_pixels_overlap(&pxl2, &pxl2));
-    g_assert_true(sat_pixels_overlap(&pxl3, &pxl3));
+    // The corners of pxl4 lie along the mid-points of pxl1. So they overlap.
+    struct SatPixel pxl4 = {.ul = (struct Coord){.lat = 45.0, .lon = -119.5},
+                            .ll = (struct Coord){.lat = 44.5, .lon = -120.0},
+                            .lr = (struct Coord){.lat = 44.0, .lon = -119.5},
+                            .ur = (struct Coord){.lat = 44.5, .lon = -119.0}};
+
+    // pixels are always overlapping themselves.
+    g_assert_true(sat_pixels_overlap(&pxl1, &pxl1, 1.0e-6));
+    g_assert_true(sat_pixels_overlap(&pxl2, &pxl2, 1.0e-6));
+    g_assert_true(sat_pixels_overlap(&pxl3, &pxl3, 1.0e-6));
+    g_assert_true(sat_pixels_overlap(&pxl4, &pxl4, 1.0e-6));
 
     // pxl1 and pxl3 are adjacent, but they do not overlap.
-    g_assert_false(sat_pixels_overlap(&pxl1, &pxl3));
-    g_assert_false(sat_pixels_overlap(&pxl3, &pxl1));
+    g_assert_false(sat_pixels_overlap(&pxl1, &pxl3, 1.0e-6));
+    g_assert_false(sat_pixels_overlap(&pxl3, &pxl1, 1.0e-6));
 
     // pxl2 overlaps pxl1 and pxl3 - order doesn't matter
-    g_assert_true(sat_pixels_overlap(&pxl1, &pxl2));
-    g_assert_true(sat_pixels_overlap(&pxl2, &pxl1));
+    g_assert_true(sat_pixels_overlap(&pxl1, &pxl2, 1.0e-6));
+    g_assert_true(sat_pixels_overlap(&pxl2, &pxl1, 1.0e-6));
 
-    g_assert_true(sat_pixels_overlap(&pxl3, &pxl2));
-    g_assert_true(sat_pixels_overlap(&pxl2, &pxl3));
+    g_assert_true(sat_pixels_overlap(&pxl3, &pxl2, 1.0e-6));
+    g_assert_true(sat_pixels_overlap(&pxl2, &pxl3, 1.0e-6));
 
-    // TODO: Test the case where a vertex lies on the boundary.
-    g_assert_true(false);
+    // Test the case where a vertex lies on the boundary.
+    g_assert_true(sat_pixels_overlap(&pxl1, &pxl4, 1.0e-6));
+    g_assert_true(sat_pixels_overlap(&pxl4, &pxl1, 1.0e-6));
 }
 
 static void

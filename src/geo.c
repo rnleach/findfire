@@ -220,9 +220,70 @@ sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord
 }
 
 bool
-sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1])
+sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
-    assert(false);
+    // Check if they are equal first, then of course they overlap!
+    if (sat_pixels_approx_equal(left, right, eps)) {
+        return true;
+    }
+
+    // If pixels overlap, then at least 1 vertex from one pixel must be inside the boundary of
+    // the other pixel or the pixels must have lines that intersect. In the case of one pixel 
+    // completely contained inside another (extremely unlikely), there would be no intersections
+    // but all the points of one would be contained in another. In any other case, there must be
+    // an intersection of lines. 
+    //
+    // This is all by my own reasoning, not based on any math book or papers on geometry. I'm
+    // assuming all pixels are convex quadrilaterals.
+
+    // Check for intersecting lines between the pixels.
+    struct Line left_pxl_lines[4] = {
+        (struct Line){.start = left->ul, .end = left->ur},
+        (struct Line){.start = left->ur, .end = left->lr},
+        (struct Line){.start = left->lr, .end = left->ll},
+        (struct Line){.start = left->ll, .end = left->ul},
+    };
+
+    struct Line right_pxl_lines[4] = {
+        (struct Line){.start = right->ul, .end = right->ur},
+        (struct Line){.start = right->ur, .end = right->lr},
+        (struct Line){.start = right->lr, .end = right->ll},
+        (struct Line){.start = right->ll, .end = right->ul},
+    };
+
+    for(unsigned i = 0; i < 4; ++i) {
+        struct Line left = left_pxl_lines[i];
+
+        for (unsigned j = 0; j < 4; ++j) {
+            struct Line right = right_pxl_lines[j];
+
+            struct IntersectResult res = lines_intersection(left, right);
+
+            if (res.does_intersect && !res.intersect_is_endpoints) {
+                return true;
+            }
+        }
+    }
+
+    // Checking for intersecting lines didn't find anything. Now try seeing if one pixel is
+    // contained in the other pixel.
+    struct Coord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
+    for(unsigned i = 0; i < 4; ++i) {
+        if (sat_pixel_contains_coord(right, left_coords[i])) {
+            return true;
+        }
+    }
+
+    struct Coord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
+    for(unsigned i = 0; i < 4; ++i) {
+        if (sat_pixel_contains_coord(left, right_coords[i])) {
+            return true;
+        }
+    }
+
+    // No intersecting lines and no corners of one pixel contained in the other, so there
+    // is no overlap.
+    return false;
 }
 
 bool
