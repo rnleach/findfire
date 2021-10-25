@@ -142,29 +142,38 @@ struct BoundingBox {
     struct Coord ur;
 };
 
-static struct BoundingBox
-sat_pixel_bounding_box(struct SatPixel const pxl[static 1])
-{
-    double xmax = fmax(pxl->ur.lon, pxl->lr.lon);
-    double xmin = fmin(pxl->ul.lon, pxl->ll.lon);
-    double ymax = fmax(pxl->ur.lat, pxl->ul.lat);
-    double ymin = fmin(pxl->lr.lat, pxl->ll.lat);
-
-    struct Coord ll = {.lat = ymin, .lon = xmin};
-    struct Coord ur = {.lat = ymax, .lon = xmax};
-
-    return (struct BoundingBox){.ll = ll, .ur = ur};
-}
-
 static bool
-bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coord)
+bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coord, double eps)
 {
-    bool lon_in_range = coord.lon < box.ur.lon && coord.lon > box.ll.lon;
-    bool lat_in_range = coord.lat < box.ur.lat && coord.lat > box.ll.lat;
+    bool lon_in_range = (coord.lon - box.ur.lon) < eps && (coord.lon - box.ll.lon) > -eps;
+    bool lat_in_range = (coord.lat - box.ur.lat) < eps && (coord.lat - box.ll.lat) > -eps;
 
     return lon_in_range && lat_in_range;
 }
 
+static bool
+bounding_boxes_overlap(struct BoundingBox const left, struct BoundingBox const right, double eps)
+{
+    struct Coord right_coords[4] = {right.ll, right.ur,
+                                    (struct Coord){.lat = right.ll.lat, .lon = right.ur.lon},
+                                    (struct Coord){.lat = right.ur.lat, .lon = right.ll.lon}};
+
+    struct Coord left_coords[4] = {left.ll, left.ur,
+                                    (struct Coord){.lat = left.ll.lat, .lon = left.ur.lon},
+                                    (struct Coord){.lat = left.ur.lat, .lon = left.ll.lon}};
+
+    for (unsigned int i = 0; i < 4; ++i) {
+        if (bounding_box_contains_coord(left, right_coords[i], eps)) {
+            return true;
+        }
+
+        if (bounding_box_contains_coord(right, left_coords[i], eps)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 /*-------------------------------------------------------------------------------------------------
  *                                         Coordinates
  *-----------------------------------------------------------------------------------------------*/
@@ -181,6 +190,31 @@ coord_are_close(struct Coord left, struct Coord right, double eps)
 /*-------------------------------------------------------------------------------------------------
  *                                         SatPixels
  *-----------------------------------------------------------------------------------------------*/
+
+static struct BoundingBox
+sat_pixel_bounding_box(struct SatPixel const pxl[static 1])
+{
+    double xmax = fmax(pxl->ur.lon, pxl->lr.lon);
+    double xmin = fmin(pxl->ul.lon, pxl->ll.lon);
+    double ymax = fmax(pxl->ur.lat, pxl->ul.lat);
+    double ymin = fmin(pxl->lr.lat, pxl->ll.lat);
+
+    struct Coord ll = {.lat = ymin, .lon = xmin};
+    struct Coord ur = {.lat = ymax, .lon = xmax};
+
+    return (struct BoundingBox){.ll = ll, .ur = ur};
+}
+
+static bool
+sat_pixels_bounding_boxes_overlap(struct SatPixel const left[static 1],
+                                  struct SatPixel const right[static 1], double eps)
+{
+    struct BoundingBox bb_left = sat_pixel_bounding_box(left);
+    struct BoundingBox bb_right = sat_pixel_bounding_box(right);
+
+    return bounding_boxes_overlap(bb_left, bb_right, eps);
+}
+
 struct Coord
 sat_pixel_centroid(struct SatPixel pxl[static 1])
 {
@@ -223,7 +257,7 @@ sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord
     // then we already know the answer.
     struct BoundingBox const box = sat_pixel_bounding_box(pxl);
 
-    if (!bounding_box_contains_coord(box, coord)) {
+    if (!bounding_box_contains_coord(box, coord, eps)) {
         return false;
     }
 
@@ -267,6 +301,11 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
     // Check if they are equal first, then of course they overlap!
     if (sat_pixels_approx_equal(left, right, eps)) {
         return true;
+    }
+
+    // Check the bounding boxes.
+    if (!sat_pixels_bounding_boxes_overlap(left, right, eps)) {
+        return false;
     }
 
     // If pixels overlap, then at least 1 vertex from one pixel must be inside the boundary of
@@ -332,6 +371,10 @@ bool
 sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
     if (sat_pixels_approx_equal(left, right, eps)) {
+        return false;
+    }
+
+    if (!sat_pixels_bounding_boxes_overlap(left, right, eps)) {
         return false;
     }
 
