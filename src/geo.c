@@ -20,13 +20,47 @@ struct IntersectResult {
     bool intersect_is_endpoints;
 };
 
+static bool
+line_coord_is_close(struct Line const line, struct Coord const coord, double eps)
+{
+    struct Coord p0 = coord;
+    struct Coord p1 = line.start;
+    struct Coord p2 = line.end;
+    double eps2 = eps * eps;
+
+    double num = (p2.lon - p1.lon) * (p1.lat - p0.lat) - (p1.lon - p0.lon) * (p2.lat - p1.lat);
+    double denom2 = (p2.lon - p1.lon) * (p2.lon - p1.lon) + (p2.lat - p1.lat) * (p2.lat - p1.lat);
+
+    return (num * num / denom2) <= eps2;
+}
+
 static struct IntersectResult
-lines_intersection(struct Line l1, struct Line l2)
+lines_intersection(struct Line l1, struct Line l2, double eps)
 {
     struct IntersectResult result = {.intersection = (struct Coord){.lat = NAN, .lon = NAN},
                                      .does_intersect = false,
                                      .intersect_is_endpoints = false,
                                      .msg = "nothing to report"};
+
+    // Check if they are nearly co-linear
+    unsigned int num_close = 0;
+    if (line_coord_is_close(l1, l2.start, eps)) {
+        ++num_close;
+    }
+    if (line_coord_is_close(l1, l2.end, eps)) {
+        ++num_close;
+    }
+    if (line_coord_is_close(l2, l1.start, eps)) {
+        ++num_close;
+    }
+    if (line_coord_is_close(l2, l1.end, eps)) {
+        ++num_close;
+    }
+    if (num_close > 1) {
+        result.does_intersect = false;
+        result.msg = "colinear";
+        return result;
+    }
 
     double m1 = (l1.end.lat - l1.start.lat) / (l1.end.lon - l1.start.lon);
     double m2 = (l2.end.lat - l2.start.lat) / (l2.end.lon - l2.start.lon);
@@ -59,18 +93,19 @@ lines_intersection(struct Line l1, struct Line l2)
     }
 
     result.intersection = (struct Coord){.lat = y0, .lon = x0};
+    struct Coord intersect = result.intersection; // short-hand
 
-    if (y0 > fmax(l1.start.lat, l1.end.lat) || y0 < fmin(l1.start.lat, l1.end.lat) ||
-        x0 > fmax(l1.start.lon, l1.end.lon) || x0 < fmin(l1.start.lon, l1.end.lon)) {
-
+    if (y0 - fmax(l1.start.lat, l1.end.lat) > eps || fmin(l1.start.lat, l1.end.lat) - y0 > eps ||
+        x0 - fmax(l1.start.lon, l1.end.lon) > eps || fmin(l1.start.lon, l1.end.lon) - x0 > eps) {
         // Test to make sure we are within the limits of l1
 
         result.does_intersect = false;
         result.msg = "intersection point outside line segment";
-    } else if (y0 > fmax(l2.start.lat, l2.end.lat)
-               // Test to make sure we are within the limits of l2
-               || y0 < fmin(l2.start.lat, l2.end.lat) || x0 > fmax(l2.start.lon, l2.end.lon) ||
-               x0 < fmin(l2.start.lon, l2.end.lon)) {
+    } else if (y0 - fmax(l2.start.lat, l2.end.lat) > eps ||
+               fmin(l2.start.lat, l2.end.lat) - y0 > eps ||
+               x0 - fmax(l2.start.lon, l2.end.lon) > eps ||
+               fmin(l2.start.lon, l2.end.lon) - x0 > eps) {
+        // Test to make sure we are within the limits of l2
 
         result.does_intersect = false;
         result.msg = "intersection point outside line segment";
@@ -78,12 +113,10 @@ lines_intersection(struct Line l1, struct Line l2)
         result.does_intersect = true;
 
         bool is_l1_endpoint =
-            ((result.intersection.lat == l1.start.lat && result.intersection.lon == l1.start.lon) ||
-             (result.intersection.lat == l1.end.lat && result.intersection.lon == l1.end.lon));
+            coord_are_close(intersect, l1.start, eps) || coord_are_close(intersect, l1.end, eps);
 
         bool is_l2_endpoint =
-            ((result.intersection.lat == l2.start.lat && result.intersection.lon == l2.start.lon) ||
-             (result.intersection.lat == l2.end.lat && result.intersection.lon == l2.end.lon));
+            coord_are_close(intersect, l2.start, eps) || coord_are_close(intersect, l2.end, eps);
 
         if (is_l1_endpoint && is_l2_endpoint) {
             result.intersect_is_endpoints = true;
@@ -167,7 +200,7 @@ sat_pixel_centroid(struct SatPixel pxl[static 1])
     struct Coord t4_c = triangle_centroid(pxl->lr, pxl->ur, pxl->ll);
     struct Line diag2_centroids = {.start = t3_c, .end = t4_c};
 
-    struct IntersectResult res = lines_intersection(diag1_centroids, diag2_centroids);
+    struct IntersectResult res = lines_intersection(diag1_centroids, diag2_centroids, 1.0e-30);
 
     assert(res.does_intersect);
 
@@ -182,7 +215,7 @@ sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[st
 }
 
 bool
-sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord)
+sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord, double eps)
 {
     // Check if it's outside the bounding box first. This is easy, and if it is,
     // then we already know the answer.
@@ -192,6 +225,13 @@ sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord
         return false;
     }
 
+    // Make a line from the point in question to each corner of the quadrilateral. If any of those
+    // lines intersect an edge of the quadrilateral, the the point is outside. Note that the
+    // line_intersection() function takes the eps argument and uses that to determine if the
+    // intersection is near an end point. If it is, then we ignore it. So there is some fuzziness
+    // to this function. If a coordinate outside the pixel is close enough to one of the edges,
+    // it is possible it would be classified as inside. But it has to be eps close! And even then
+    // it's not guaranteed.
     struct Line pxl_lines[4] = {
         (struct Line){.start = pxl->ul, .end = pxl->ur},
         (struct Line){.start = pxl->ur, .end = pxl->lr},
@@ -208,7 +248,7 @@ sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord
 
     for (unsigned int i = 0; i < 4; ++i) {
         for (unsigned int j = 0; j < 4; ++j) {
-            struct IntersectResult res = lines_intersection(pxl_lines[i], coord_lines[j]);
+            struct IntersectResult res = lines_intersection(pxl_lines[i], coord_lines[j], eps);
 
             if (res.does_intersect && !res.intersect_is_endpoints) {
                 return false;
@@ -228,10 +268,10 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
     }
 
     // If pixels overlap, then at least 1 vertex from one pixel must be inside the boundary of
-    // the other pixel or the pixels must have lines that intersect. In the case of one pixel 
+    // the other pixel or the pixels must have lines that intersect. In the case of one pixel
     // completely contained inside another (extremely unlikely), there would be no intersections
     // but all the points of one would be contained in another. In any other case, there must be
-    // an intersection of lines. 
+    // an intersection of lines.
     //
     // This is all by my own reasoning, not based on any math book or papers on geometry. I'm
     // assuming all pixels are convex quadrilaterals.
@@ -251,13 +291,13 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
         (struct Line){.start = right->ll, .end = right->ul},
     };
 
-    for(unsigned i = 0; i < 4; ++i) {
+    for (unsigned i = 0; i < 4; ++i) {
         struct Line left = left_pxl_lines[i];
 
         for (unsigned j = 0; j < 4; ++j) {
             struct Line right = right_pxl_lines[j];
 
-            struct IntersectResult res = lines_intersection(left, right);
+            struct IntersectResult res = lines_intersection(left, right, eps);
 
             if (res.does_intersect && !res.intersect_is_endpoints) {
                 return true;
@@ -268,15 +308,15 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
     // Checking for intersecting lines didn't find anything. Now try seeing if one pixel is
     // contained in the other pixel.
     struct Coord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
-    for(unsigned i = 0; i < 4; ++i) {
-        if (sat_pixel_contains_coord(right, left_coords[i])) {
+    for (unsigned i = 0; i < 4; ++i) {
+        if (sat_pixel_contains_coord(right, left_coords[i], eps)) {
             return true;
         }
     }
 
     struct Coord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
-    for(unsigned i = 0; i < 4; ++i) {
-        if (sat_pixel_contains_coord(left, right_coords[i])) {
+    for (unsigned i = 0; i < 4; ++i) {
+        if (sat_pixel_contains_coord(left, right_coords[i], eps)) {
             return true;
         }
     }
@@ -289,7 +329,62 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
 bool
 sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
 {
-    assert(false);
+    if (sat_pixels_approx_equal(left, right, eps)) {
+        return false;
+    }
+
+    struct Coord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
+    struct Coord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
+
+    // Count the number of close coords and mark which ones are close.
+    bool left_close[4] = {false, false, false, false};
+    bool right_close[4] = {false, false, false, false};
+    unsigned int num_close_coords = 0;
+    for (unsigned int i = 0; i < 4; ++i) {
+        for (unsigned int j = 0; j < 4; ++j) {
+            if (coord_are_close(left_coords[i], right_coords[j], eps)) {
+                ++num_close_coords;
+                left_close[i] = true;
+                right_close[j] = true;
+            }
+        }
+    }
+
+    // bail out early if we can
+    if (num_close_coords < 1 || num_close_coords > 2) {
+        return false;
+    }
+
+    // Check if any not close points are contained in the other pixel
+    for (unsigned int i = 0; i < 4; ++i) {
+        if (!left_close[i]) {
+            if (sat_pixel_contains_coord(right, left_coords[i], eps)) {
+                return false;
+            }
+        }
+
+        if (!right_close[i]) {
+            if (sat_pixel_contains_coord(left, right_coords[i], eps)) {
+                return false;
+            }
+        }
+    }
+
+    // The following is a heuristic that should catch most of the remaining edge cases. For the
+    // satellite data this program will be working with, this should really be more than good
+    // enough.
+
+    // If they are adjacent, the centroid of neither should be interior to the other.
+    struct Coord left_centroid = sat_pixel_centroid(left);
+    if (sat_pixel_contains_coord(right, left_centroid, eps)) {
+        return false;
+    }
+    struct Coord right_centroid = sat_pixel_centroid(right);
+    if (sat_pixel_contains_coord(left, right_centroid, eps)) {
+        return false;
+    }
+
+    return true;
 }
 
 /*-------------------------------------------------------------------------------------------------

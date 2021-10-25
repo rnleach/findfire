@@ -6,11 +6,11 @@
  *
  * For the purpose of working with GOES-R/S satellite imagery working with quadrilaterals
  * representing the area of a scan pixel on earth as viewed from the satellite is all that is
- * necessary. A general purpose GIS library, such as GDAL, is not necessary. During prototyping,
- * using a general purpose GIS library actually proved to be very problematic. The nature of
- * floating point numbers combined with the nature of working with so many adjacent pixels caused
- * more problems than a general GIS library could handle. The particular dataset we are working with
- * is rife with edge cases that were difficult to handle.
+ * necessary. A general purpose GIS library, such as GDAL, is not necessary. During prototyping with
+ * a general purpose GIS library, it actually proved to be very problematic. The nature of floating
+ * point numbers combined with the nature of working with so many adjacent pixels caused more
+ * problems than a general GIS library could handle. This type of dataset is rife with edge cases
+ * that were difficult to handle.
  *
  * To deal with those edge cases, this module deals directly with the approximate equality of
  * floating point values.
@@ -54,30 +54,37 @@ struct SatPixel {
  */
 struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 
-/** Are these pixels basically the same pixel. */
+/** Tests if these pixels are basically the same pixel.
+ *
+ * This compares the four corners of the pixel using the coord_are_close() function.
+ */
 bool sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1],
                              double eps);
 
 /** Determine if a coordinate is interior to a pixel.
  *
- * Interior means that it is NOT on the boundary.
+ * Interior means that it is NOT on the boundary. The eps parameter is used by an interanl line
+ * intersection function to detect if the intersection point is very close to an end point.
  */
-bool sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord);
+bool sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord, double eps);
 
 /** Determine if satellite pixels overlap.
  *
- * Overlapping is defined as one pixel having a vertex / corner that is interior to the other one 
+ * Overlapping is defined as one pixel having a vertex / corner that is interior to the other one
  * or as pixels having edges that intersect.
  *
- * The eps parameter is ONLY used for checking if the SatPixels are approximately equal, it isn't
- * used anywhere else in the algorithm.
+ * The eps parameter is used as a parameter for any cases where floating point values need to be
+ * compared. There are a few places in the algorithm where that happens, and if they are within
+ * eps units of each other, they are considered equal.
  */
-bool sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps);
+bool sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1],
+                        double eps);
 
 /** Determine if satellite pixels are adjacent.
  *
  * Adjacent is defined as having at least one corner that is 'eps' close to a coordinate in the
- * other. Adjacent pixels cannot overlap.
+ * other. Adjacent pixels may overlap also because sat_pixels_overlap() uses the eps variable in
+ * determining overlap. However, if there is a large overlap, the pixels aren't adjacent.
  *
  * \param left a satellite pixel to check.
  * \param right the pixel to check against.
