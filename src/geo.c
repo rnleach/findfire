@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <tgmath.h>
 
 /*-------------------------------------------------------------------------------------------------
@@ -159,8 +160,8 @@ bounding_boxes_overlap(struct BoundingBox const left, struct BoundingBox const r
                                     (struct Coord){.lat = right.ur.lat, .lon = right.ll.lon}};
 
     struct Coord left_coords[4] = {left.ll, left.ur,
-                                    (struct Coord){.lat = left.ll.lat, .lon = left.ur.lon},
-                                    (struct Coord){.lat = left.ur.lat, .lon = left.ll.lon}};
+                                   (struct Coord){.lat = left.ll.lat, .lon = left.ur.lon},
+                                   (struct Coord){.lat = left.ur.lat, .lon = left.ll.lon}};
 
     for (unsigned int i = 0; i < 4; ++i) {
         if (bounding_box_contains_coord(left, right_coords[i], eps)) {
@@ -507,20 +508,35 @@ pixel_list_clear(struct PixelList list[static 1])
 size_t
 pixel_list_binary_serialize_buffer_size(struct PixelList plist[static 1])
 {
-    assert(false);
+    return sizeof(struct PixelList) + sizeof(struct SatPixel) * plist->len;
 }
 
 size_t
 pixel_list_binary_serialize(struct PixelList plist[static 1], size_t buf_size,
                             unsigned char buffer[buf_size])
 {
-    assert(false);
+    memcpy(buffer, plist, buf_size);
+
+    return buf_size;
 }
 
 struct PixelList *
-pixel_list_binary_deserialize(size_t buf_size, unsigned char buffer[buf_size])
+pixel_list_binary_deserialize(unsigned char buffer[static sizeof(size_t)])
 {
-    assert(false);
+    // member len needs to be first for the current binary serialization scheme.
+    size_t len = 0;
+    memcpy(&len, buffer, sizeof(len));
+
+    size_t buf_len = sizeof(struct PixelList) + sizeof(struct SatPixel) * len;
+
+    struct PixelList *list = calloc(buf_len, sizeof(unsigned char));
+
+    Stopif(!list, exit(EXIT_FAILURE), "out of memory, aborting");
+
+    memcpy(list, buffer, buf_len);
+    list->capacity = list->len;
+
+    return list;
 }
 
 /*-------------------------------------------------------------------------------------------------

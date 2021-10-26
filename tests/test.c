@@ -1,4 +1,5 @@
 
+#include <float.h>
 #include <locale.h>
 #include <stdbool.h>
 
@@ -421,6 +422,100 @@ test_sat_pixels_are_adjacent(void)
     g_assert_false(sat_pixels_are_adjacent(&sub_pxl_02, &pxl_00, 1.0e-6));
 }
 
+// ------------------------------ Tests for PixelList Serialization -------------------------------
+struct PixelListFixture {
+    struct PixelList *list;
+};
+
+static void
+pixel_list_test_setup(struct PixelListFixture fixture[static 1], gconstpointer _unused)
+{
+    struct SatPixel pixels[9] = {{.ul = (struct Coord){.lat = 46.0, .lon = -121.0},
+                                  .ll = (struct Coord){.lat = 45.0, .lon = -121.0},
+                                  .lr = (struct Coord){.lat = 45.0, .lon = -120.0},
+                                  .ur = (struct Coord){.lat = 46.0, .lon = -120.0}},
+
+                                 {.ul = (struct Coord){.lat = 46.0, .lon = -120.0},
+                                  .ll = (struct Coord){.lat = 45.0, .lon = -120.0},
+                                  .lr = (struct Coord){.lat = 45.0, .lon = -119.0},
+                                  .ur = (struct Coord){.lat = 46.0, .lon = -119.0}},
+
+                                 {.ul = (struct Coord){.lat = 46.0, .lon = -119.0},
+                                  .ll = (struct Coord){.lat = 45.0, .lon = -119.0},
+                                  .lr = (struct Coord){.lat = 45.0, .lon = -118.0},
+                                  .ur = (struct Coord){.lat = 46.0, .lon = -118.0}},
+
+                                 {.ul = (struct Coord){.lat = 45.0000002, .lon = -121.0000002},
+                                  .ll = (struct Coord){.lat = 44.0000002, .lon = -120.9999998},
+                                  .lr = (struct Coord){.lat = 43.9999998, .lon = -120.0000002},
+                                  .ur = (struct Coord){.lat = 44.9999998, .lon = -119.9999998}},
+
+                                 {.ul = (struct Coord){.lat = 45.0, .lon = -120.0},
+                                  .ll = (struct Coord){.lat = 44.0, .lon = -120.0},
+                                  .lr = (struct Coord){.lat = 44.0, .lon = -119.0},
+                                  .ur = (struct Coord){.lat = 45.0, .lon = -119.0}},
+
+                                 {.ul = (struct Coord){.lat = 45.0, .lon = -119.0},
+                                  .ll = (struct Coord){.lat = 44.0, .lon = -119.0},
+                                  .lr = (struct Coord){.lat = 44.0, .lon = -118.0},
+                                  .ur = (struct Coord){.lat = 45.0, .lon = -118.0}},
+
+                                 {.ul = (struct Coord){.lat = 44.0, .lon = -121.0},
+                                  .ll = (struct Coord){.lat = 43.0, .lon = -121.0},
+                                  .lr = (struct Coord){.lat = 43.0, .lon = -120.0},
+                                  .ur = (struct Coord){.lat = 44.0, .lon = -120.0}},
+
+                                 {.ul = (struct Coord){.lat = 44.0, .lon = -120.0},
+                                  .ll = (struct Coord){.lat = 43.0, .lon = -120.0},
+                                  .lr = (struct Coord){.lat = 43.0, .lon = -119.0},
+                                  .ur = (struct Coord){.lat = 44.0, .lon = -119.0}},
+
+                                 {.ul = (struct Coord){.lat = 44.0, .lon = -119.0},
+                                  .ll = (struct Coord){.lat = 43.0, .lon = -119.0},
+                                  .lr = (struct Coord){.lat = 43.0, .lon = -118.0},
+                                  .ur = (struct Coord){.lat = 44.0, .lon = -118.0}}};
+
+    fixture->list = pixel_list_new();
+
+    for (unsigned int i = 0; i < sizeof(pixels) / sizeof(pixels[0]); ++i) {
+        fixture->list = pixel_list_append(fixture->list, &pixels[i]);
+    }
+}
+
+static void
+pixel_list_test_teaddown(struct PixelListFixture fixture[static 1], gconstpointer _unused)
+{
+    fixture->list = pixel_list_destroy(fixture->list);
+}
+
+static void
+pixel_list_test_binary_round_trip(struct PixelListFixture fixture[static 1], gconstpointer _unused)
+{
+    g_assert_cmpint(fixture->list->len, ==, 9);
+
+    size_t buf_size = pixel_list_binary_serialize_buffer_size(fixture->list);
+
+    unsigned char *buffer = 0;
+    buffer = calloc(buf_size, sizeof(unsigned char));
+    g_assert_true(buffer);
+
+    size_t num_bytes_written = pixel_list_binary_serialize(fixture->list, buf_size, buffer);
+
+    g_assert_cmpint(buf_size, ==, num_bytes_written);
+
+    struct PixelList *decoded = pixel_list_binary_deserialize(buffer);
+
+    g_assert_true(decoded);
+    g_assert_cmpint(fixture->list->len, ==, decoded->len);
+
+    for (unsigned int i = 0; i < decoded->len; ++i) {
+        g_assert_true(
+            sat_pixels_approx_equal(&fixture->list->pixels[i], &decoded->pixels[i], DBL_MIN));
+    }
+
+    free(buffer);
+    decoded = pixel_list_destroy(decoded);
+}
 /*-------------------------------------------------------------------------------------------------
  *
  *                                      Main Test Runner
@@ -446,6 +541,10 @@ main(int argc, char *argv[static 1])
     g_test_add_func("/geo/sat_pixel/sat_pixel_contains_coord", test_sat_pixel_contains_coord);
     g_test_add_func("/geo/sat_pixel/sat_pixels_overlap", test_sat_pixels_overlap);
     g_test_add_func("/geo/sat_pixel/sat_pixels_are_adjacent", test_sat_pixels_are_adjacent);
+
+    // PixelList
+    g_test_add("/geo/pixel_list/pixel_list_test_binary_round_trip", struct PixelListFixture, 0,
+               pixel_list_test_setup, pixel_list_test_binary_round_trip, pixel_list_test_teaddown);
 
     //
     // Run tests

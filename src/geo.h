@@ -98,8 +98,8 @@ bool sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel rig
  *-----------------------------------------------------------------------------------------------*/
 /** A pixel list stores a list of SatPixel objects. */
 struct PixelList {
-    size_t capacity;
     size_t len;
+    size_t capacity;
     struct SatPixel pixels[];
 };
 
@@ -152,7 +152,7 @@ size_t pixel_list_binary_serialize(struct PixelList plist[static 1], size_t buf_
  * \return an allocated PixelList that should be cleaned up with pixel_list_destroy(). In the
  * event of an error, it returns NULL.
  */
-struct PixelList *pixel_list_binary_deserialize(size_t buf_size, unsigned char buffer[buf_size]);
+struct PixelList *pixel_list_binary_deserialize(unsigned char buffer[static sizeof(size_t)]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         KML Export
