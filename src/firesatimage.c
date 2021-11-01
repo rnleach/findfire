@@ -74,6 +74,7 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
 
     trans = OCTNewCoordinateTransformation(src_srs, dst_srs);
     assert(trans);
+    OSRDestroySpatialReference(dst_srs);
 
     buffer = g_array_sized_new(false, true, sizeof(float), fdata->x_size * fdata->y_size);
     buffer = g_array_set_size(buffer, fdata->x_size * fdata->y_size);
