@@ -13,7 +13,7 @@
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
-char const *data_dir = "/home/ryan/wxdata/GOESX";
+char const *data_dir = "/media/ryan/SAT/GOESX";
 
 static void
 program_initialization()
@@ -58,7 +58,7 @@ skip_path(char const *path, time_t newest_scan_start_time)
 }
 
 struct ClusterStats {
-    struct Cluster biggest_fire;
+    struct Cluster *biggest_fire;
     char biggest_sat[4];
     char biggest_sector[5];
     time_t biggest_start;
@@ -73,7 +73,7 @@ static struct ClusterStats
 cluster_stats_new(void)
 {
     return (struct ClusterStats){
-        .biggest_fire = {0},
+        .biggest_fire = cluster_new(),
         .biggest_sat = {0},
         .biggest_sector = {0},
         .biggest_start = 0,
@@ -84,23 +84,33 @@ cluster_stats_new(void)
     };
 }
 
+static void
+cluster_stats_destroy(struct ClusterStats *tgt)
+{
+    free(tgt->biggest_fire);
+    memset(tgt, 0, sizeof(struct ClusterStats));
+}
+
 static struct ClusterStats
 cluster_stats_update(struct ClusterStats stats, char const sat[static 4],
                      char const sector[static 5], time_t start, time_t end, struct Cluster *cluster)
 {
-    if (cluster->power > stats.biggest_fire.power) {
-        stats.biggest_fire = *cluster;
+    double cluster_power = cluster_total_power(cluster);
+
+    if (cluster_power > cluster_total_power(stats.biggest_fire)) {
+        cluster_destroy(&stats.biggest_fire);
+        stats.biggest_fire = cluster_copy(cluster);
         memcpy(stats.biggest_sat, sat, 3);
         memcpy(stats.biggest_sector, sector, 4);
         stats.biggest_start = start;
         stats.biggest_end = end;
     }
 
-    if (cluster->power < 1.0) {
+    if (cluster_power < 1.0) {
         stats.num_power_lt_1mw += 1;
     }
 
-    if (cluster->power < 10.0) {
+    if (cluster_power < 10.0) {
         stats.num_power_lt_10mw += 1;
     }
 
@@ -116,6 +126,8 @@ cluster_stats_print(struct ClusterStats stats)
     ctime_r(&stats.biggest_start, start_str);
     char end_str[128] = {0};
     ctime_r(&stats.biggest_end, end_str);
+
+    struct Coord biggest_centroid = cluster_centroid(stats.biggest_fire);
 
     printf("\nIndividual Cluster Stats\n\n"
            "Most Powerfull:\n"
@@ -134,9 +146,10 @@ cluster_stats_print(struct ClusterStats stats)
            "    Pct < 1 MW: %10u%%\n"
            " Power < 10 MW: %10u\n"
            "   Pct < 10 MW: %10u%%\n",
-           stats.biggest_sat, stats.biggest_sector, start_str, end_str, stats.biggest_fire.lat,
-           stats.biggest_fire.lon, stats.biggest_fire.count, stats.biggest_fire.radius,
-           stats.biggest_fire.power, stats.num_clusters, stats.num_power_lt_1mw,
+           stats.biggest_sat, stats.biggest_sector, start_str, end_str, biggest_centroid.lat,
+           biggest_centroid.lon, cluster_pixel_count(stats.biggest_fire),
+           cluster_radius(stats.biggest_fire), cluster_total_power(stats.biggest_fire),
+           stats.num_clusters, stats.num_power_lt_1mw,
            stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
            stats.num_power_lt_10mw * 100 / stats.num_clusters);
 }
@@ -332,12 +345,15 @@ main()
                 for (unsigned int i = 0; i < clusters.clusters->len; ++i) {
 
                     struct Cluster *curr_clust =
-                        &g_array_index(clusters.clusters, struct Cluster, i);
+                        g_array_index(clusters.clusters, struct Cluster *, i);
 
-                    int failure = cluster_db_add_row(add_stmt, clusters.satellite, clusters.sector,
-                                                     clusters.start, curr_clust->lat,
-                                                     curr_clust->lon, curr_clust->power,
-                                                     curr_clust->radius, curr_clust->count);
+                    struct Coord centroid = cluster_centroid(curr_clust);
+
+                    int failure = cluster_db_add_row(
+                        add_stmt, clusters.satellite, clusters.sector, clusters.start, centroid.lat,
+                        centroid.lon, cluster_total_power(curr_clust), cluster_radius(curr_clust),
+                        cluster_pixel_count(curr_clust));
+
                     Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
 
                     cluster_stats =
@@ -360,6 +376,7 @@ main()
     dir_walk_destroy(&dir_walk_state);
 
     cluster_stats_print(cluster_stats);
+    cluster_stats_destroy(&cluster_stats);
     cluster_list_stats_print(clstats);
 
     rc = EXIT_SUCCESS;

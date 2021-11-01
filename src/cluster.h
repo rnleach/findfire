@@ -5,6 +5,8 @@
 
 #include <glib.h>
 
+#include "geo.h"
+
 /**
  * \file cluster.h
  * \brief Types and functions for working with clusters.
@@ -13,22 +15,41 @@
  * objects.
  */
 
+/*-------------------------------------------------------------------------------------------------
+                                                 Cluster
+-------------------------------------------------------------------------------------------------*/
 /**
  * \brief The aggregate properties of a connected group of FirePoint objects.
  */
-struct Cluster {
-    /// Average latitude of the points in the cluster.
-    double lat;
-    /// Average longitude of the points in the cluster.
-    double lon;
-    /// Total (sum) of the fire power of the points in the cluster in megawatts.
-    double power;
-    /// The distance from the cluster center to the farthest point in the cluster.
-    double radius;
-    /// The number of points that are in this cluster.
-    int count;
-};
+struct Cluster; 
 
+/** Create a new Cluster. */
+struct Cluster *cluster_new(void);
+
+/** Cleanup a Cluster. */
+void cluster_destroy(struct Cluster **cluster);
+
+/** Create a deep copy of a Cluster. */
+struct Cluster *cluster_copy(struct Cluster *cluster);
+
+/** Get the total power of all pixels in the Cluster. */
+double cluster_total_power(struct Cluster *cluster);
+
+/** Get a representative radius of the Cluster. */
+double cluster_radius(struct Cluster *cluster);
+
+/** Get the number of SatPixels in a Cluster. */
+int cluster_pixel_count(struct Cluster *cluster);
+
+/** Get the centroid of a cluster. */
+struct Coord cluster_centroid(struct Cluster *cluster);
+
+/** Compare Cluster objects for sorting in descending order of power. */
+int cluster_descending_power_compare(const void *ap, const void *bp);
+
+/*-------------------------------------------------------------------------------------------------
+                                               ClusterList
+-------------------------------------------------------------------------------------------------*/
 /**
  * \brief Keep a cluster list with metadata about the file it was derived from.
  *
@@ -57,21 +78,6 @@ struct ClusterList {
     /// Error flag. False indicates no error.
     bool error;
 };
-
-/** Compare \a Cluster objects for sorting in descending order of power. */
-int cluster_desc_cmp(const void *ap, const void *bp);
-
-/**
- * \brief Group struct FirePoint objects into clusters.
- *
- * FirePoint objects that are directly adjacent to each other are grouped into clusters where
- * each point is in direct contact with at least one other point in the cluster.
- *
- * \param points is an array of struct FirePoint objects.
- *
- * \returns an array of struct Cluster objects.
- * */
-GArray *clusters_from_fire_points(GArray const *points);
 
 /**
  * \brief Analyze a file and return a ClusterList including the file metadata.

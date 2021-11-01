@@ -9,6 +9,90 @@
 #include "geo.h"
 #include "util.h"
 
+/*-------------------------------------------------------------------------------------------------
+                                                 Cluster
+-------------------------------------------------------------------------------------------------*/
+struct Cluster {
+    /// Average latitude of the points in the cluster.
+    double lat;
+    /// Average longitude of the points in the cluster.
+    double lon;
+    /// Total (sum) of the fire power of the points in the cluster in megawatts.
+    double power;
+    /// The distance from the cluster center to the farthest point in the cluster.
+    double radius;
+    /// The number of points that are in this cluster.
+    int count;
+};
+
+struct Cluster *cluster_new(void)
+{
+    struct Cluster *new = malloc(sizeof(struct Cluster));
+    Stopif(!new, exit(EXIT_FAILURE), "malloc fail: out of memory");
+
+    *new = (struct Cluster){.lat=NAN, .lon=NAN, .power=0.0, .radius=0.0, .count=0};
+
+    return new;
+}
+
+void cluster_destroy(struct Cluster **cluster)
+{
+    assert(cluster);
+    assert(*cluster);
+    free(*cluster);
+    *cluster = 0;
+}
+
+struct Cluster *cluster_copy(struct Cluster *cluster)
+{
+    assert(cluster);
+
+    struct Cluster *copy = cluster_new();
+    *copy = *cluster;
+
+    return copy;
+}
+
+double cluster_total_power(struct Cluster *cluster)
+{
+    assert(cluster);
+    return cluster->power;
+}
+
+double cluster_radius(struct Cluster *cluster)
+{
+    assert(cluster);
+    return cluster->radius;
+}
+
+int cluster_pixel_count(struct Cluster *cluster)
+{
+    assert(cluster);
+    return cluster->count;
+}
+
+struct Coord cluster_centroid(struct Cluster *cluster)
+{
+    assert(cluster);
+    return (struct Coord){.lat=cluster->lat, .lon=cluster->lon};
+}
+
+
+int
+cluster_descending_power_compare(const void *ap, const void *bp)
+{
+    struct Cluster const *a = ap;
+    struct Cluster const *b = bp;
+
+    if (a->power > b->power)
+        return -1;
+    if (a->power < b->power)
+        return 1;
+    return 0;
+}
+/*-------------------------------------------------------------------------------------------------
+                                               ClusterList
+-------------------------------------------------------------------------------------------------*/
 void
 cluster_list_clear(struct ClusterList *tgt)
 {
@@ -69,6 +153,90 @@ find_end_time(char const *fname)
     if (end)
         return end + 2;
     return end;
+}
+
+static void
+local_cluster_destroy(void *cluster)
+{
+    struct Cluster **clst = cluster;
+    cluster_destroy(clst);
+}
+
+static GArray *
+clusters_from_fire_points(GArray const *points)
+{
+    GArray *clusters = g_array_sized_new(false, true, sizeof(struct Cluster *), 100);
+    g_array_set_clear_func(clusters, local_cluster_destroy);
+
+    GArray *cluster_points = g_array_sized_new(false, true, sizeof(struct FirePoint), 20);
+
+    for (unsigned int i = 0; i < points->len; i++) {
+
+        struct FirePoint *fp = &g_array_index(points, struct FirePoint, i);
+
+        if (fp->x == 0 && fp->y == 0)
+            continue;
+
+        cluster_points = g_array_append_val(cluster_points, *fp);
+        fp->x = 0;
+        fp->y = 0;
+
+        for (unsigned int j = i + 1; j < points->len; j++) {
+            struct FirePoint *candidate = &g_array_index(points, struct FirePoint, j);
+
+            if (candidate->x == 0 && candidate->y == 0)
+                continue;
+            for (unsigned int k = 0; k < cluster_points->len; ++k) {
+                struct FirePoint *a_point_in_cluster =
+                    &g_array_index(cluster_points, struct FirePoint, k);
+
+                int dx = abs(a_point_in_cluster->x - candidate->x);
+                int dy = abs(a_point_in_cluster->y - candidate->y);
+
+                if (dx <= 1 && dy <= 1) {
+                    cluster_points = g_array_append_val(cluster_points, *candidate);
+                    candidate->x = 0;
+                    candidate->y = 0;
+                }
+            }
+        }
+
+        struct Cluster *curr_clust = cluster_new();
+        curr_clust->lat = g_array_index(cluster_points, struct FirePoint, 0).lat;
+        curr_clust->lon = g_array_index(cluster_points, struct FirePoint, 0).lon;
+        curr_clust->power = g_array_index(cluster_points, struct FirePoint, 0).power;
+        curr_clust->count = 1;
+
+        for (unsigned int j = 1; j < cluster_points->len; ++j) {
+
+            curr_clust->lat += g_array_index(cluster_points, struct FirePoint, j).lat;
+            curr_clust->lon += g_array_index(cluster_points, struct FirePoint, j).lon;
+            curr_clust->power += g_array_index(cluster_points, struct FirePoint, j).power;
+            curr_clust->count += 1;
+        }
+
+        curr_clust->lat /= curr_clust->count;
+        curr_clust->lon /= curr_clust->count;
+
+        for (unsigned int j = 1; j < cluster_points->len; ++j) {
+            double pnt_lat = g_array_index(cluster_points, struct FirePoint, j).lat;
+            double pnt_lon = g_array_index(cluster_points, struct FirePoint, j).lon;
+
+            double gs_distance =
+                great_circle_distance(pnt_lat, pnt_lon, curr_clust->lat, curr_clust->lon);
+
+            if (gs_distance > curr_clust->radius) {
+                curr_clust->radius = gs_distance;
+            }
+        }
+
+        clusters = g_array_append_val(clusters, curr_clust);
+
+        cluster_points = g_array_set_size(cluster_points, 0);
+    }
+    g_array_unref(cluster_points);
+
+    return clusters;
 }
 
 struct ClusterList
@@ -132,94 +300,6 @@ ERR_RETURN:
     return clist;
 }
 
-GArray *
-clusters_from_fire_points(GArray const *points)
-{
-    GArray *clusters = g_array_sized_new(false, true, sizeof(struct Cluster), 100);
-    GArray *cluster_points = g_array_sized_new(false, true, sizeof(struct FirePoint), 20);
-
-    for (unsigned int i = 0; i < points->len; i++) {
-
-        struct FirePoint *fp = &g_array_index(points, struct FirePoint, i);
-
-        if (fp->x == 0 && fp->y == 0)
-            continue;
-
-        cluster_points = g_array_append_val(cluster_points, *fp);
-        fp->x = 0;
-        fp->y = 0;
-
-        for (unsigned int j = i + 1; j < points->len; j++) {
-            struct FirePoint *candidate = &g_array_index(points, struct FirePoint, j);
-
-            if (candidate->x == 0 && candidate->y == 0)
-                continue;
-            for (unsigned int k = 0; k < cluster_points->len; ++k) {
-                struct FirePoint *a_point_in_cluster =
-                    &g_array_index(cluster_points, struct FirePoint, k);
-
-                int dx = abs(a_point_in_cluster->x - candidate->x);
-                int dy = abs(a_point_in_cluster->y - candidate->y);
-
-                if (dx <= 1 && dy <= 1) {
-                    cluster_points = g_array_append_val(cluster_points, *candidate);
-                    candidate->x = 0;
-                    candidate->y = 0;
-                }
-            }
-        }
-
-        struct Cluster curr_clust = {0};
-        curr_clust.lat = g_array_index(cluster_points, struct FirePoint, 0).lat;
-        curr_clust.lon = g_array_index(cluster_points, struct FirePoint, 0).lon;
-        curr_clust.power = g_array_index(cluster_points, struct FirePoint, 0).power;
-        curr_clust.count = 1;
-
-        for (unsigned int j = 1; j < cluster_points->len; ++j) {
-
-            curr_clust.lat += g_array_index(cluster_points, struct FirePoint, j).lat;
-            curr_clust.lon += g_array_index(cluster_points, struct FirePoint, j).lon;
-            curr_clust.power += g_array_index(cluster_points, struct FirePoint, j).power;
-            curr_clust.count += 1;
-        }
-
-        curr_clust.lat /= curr_clust.count;
-        curr_clust.lon /= curr_clust.count;
-
-        for (unsigned int j = 1; j < cluster_points->len; ++j) {
-            double pnt_lat = g_array_index(cluster_points, struct FirePoint, j).lat;
-            double pnt_lon = g_array_index(cluster_points, struct FirePoint, j).lon;
-
-            double gs_distance =
-                great_circle_distance(pnt_lat, pnt_lon, curr_clust.lat, curr_clust.lon);
-
-            if (gs_distance > curr_clust.radius) {
-                curr_clust.radius = gs_distance;
-            }
-        }
-
-        clusters = g_array_append_val(clusters, curr_clust);
-
-        cluster_points = g_array_set_size(cluster_points, 0);
-    }
-    g_array_unref(cluster_points);
-
-    return clusters;
-}
-
-int
-cluster_desc_cmp(const void *ap, const void *bp)
-{
-    struct Cluster const *a = ap;
-    struct Cluster const *b = bp;
-
-    if (a->power > b->power)
-        return -1;
-    if (a->power < b->power)
-        return 1;
-    return 0;
-}
-
 unsigned int
 cluster_list_length(struct ClusterList tgt[static 1])
 {
@@ -231,7 +311,7 @@ cluster_list_total_power(struct ClusterList tgt[static 1])
 {
     double sum = 0.0;
     for (unsigned int i = 0; i < tgt->clusters->len; i++) {
-        sum += g_array_index(tgt->clusters, struct Cluster, i).power;
+        sum += g_array_index(tgt->clusters, struct Cluster *, i)->power;
     }
 
     return sum;
