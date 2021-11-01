@@ -289,16 +289,21 @@ clusters_from_fire_points(GArray const *points)
         }
 
         struct Cluster *curr_clust = cluster_new();
-        curr_clust->lat = g_array_index(cluster_points, struct FirePoint, 0).lat;
-        curr_clust->lon = g_array_index(cluster_points, struct FirePoint, 0).lon;
-        curr_clust->power = g_array_index(cluster_points, struct FirePoint, 0).power;
+        struct FirePoint *curr_fire_point = &g_array_index(cluster_points, struct FirePoint, 0);
+        struct Coord centroid = sat_pixel_centroid(&curr_fire_point->pixel);
+        curr_clust->lat = centroid.lat;
+        curr_clust->lon = centroid.lon;
+        curr_clust->power = curr_fire_point->power;
         curr_clust->count = 1;
 
         for (unsigned int j = 1; j < cluster_points->len; ++j) {
 
-            curr_clust->lat += g_array_index(cluster_points, struct FirePoint, j).lat;
-            curr_clust->lon += g_array_index(cluster_points, struct FirePoint, j).lon;
-            curr_clust->power += g_array_index(cluster_points, struct FirePoint, j).power;
+            curr_fire_point = &g_array_index(cluster_points, struct FirePoint, j);
+            centroid = sat_pixel_centroid(&curr_fire_point->pixel);
+
+            curr_clust->lat += centroid.lat;
+            curr_clust->lon += centroid.lon;
+            curr_clust->power += curr_fire_point->power;
             curr_clust->count += 1;
         }
 
@@ -306,8 +311,12 @@ clusters_from_fire_points(GArray const *points)
         curr_clust->lon /= curr_clust->count;
 
         for (unsigned int j = 1; j < cluster_points->len; ++j) {
-            double pnt_lat = g_array_index(cluster_points, struct FirePoint, j).lat;
-            double pnt_lon = g_array_index(cluster_points, struct FirePoint, j).lon;
+
+            curr_fire_point = &g_array_index(cluster_points, struct FirePoint, j);
+            centroid = sat_pixel_centroid(&curr_fire_point->pixel);
+
+            double pnt_lat = centroid.lat;
+            double pnt_lon = centroid.lon;
 
             double gs_distance =
                 great_circle_distance(pnt_lat, pnt_lon, curr_clust->lat, curr_clust->lon);

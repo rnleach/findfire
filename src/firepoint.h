@@ -6,6 +6,7 @@
  * A FirePoint is a structure that holds all data associated with a pixel in the satellite imagery
  * that corresponds to a fire detection.
  */
+#include "geo.h"
 
 /**
  * \brief Represents all the data associated with a single pixel in which the satellite has detected
@@ -16,19 +17,8 @@ struct FirePoint {
     int x;
     /// The y-coordinate (row number, often indexed as 'j') in the grid.
     int y;
-    /// The latitude
-    float lat;
-    /// The longitude
-    float lon;
+    /// The polygon describing the scanned area.
+    struct SatPixel pixel;
     /// The power of the fire in that pixel in megawatts.
     float power;
 };
-
-/**
- * \brief Calculate the great circle distance between two \a FirePoint objects.
- *
- * Calculate the great circle distance between \a a and \a b.
- *
- * \return The distance between the points in kilometers.
- */
-double firepoint_great_circle_distance(struct FirePoint const a, struct FirePoint const b);
