@@ -1,6 +1,8 @@
-# Editor configuration files.
+# Editor configuration files, temp files for dev tools
 *.vim
 tags
+vgdump
+useful_commands.txt
 
 # Project layout
 release
