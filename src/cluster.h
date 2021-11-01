@@ -21,7 +21,7 @@
 /**
  * \brief The aggregate properties of a connected group of FirePoint objects.
  */
-struct Cluster; 
+struct Cluster;
 
 /** Create a new Cluster. */
 struct Cluster *cluster_new(void);
@@ -52,62 +52,84 @@ int cluster_descending_power_compare(const void *ap, const void *bp);
 -------------------------------------------------------------------------------------------------*/
 /**
  * \brief Keep a cluster list with metadata about the file it was derived from.
- *
- * If there is an error, the error member will be true, there will be an error message, and the
- * clusters pointer will be set to null.
  */
-struct ClusterList {
-    /// This is the sector, "FDCC", "FDCF", or "FDCM"
-    ///
-    /// FDCC is the CONUS scale
-    /// FDCF is the full disk scale
-    /// FDCM is the mesosector scale
-    char sector[5];
-    /// This is the source satellite.
-    ///
-    /// At the time of writing it will either be "G16" or "G17"
-    char satellite[4];
-    /// Start time of the scan
-    time_t start;
-    /// End time of the scan
-    time_t end;
-    /// List of struct Cluster objects associated with the above metadata.
-    GArray *clusters;
-    /// Error message.
-    char *err_msg;
-    /// Error flag. False indicates no error.
-    bool error;
-};
+struct ClusterList;
 
 /**
- * \brief Analyze a file and return a ClusterList including the file metadata.
+ * \brief Analyze a file and return a ClusterList.
  *
- * The metadata is gleaned from the file name at this time.
+ * The metadata is gleaned from the file name, so this program relies on the current naming
+ * conventions of the NOAA big data program.
  *
  *  \param full_path is the path to the file to analyze.
  */
-struct ClusterList cluster_list_from_file(char const *full_path);
+struct ClusterList *cluster_list_from_file(char const *full_path);
 
 /**
- * \brief Clean up a struct ClusterList object.
+ * \brief Clean up a ClusterList object.
  *
- * Use this function to clean up a ClusterList object. After it's cleaned up, it will be as if
- * memset(0, sizeof(struct ClusterList)) had been called on the struct. This is meant to be used
- * for all ClusterList objects regardless of error state.
+ * After this function, the value pointed to by \a list will be set to \c 0 or \c NULL.
  */
-void cluster_list_clear(struct ClusterList *tgt);
+void cluster_list_destroy(struct ClusterList **list);
+
+/** \brief Get the name of the satellite sector.
+ *
+ * This is a static string determined at compile time.
+ *
+ * Potential values are "FDCC", "FDCF", and "FDCM".
+ * FDCC is the CONUS sector.
+ * FDCF is the Full Disk sector.
+ * FDCM is the Meso-sector.
+ */
+const char *cluster_list_sector(struct ClusterList *list);
+
+/** \brief Get the name of the satellite.
+ *
+ * This is a static string determined at compile time.
+ *
+ * "G16" and "G17" are the only currently supported values.
+ */
+const char *cluster_list_satellite(struct ClusterList *list);
+
+/** Get the start time of the scan. */
+time_t cluster_list_scan_start(struct ClusterList *list);
+
+/** Get the end time of the scan. */
+time_t cluster_list_scan_end(struct ClusterList *list);
+
+/** Error status from creating the ClusterList.
+ *
+ * This will always be false unless there was an error creating the ClusterList. In that case the
+ * cluster_list_clusters() function will return \c 0 or \c NULL and the cluster_list_error_msg()
+ * function will return a message as to the source of the error.
+ */
+bool cluster_list_error(struct ClusterList *list);
+
+/** The error message associated with the ClusterList.
+ *
+ * This is a static string determined at compile time and should not be freed.
+ */
+const char *cluster_list_error_msg(struct ClusterList *list);
+
+/** Get the Clusters.
+ *
+ * The \c GArray holds pointers to the Cluster objects.
+ */
+GArray *cluster_list_clusters(struct ClusterList *list);
 
 /**
  * \brief Parse the file name and find the scan start time.
  */
+// TODO: MOVE TO util.h since this operates on file names only and is not directly related to
+// Clusters.
 char const *cluster_find_start_time(char const *fname);
 
 /**
  * \brief Get the number of items in the ClusterList.
  */
-unsigned int cluster_list_length(struct ClusterList tgt[static 1]);
+unsigned int cluster_list_length(struct ClusterList *list);
 
 /**
  * \brief Get the total fire power of all the clusters in this list.
  */
-double cluster_list_total_power(struct ClusterList tgt[static 1]);
+double cluster_list_total_power(struct ClusterList *list);

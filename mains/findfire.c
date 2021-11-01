@@ -217,35 +217,35 @@ cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *c
 
     if (num_clust > clstats.max_num_clusters) {
         clstats.max_num_clusters = num_clust;
-        memcpy(clstats.max_num_clusters_sat, clusters->satellite, 3);
-        memcpy(clstats.max_num_clusters_sector, clusters->sector, 4);
-        clstats.max_num_clusters_start = clusters->start;
-        clstats.max_num_clusters_end = clusters->end;
+        memcpy(clstats.max_num_clusters_sat, cluster_list_satellite(clusters), 3);
+        memcpy(clstats.max_num_clusters_sector, cluster_list_sector(clusters), 4);
+        clstats.max_num_clusters_start = cluster_list_scan_start(clusters);
+        clstats.max_num_clusters_end = cluster_list_scan_end(clusters);
     }
 
     if (num_clust < clstats.min_num_clusters) {
         clstats.min_num_clusters = num_clust;
-        memcpy(clstats.min_num_clusters_sat, clusters->satellite, 3);
-        memcpy(clstats.min_num_clusters_sector, clusters->sector, 4);
-        clstats.min_num_clusters_start = clusters->start;
-        clstats.min_num_clusters_end = clusters->end;
+        memcpy(clstats.min_num_clusters_sat, cluster_list_satellite(clusters), 3);
+        memcpy(clstats.min_num_clusters_sector, cluster_list_sector(clusters), 4);
+        clstats.min_num_clusters_start = cluster_list_scan_start(clusters);
+        clstats.min_num_clusters_end = cluster_list_scan_end(clusters);
     }
 
     double total_power = cluster_list_total_power(clusters);
     if (total_power > clstats.max_total_power) {
         clstats.max_total_power = total_power;
-        memcpy(clstats.max_total_power_sat, clusters->satellite, 3);
-        memcpy(clstats.max_total_power_sector, clusters->sector, 4);
-        clstats.max_total_power_start = clusters->start;
-        clstats.max_total_power_end = clusters->end;
+        memcpy(clstats.max_total_power_sat, cluster_list_satellite(clusters), 3);
+        memcpy(clstats.max_total_power_sector, cluster_list_sector(clusters), 4);
+        clstats.max_total_power_start = cluster_list_scan_start(clusters);
+        clstats.max_total_power_end = cluster_list_scan_end(clusters);
     }
 
     if (total_power < clstats.min_total_power) {
         clstats.min_total_power = total_power;
-        memcpy(clstats.min_total_power_sat, clusters->satellite, 3);
-        memcpy(clstats.min_total_power_sector, clusters->sector, 4);
-        clstats.min_total_power_start = clusters->start;
-        clstats.min_total_power_end = clusters->end;
+        memcpy(clstats.min_total_power_sat, cluster_list_satellite(clusters), 3);
+        memcpy(clstats.min_total_power_sector, cluster_list_sector(clusters), 4);
+        clstats.min_total_power_start = cluster_list_scan_start(clusters);
+        clstats.min_total_power_end = cluster_list_scan_end(clusters);
     }
 
     return clstats;
@@ -340,34 +340,39 @@ main()
 
             printf("Processing: %s\n", path);
 
-            struct ClusterList clusters = cluster_list_from_file(path);
-            if (!clusters.error) {
-                for (unsigned int i = 0; i < clusters.clusters->len; ++i) {
+            struct ClusterList *clusters = cluster_list_from_file(path);
+            if (!cluster_list_error(clusters)) {
+                GArray *clusters_array = cluster_list_clusters(clusters);
 
-                    struct Cluster *curr_clust =
-                        g_array_index(clusters.clusters, struct Cluster *, i);
+                const char *sat = cluster_list_satellite(clusters);
+                const char *sector = cluster_list_satellite(clusters);
+                time_t start = cluster_list_scan_start(clusters);
+                time_t end = cluster_list_scan_end(clusters);
+
+                for (unsigned int i = 0; i < clusters_array->len; ++i) {
+
+                    struct Cluster *curr_clust = g_array_index(clusters_array, struct Cluster *, i);
 
                     struct Coord centroid = cluster_centroid(curr_clust);
 
-                    int failure = cluster_db_add_row(
-                        add_stmt, clusters.satellite, clusters.sector, clusters.start, centroid.lat,
-                        centroid.lon, cluster_total_power(curr_clust), cluster_radius(curr_clust),
-                        cluster_pixel_count(curr_clust));
+                    int failure = cluster_db_add_row(add_stmt, sat, sector, start, centroid.lat,
+                                                     centroid.lon, cluster_total_power(curr_clust),
+                                                     cluster_radius(curr_clust),
+                                                     cluster_pixel_count(curr_clust));
 
                     Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
 
                     cluster_stats =
-                        cluster_stats_update(cluster_stats, clusters.satellite, clusters.sector,
-                                             clusters.start, clusters.end, curr_clust);
+                        cluster_stats_update(cluster_stats, sat, sector, start, end, curr_clust);
                 }
 
-                clstats = cluster_list_stats_update(clstats, &clusters);
+                clstats = cluster_list_stats_update(clstats, clusters);
 
             } else {
                 printf("    Error processing file.\n");
             }
 
-            cluster_list_clear(&clusters);
+            cluster_list_destroy(&clusters);
         }
 
         path = dir_walk_next_path(&dir_walk_state);

@@ -25,17 +25,19 @@ struct Cluster {
     int count;
 };
 
-struct Cluster *cluster_new(void)
+struct Cluster *
+cluster_new(void)
 {
     struct Cluster *new = malloc(sizeof(struct Cluster));
     Stopif(!new, exit(EXIT_FAILURE), "malloc fail: out of memory");
 
-    *new = (struct Cluster){.lat=NAN, .lon=NAN, .power=0.0, .radius=0.0, .count=0};
+    *new = (struct Cluster){.lat = NAN, .lon = NAN, .power = 0.0, .radius = 0.0, .count = 0};
 
     return new;
 }
 
-void cluster_destroy(struct Cluster **cluster)
+void
+cluster_destroy(struct Cluster **cluster)
 {
     assert(cluster);
     assert(*cluster);
@@ -43,7 +45,8 @@ void cluster_destroy(struct Cluster **cluster)
     *cluster = 0;
 }
 
-struct Cluster *cluster_copy(struct Cluster *cluster)
+struct Cluster *
+cluster_copy(struct Cluster *cluster)
 {
     assert(cluster);
 
@@ -53,30 +56,33 @@ struct Cluster *cluster_copy(struct Cluster *cluster)
     return copy;
 }
 
-double cluster_total_power(struct Cluster *cluster)
+double
+cluster_total_power(struct Cluster *cluster)
 {
     assert(cluster);
     return cluster->power;
 }
 
-double cluster_radius(struct Cluster *cluster)
+double
+cluster_radius(struct Cluster *cluster)
 {
     assert(cluster);
     return cluster->radius;
 }
 
-int cluster_pixel_count(struct Cluster *cluster)
+int
+cluster_pixel_count(struct Cluster *cluster)
 {
     assert(cluster);
     return cluster->count;
 }
 
-struct Coord cluster_centroid(struct Cluster *cluster)
+struct Coord
+cluster_centroid(struct Cluster *cluster)
 {
     assert(cluster);
-    return (struct Coord){.lat=cluster->lat, .lon=cluster->lon};
+    return (struct Coord){.lat = cluster->lat, .lon = cluster->lon};
 }
-
 
 int
 cluster_descending_power_compare(const void *ap, const void *bp)
@@ -93,19 +99,100 @@ cluster_descending_power_compare(const void *ap, const void *bp)
 /*-------------------------------------------------------------------------------------------------
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/
+struct ClusterList {
+    /// This is the sector, "FDCC", "FDCF", or "FDCM"
+    ///
+    /// FDCC is the CONUS scale
+    /// FDCF is the full disk scale
+    /// FDCM is the mesosector scale
+    char sector[5];
+    /// This is the source satellite.
+    ///
+    /// At the time of writing it will either be "G16" or "G17"
+    char satellite[4];
+    /// Start time of the scan
+    time_t start;
+    /// End time of the scan
+    time_t end;
+    /// List of struct Cluster objects associated with the above metadata.
+    GArray *clusters;
+    /// Error message.
+    char *err_msg;
+    /// Error flag. False indicates no error.
+    bool error;
+};
+
 void
-cluster_list_clear(struct ClusterList *tgt)
+cluster_list_destroy(struct ClusterList **list)
 {
-    if (tgt->clusters) {
-        g_array_unref(tgt->clusters);
+    assert(list);
+    assert(*list);
+
+    if ((*list)->clusters) {
+        g_array_unref((*list)->clusters);
     }
 
     // These are static strings!
-    // if (tgt->err_msg) {
-    //    free(tgt->err_msg);
+    // if ((*list)->err_msg) {
+    //    free((*list)->err_msg);
     //}
 
-    memset(tgt, 0, sizeof(struct ClusterList));
+    free(*list);
+    *list = 0;
+}
+
+const char *
+cluster_list_sector(struct ClusterList *list)
+{
+    assert(list);
+    return list->sector;
+}
+
+const char *
+cluster_list_satellite(struct ClusterList *list)
+{
+    assert(list);
+    return list->satellite;
+}
+
+time_t
+cluster_list_scan_start(struct ClusterList *list)
+{
+    assert(list);
+    return list->start;
+}
+
+time_t
+cluster_list_scan_end(struct ClusterList *list)
+{
+    assert(list);
+    return list->end;
+}
+
+bool
+cluster_list_error(struct ClusterList *list)
+{
+    assert(list);
+    return list->error;
+}
+
+const char *
+cluster_list_error_msg(struct ClusterList *list)
+{
+    assert(list);
+    return list->err_msg;
+}
+
+GArray *
+cluster_list_clusters(struct ClusterList *list)
+{
+    assert(list);
+
+    if (list->error) {
+        assert(!list->clusters); // Force to be NULL
+    }
+
+    return list->clusters;
 }
 
 static char const *
@@ -239,10 +326,10 @@ clusters_from_fire_points(GArray const *points)
     return clusters;
 }
 
-struct ClusterList
+struct ClusterList *
 cluster_list_from_file(char const *full_path)
 {
-    struct ClusterList clist = {0};
+    struct ClusterList *clist = calloc(1, sizeof(struct ClusterList));
     char *err_msg = 0;
     GArray *points = 0;
     GArray *clusters = 0;
@@ -253,17 +340,17 @@ cluster_list_from_file(char const *full_path)
     char const *sat_start = find_satellite_start(fname);
     err_msg = "Error parsing satellite name";
     Stopif(!sat_start, goto ERR_RETURN, "Error parsing satellite name");
-    memcpy(clist.satellite, sat_start, 3);
+    memcpy(clist->satellite, sat_start, 3);
 
     // Get the sector name
     char const *sect_start = find_sector_start(fname);
     err_msg = "Error parsing sector name";
     Stopif(!sect_start, goto ERR_RETURN, "Error parsing sector name");
-    memcpy(clist.sector, sect_start, 4);
+    memcpy(clist->sector, sect_start, 4);
 
     // Get the start and end times
-    clist.start = parse_time_string(cluster_find_start_time(fname));
-    clist.end = parse_time_string(find_end_time(fname));
+    clist->start = parse_time_string(cluster_find_start_time(fname));
+    clist->end = parse_time_string(find_end_time(fname));
 
     // Get the clusters member.
     struct FireSatImage fdata = {0};
@@ -279,7 +366,7 @@ cluster_list_from_file(char const *full_path)
            goto ERR_RETURN, "Error creating clusters from fire points.");
     g_array_unref(points);
 
-    clist.clusters = clusters;
+    clist->clusters = clusters;
 
     return clist;
 
@@ -295,23 +382,26 @@ ERR_RETURN:
         clusters = 0;
     }
 
-    clist.error = true;
-    clist.err_msg = err_msg;
+    clist->error = true;
+    clist->err_msg = err_msg;
     return clist;
 }
 
 unsigned int
-cluster_list_length(struct ClusterList tgt[static 1])
+cluster_list_length(struct ClusterList *list)
 {
-    return tgt->clusters->len;
+    assert(list);
+    return list->clusters->len;
 }
 
 double
-cluster_list_total_power(struct ClusterList tgt[static 1])
+cluster_list_total_power(struct ClusterList *list)
 {
+    assert(list);
+
     double sum = 0.0;
-    for (unsigned int i = 0; i < tgt->clusters->len; i++) {
-        sum += g_array_index(tgt->clusters, struct Cluster *, i)->power;
+    for (unsigned int i = 0; i < list->clusters->len; i++) {
+        sum += g_array_index(list->clusters, struct Cluster *, i)->power;
     }
 
     return sum;
