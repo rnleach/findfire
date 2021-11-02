@@ -24,6 +24,8 @@
  * for several days, even a month or more and still persist.
  *
  * e.g. id = 000001239_000056 is sub-fire number 56 of fire number 1239.
+ *
+ * \todo Still need implmented.
  */
 struct Wildfire {
     time_t first_observed;
