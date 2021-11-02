@@ -3,12 +3,12 @@
  *
  * This program walks a directory tree and analyzes all the NOAA Big Data files with GOES satellite
  * Fire Detection Characteristics (FDC) data. Individual pixels with fire power greater than 0.0 MW
- * are grouped into clusters of adjacent pixels. The power is summed to get a total power for the 
+ * are grouped into clusters of adjacent pixels. The power is summed to get a total power for the
  * cluster, and then the total power and a geographic description of all the pixels in the cluster
  * are serialized and stored in a database. The source satellite, scanning sector (Full Disk, CONUS,
  * MesoSector), scan start, and scan end times are also stored in the database with each cluster.
  *
- * The goal of having all this data together is for other programs to read the data from the 
+ * The goal of having all this data together is for other programs to read the data from the
  * database and perform more analysis.
  */
 #include "util.h"
