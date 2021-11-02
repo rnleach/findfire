@@ -139,5 +139,44 @@ void kml_end_style(FILE *output);
  */
 void kml_poly_style(FILE *output, char const *color, bool filled, bool outlined);
 
+/** Create a IconStyle element.
+ *
+ * This should only go inside a style element.
+ */
+void kml_icon_style(FILE *output, char const *icon_url, double scale);
+
 /** Create a TimeSpan element. */
 void kml_timespan(FILE *output, time_t start, time_t end);
+
+/** Start a MultiGeometry. */
+void kml_start_multigeometry(FILE *output);
+
+/** End a MultiGeometry. */
+void kml_end_multigeometry(FILE *output);
+
+/** Start a Polygon. */
+void kml_start_polygon(FILE *output);
+
+/** End a Polygon. */
+void kml_end_polygon(FILE *output);
+
+/** Start the polygon outer ring.*/
+void kml_polygon_start_outer_ring(FILE *output);
+
+/** End the polygon outer ring.*/
+void kml_polygon_end_outer_ring(FILE *output);
+
+/** Start a LinearRing. */
+void kml_start_linear_ring(FILE *output);
+
+/** End a LinearRing. */
+void kml_end_linear_ring(FILE *output);
+
+/** Add a vertex to the LinearRing.
+ *
+ * This could be the an outer or inner ring in progress.
+ */
+void kml_linear_ring_add_vertex(FILE *output, double lat, double lon);
+
+/** Write out a KML Point. */
+void kml_point(FILE *output, double lat, double lon);

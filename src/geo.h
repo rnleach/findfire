@@ -57,7 +57,7 @@ struct SatPixel {
  * This function uses an algorithm that assumes the pixel is a quadrilateral, which is enforced
  * by the definition of the SatPixel type.
  */
-struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
+struct Coord sat_pixel_centroid(struct SatPixel const pxl[static 1]);
 
 /** Tests if these pixels are basically the same pixel.
  *
@@ -138,7 +138,7 @@ struct PixelList *pixel_list_append(struct PixelList list[static 1],
 struct PixelList *pixel_list_clear(struct PixelList list[static 1]);
 
 /** Calculate the centroid of a PixelList. */
-struct Coord pixel_list_centroid(struct PixelList list[static 1]);
+struct Coord pixel_list_centroid(struct PixelList const list[static 1]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
@@ -173,10 +173,8 @@ struct PixelList *pixel_list_binary_deserialize(unsigned char buffer[static size
  * This will print out a multigeometry KML element. It should be composed as part of a function
  * that outputs a KML file where that higher function adds style information and the rest of the
  * document.
- *
- * \returns the number of bytes written to the \param strm or -1 if there was an error.
  */
-int pixel_list_kml_print(FILE *strm, struct PixelList plist[static 1]);
+void pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                            Misc

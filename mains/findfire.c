@@ -10,6 +10,16 @@
  *
  * The goal of having all this data together is for other programs to read the data from the
  * database and perform more analysis.
+ *
+ * This program queries an existing database to find what the latest entry is in the database and
+ * assumes it can skip any files that can contain older data.
+ *
+ * \todo: create more sophisticated checking for the oldest scan, or better yet for a scan existing
+ * at all.
+ *
+ * At the end of processing, some summary statistics are printed to the screen and a file called
+ * findfire.kml is output in the same location as the database file findfire.sqlite that has the
+ * largest Cluster processed this time.
  */
 #include "util.h"
 
@@ -26,6 +36,7 @@
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
+char const *kml_file = "/home/ryan/wxdata/findfire.kml";
 char const *data_dir = "/media/ryan/SAT/GOESX";
 
 static void
@@ -41,6 +52,38 @@ program_initialization()
 static void
 program_finalization()
 {
+}
+
+static void
+save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, char const *sat,
+                 char const *sector)
+{
+    FILE *out = fopen(kml_file, "wb");
+    Stopif(!out, return, "Unable to open file for writing: %s", kml_file);
+
+    kml_start_document(out);
+
+    kml_start_style(out, "fire");
+    kml_poly_style(out, "880000FF", true, false);
+    kml_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
+    kml_end_style(out);
+
+    char *description = 0;
+    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf", sat, sector,
+             cluster_total_power(biggest));
+
+    kml_start_placemark(out, "Biggest Fire", description, "#fire");
+    kml_timespan(out, start, end);
+    pixel_list_kml_write(out, cluster_pixels(biggest));
+    kml_end_placemark(out);
+
+    free(description);
+
+    kml_end_document(out);
+
+    fclose(out);
+
+    return;
 }
 
 static bool
@@ -221,6 +264,12 @@ cluster_list_stats_new(void)
     };
 }
 
+static void
+cluster_list_stats_destroy(struct ClusterListStats *clstats)
+{
+    // Nothing to do at this time because nothing is heap allocated.
+}
+
 static struct ClusterListStats
 cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *clusters)
 {
@@ -387,8 +436,13 @@ main()
     dir_walk_destroy(&dir_walk_state);
 
     cluster_stats_print(cluster_stats);
+    save_cluster_kml(cluster_stats.biggest_fire, cluster_stats.biggest_start,
+                     cluster_stats.biggest_end, cluster_stats.biggest_sat,
+                     cluster_stats.biggest_sector);
     cluster_stats_destroy(&cluster_stats);
+
     cluster_list_stats_print(clstats);
+    cluster_list_stats_destroy(&clstats);
 
     rc = EXIT_SUCCESS;
 

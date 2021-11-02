@@ -222,10 +222,10 @@ void
 kml_start_document(FILE *output)
 {
     assert(output);
-
-    // TODO: Implement
-    assert(false);
-
+    static char const *header = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n"
+                                "<Document>\n";
+    fputs(header, output);
     return;
 }
 
@@ -233,10 +233,8 @@ void
 kml_end_document(FILE *output)
 {
     assert(output);
-
-    // TODO: Implement
-    assert(false);
-
+    static char const *footer = "</Document>\n</kml>\n";
+    fputs(footer, output);
     return;
 }
 
@@ -245,8 +243,19 @@ kml_start_placemark(FILE *output, char const *name, char const *description, cha
 {
     assert(output);
 
-    // TODO: Implement
-    assert(false);
+    fprintf(output, "<Placemark>\n");
+
+    if (name) {
+        fprintf(output, "<name>%s</name>\n", name);
+    }
+
+    if (description) {
+        fprintf(output, "<description><![CDATA[%s]]></description>\n", description);
+    }
+
+    if (style_url) {
+        fprintf(output, "<styleUrl>%s</styleUrl>\n", style_url);
+    }
 
     return;
 }
@@ -255,10 +264,7 @@ void
 kml_end_placemark(FILE *output)
 {
     assert(output);
-
-    // TODO: Implement
-    assert(false);
-
+    fputs("</Placemark>\n", output);
     return;
 }
 
@@ -267,9 +273,11 @@ kml_start_style(FILE *output, char const *style_id)
 {
     assert(output);
 
-    // TODO: Implement
-    assert(false);
-
+    if (style_id) {
+        fprintf(output, "<Style id=\"%s\">\n", style_id);
+    } else {
+        fputs("<Style>\n", output);
+    }
     return;
 }
 
@@ -277,10 +285,7 @@ void
 kml_end_style(FILE *output)
 {
     assert(output);
-
-    // TODO: Implement
-    assert(false);
-
+    fputs("</Style>\n", output);
     return;
 }
 
@@ -288,10 +293,41 @@ void
 kml_poly_style(FILE *output, char const *color, bool filled, bool outlined)
 {
     assert(output);
+    fputs("<PolyStyle>\n", output);
 
-    // TODO: Implement
-    assert(false);
+    if (color) {
+        fprintf(output, "<color>%s</color>\n", color);
+        fputs("<colorMode>normal</colorMode>\n", output);
+    } else {
+        fputs("<colorMode>random</colorMode>\n", output);
+    }
 
+    fprintf(output, "<fill>%d</fill>\n", filled ? 1 : 0);
+    fprintf(output, "<outline>%d</outline>\n", outlined ? 1 : 0);
+
+    fputs("</PolyStyle>\n", output);
+
+    return;
+}
+
+void
+kml_icon_style(FILE *output, char const *icon_url, double scale)
+{
+    assert(output);
+
+    fputs("<IconStyle>\n", output);
+
+    if (scale > 0.0) {
+        fprintf(output, "<scale>%lf</scale>\n", scale);
+    } else {
+        fputs("<scale>1</scale>\n", output);
+    }
+
+    if (icon_url) {
+        fprintf(output, "<Icon><href>%s</href></Icon>\n", icon_url);
+    }
+
+    fputs("</IconStyle>\n", output);
     return;
 }
 
@@ -299,9 +335,104 @@ void
 kml_timespan(FILE *output, time_t start, time_t end)
 {
     assert(output);
+    struct tm start_tm = {0};
+    struct tm end_tm = {0};
 
-    // TODO: Implement
-    assert(false);
+    gmtime_r(&start, &start_tm);
+    gmtime_r(&end, &end_tm);
 
+    char start_str[25] = {0};
+    char end_str[25] = {0};
+
+    strftime(start_str, sizeof(start_str), "%Y-%m-%dT%H:%M:%S.000Z", &start_tm);
+    strftime(end_str, sizeof(end_str), "%Y-%m-%dT%H:%M:%S.000Z", &end_tm);
+
+    fputs("<TimeSpan>\n", output);
+    fprintf(output, "<begin>%s</begin>\n", start_str);
+    fprintf(output, "<end>%s</end>\n", end_str);
+    fputs("</TimeSpan>\n", output);
+
+    return;
+}
+
+void
+kml_start_multigeometry(FILE *output)
+{
+    assert(output);
+    fputs("<MultiGeometry>\n", output);
+    return;
+}
+
+void
+kml_end_multigeometry(FILE *output)
+{
+    assert(output);
+    fputs("</MultiGeometry>\n", output);
+    return;
+}
+
+void
+kml_start_polygon(FILE *output)
+{
+    assert(output);
+    fputs("<Polygon>\n", output);
+    return;
+}
+
+void
+kml_end_polygon(FILE *output)
+{
+    assert(output);
+    fputs("</Polygon>\n", output);
+    return;
+}
+
+void
+kml_polygon_start_outer_ring(FILE *output)
+{
+    assert(output);
+    fputs("<outerBoundaryIs>\n", output);
+    return;
+}
+
+void
+kml_polygon_end_outer_ring(FILE *output)
+{
+    assert(output);
+    fputs("</outerBoundaryIs>\n", output);
+    return;
+}
+
+void
+kml_start_linear_ring(FILE *output)
+{
+    assert(output);
+    fputs("<LinearRing>\n", output);
+    fputs("<coordinates>\n", output);
+    return;
+}
+
+void
+kml_end_linear_ring(FILE *output)
+{
+    assert(output);
+    fputs("</coordinates>\n", output);
+    fputs("</LinearRing>\n", output);
+    return;
+}
+
+void
+kml_linear_ring_add_vertex(FILE *output, double lat, double lon)
+{
+    assert(output);
+    fprintf(output, "%lf,%lf,0\n", lon, lat);
+    return;
+}
+
+void
+kml_point(FILE *output, double lat, double lon)
+{
+    assert(output);
+    fprintf(output, "<Point>\n<coordinates>%lf,%lf,0.0</coordinates>\n</Point>\n", lon, lat);
     return;
 }

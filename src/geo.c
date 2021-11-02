@@ -217,7 +217,7 @@ sat_pixels_bounding_boxes_overlap(struct SatPixel const left[static 1],
 }
 
 struct Coord
-sat_pixel_centroid(struct SatPixel pxl[static 1])
+sat_pixel_centroid(struct SatPixel const pxl[static 1])
 {
     /* Steps to calculatule the centroid of a quadrilateral.
      *
@@ -515,7 +515,7 @@ pixel_list_clear(struct PixelList list[static 1])
 }
 
 struct Coord
-pixel_list_centroid(struct PixelList list[static 1])
+pixel_list_centroid(struct PixelList const list[static 1])
 {
     assert(list);
 
@@ -572,10 +572,35 @@ pixel_list_binary_deserialize(unsigned char buffer[static sizeof(size_t)])
 /*-------------------------------------------------------------------------------------------------
  *                                         KML Export
  *-----------------------------------------------------------------------------------------------*/
-int
-pixel_list_kml_print(FILE *strm, struct PixelList plist[static 1])
+void
+pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
 {
-    assert(false);
+    assert(plist);
+
+    kml_start_multigeometry(strm);
+    for (unsigned int i = 0; i < plist->len; ++i) {
+        struct SatPixel pixel = plist->pixels[i];
+        kml_start_polygon(strm);
+        kml_polygon_start_outer_ring(strm);
+        kml_start_linear_ring(strm);
+
+        for (unsigned int j = 0; j < sizeof(pixel.coords) / sizeof(pixel.coords[0]); ++j) {
+            struct Coord coord = pixel.coords[j];
+            kml_linear_ring_add_vertex(strm, coord.lat, coord.lon);
+        }
+        // Close the loop.
+        struct Coord coord = pixel.coords[0];
+        kml_linear_ring_add_vertex(strm, coord.lat, coord.lon);
+
+        kml_end_linear_ring(strm);
+        kml_polygon_end_outer_ring(strm);
+        kml_end_polygon(strm);
+    }
+    struct Coord centroid = pixel_list_centroid(plist);
+    kml_point(strm, centroid.lat, centroid.lon);
+    kml_end_multigeometry(strm);
+
+    return;
 }
 
 /*-------------------------------------------------------------------------------------------------
