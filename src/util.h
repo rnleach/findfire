@@ -6,6 +6,7 @@
  */
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -109,3 +110,34 @@ void dir_walk_destroy(struct DirWalkState done[static 1]);
  * added to the stack and all files under that root will be returned.
  */
 char const *dir_walk_next_path(struct DirWalkState stck[static 1]);
+
+/*-------------------------------------------------------------------------------------------------
+ *                                     Create KML Files
+ *-----------------------------------------------------------------------------------------------*/
+/** \brief Write out a KML header for a file opening the Document element. */
+void kml_start_document(FILE *output);
+
+/** \brief Write out a KML footer for a file closing the Document element. */
+void kml_end_document(FILE *output);
+
+/** \brief Start a Placemark. */
+void kml_start_placemark(FILE *output, char const *name, char const *description,
+                         char const *style_url);
+
+/** \brief Finish a Placemark. */
+void kml_end_placemark(FILE *output);
+
+/** Start a style definition. */
+void kml_start_style(FILE *output, char const *style_id);
+
+/** End a style definition. */
+void kml_end_style(FILE *output);
+
+/** Create a PolyStyle element.
+ *
+ * This should only go inside a style element.
+ */
+void kml_poly_style(FILE *output, char const *color, bool filled, bool outlined);
+
+/** Create a TimeSpan element. */
+void kml_timespan(FILE *output, time_t start, time_t end);

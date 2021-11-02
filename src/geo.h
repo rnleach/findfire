@@ -171,7 +171,8 @@ struct PixelList *pixel_list_binary_deserialize(unsigned char buffer[static size
 /** Write out a pixel list in KML format.
  *
  * This will print out a multigeometry KML element. It should be composed as part of a function
- * that outputs a KML file where that higher function add style information.
+ * that outputs a KML file where that higher function adds style information and the rest of the
+ * document.
  *
  * \returns the number of bytes written to the \param strm or -1 if there was an error.
  */

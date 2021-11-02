@@ -214,3 +214,94 @@ dir_walk_next_path(struct DirWalkState state[static 1])
     // If we get here, we've run out of entries.
     return 0;
 }
+
+/*-------------------------------------------------------------------------------------------------
+ *                                     Create KML Files
+ *-----------------------------------------------------------------------------------------------*/
+void
+kml_start_document(FILE *output)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_end_document(FILE *output)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_start_placemark(FILE *output, char const *name, char const *description, char const *style_url)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_end_placemark(FILE *output)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_start_style(FILE *output, char const *style_id)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_end_style(FILE *output)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_poly_style(FILE *output, char const *color, bool filled, bool outlined)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
+
+void
+kml_timespan(FILE *output, time_t start, time_t end)
+{
+    assert(output);
+
+    // TODO: Implement
+    assert(false);
+
+    return;
+}
