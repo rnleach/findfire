@@ -13,16 +13,10 @@
                                                  Cluster
 -------------------------------------------------------------------------------------------------*/
 struct Cluster {
-    /// Average latitude of the points in the cluster.
-    double lat;
-    /// Average longitude of the points in the cluster.
-    double lon;
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     double power;
-    /// The distance from the cluster center to the farthest point in the cluster.
-    double radius;
-    /// The number of points that are in this cluster.
-    int count;
+    /// Pixels making up the cluster.
+    struct PixelList *pixels;
 };
 
 struct Cluster *
@@ -31,7 +25,7 @@ cluster_new(void)
     struct Cluster *new = malloc(sizeof(struct Cluster));
     Stopif(!new, exit(EXIT_FAILURE), "malloc fail: out of memory");
 
-    *new = (struct Cluster){.lat = NAN, .lon = NAN, .power = 0.0, .radius = 0.0, .count = 0};
+    *new = (struct Cluster){.power = 0.0, .pixels = pixel_list_new()};
 
     return new;
 }
@@ -41,47 +35,61 @@ cluster_destroy(struct Cluster **cluster)
 {
     assert(cluster);
     assert(*cluster);
+    (*cluster)->pixels = pixel_list_destroy((*cluster)->pixels);
     free(*cluster);
     *cluster = 0;
 }
 
+void
+cluster_add_fire_point(struct Cluster *cluster, struct FirePoint *fire_point)
+{
+    assert(cluster);
+    assert(fire_point);
+
+    cluster->pixels = pixel_list_append(cluster->pixels, &fire_point->pixel);
+    cluster->power += fire_point->power;
+}
+
 struct Cluster *
-cluster_copy(struct Cluster *cluster)
+cluster_copy(struct Cluster const *cluster)
 {
     assert(cluster);
 
-    struct Cluster *copy = cluster_new();
-    *copy = *cluster;
+    struct Cluster *copy = malloc(sizeof(struct Cluster));
+    Stopif(!copy, exit(EXIT_FAILURE), "malloc fail: out of memory");
+
+    *copy = (struct Cluster){.power = cluster->power, .pixels = pixel_list_copy(cluster->pixels)};
 
     return copy;
 }
 
 double
-cluster_total_power(struct Cluster *cluster)
+cluster_total_power(struct Cluster const *cluster)
 {
     assert(cluster);
     return cluster->power;
 }
 
-double
-cluster_radius(struct Cluster *cluster)
+unsigned int
+cluster_pixel_count(struct Cluster const *cluster)
 {
     assert(cluster);
-    return cluster->radius;
+
+    return cluster->pixels->len;
 }
 
-int
-cluster_pixel_count(struct Cluster *cluster)
+const struct PixelList *
+cluster_pixels(struct Cluster const *cluster)
 {
     assert(cluster);
-    return cluster->count;
+    return cluster->pixels;
 }
 
 struct Coord
-cluster_centroid(struct Cluster *cluster)
+cluster_centroid(struct Cluster const *cluster)
 {
     assert(cluster);
-    return (struct Coord){.lat = cluster->lat, .lon = cluster->lon};
+    return pixel_list_centroid(cluster->pixels);
 }
 
 int
@@ -290,46 +298,18 @@ clusters_from_fire_points(GArray const *points)
 
         struct Cluster *curr_clust = cluster_new();
         struct FirePoint *curr_fire_point = &g_array_index(cluster_points, struct FirePoint, 0);
-        struct Coord centroid = sat_pixel_centroid(&curr_fire_point->pixel);
-        curr_clust->lat = centroid.lat;
-        curr_clust->lon = centroid.lon;
-        curr_clust->power = curr_fire_point->power;
-        curr_clust->count = 1;
+        cluster_add_fire_point(curr_clust, curr_fire_point);
 
         for (unsigned int j = 1; j < cluster_points->len; ++j) {
 
             curr_fire_point = &g_array_index(cluster_points, struct FirePoint, j);
-            centroid = sat_pixel_centroid(&curr_fire_point->pixel);
-
-            curr_clust->lat += centroid.lat;
-            curr_clust->lon += centroid.lon;
-            curr_clust->power += curr_fire_point->power;
-            curr_clust->count += 1;
-        }
-
-        curr_clust->lat /= curr_clust->count;
-        curr_clust->lon /= curr_clust->count;
-
-        for (unsigned int j = 1; j < cluster_points->len; ++j) {
-
-            curr_fire_point = &g_array_index(cluster_points, struct FirePoint, j);
-            centroid = sat_pixel_centroid(&curr_fire_point->pixel);
-
-            double pnt_lat = centroid.lat;
-            double pnt_lon = centroid.lon;
-
-            double gs_distance =
-                great_circle_distance(pnt_lat, pnt_lon, curr_clust->lat, curr_clust->lon);
-
-            if (gs_distance > curr_clust->radius) {
-                curr_clust->radius = gs_distance;
-            }
+            cluster_add_fire_point(curr_clust, curr_fire_point);
         }
 
         clusters = g_array_append_val(clusters, curr_clust);
-
         cluster_points = g_array_set_size(cluster_points, 0);
     }
+
     g_array_unref(cluster_points);
 
     return clusters;

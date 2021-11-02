@@ -4,6 +4,9 @@
 
 #include "sqlite3.h"
 
+#include "cluster.h"
+#include "geo.h"
+
 /**
  * \brief Open a connection to the database to store clusters.
  *
@@ -40,8 +43,7 @@ int cluster_db_finalize_add(sqlite3 *db, sqlite3_stmt **stmt);
  * \returns the 0 on success and non-zero on error.
  */
 int cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector,
-                       time_t scan_start, float lat, float lon, float power, float radius,
-                       int num_points);
+                       time_t scan_start, time_t scan_end, struct Cluster const *cluster);
 /**
  * \brief Find the latest valid time in the database so you can safely skip anything older.
  *

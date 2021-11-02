@@ -87,7 +87,7 @@ cluster_stats_new(void)
 static void
 cluster_stats_destroy(struct ClusterStats *tgt)
 {
-    free(tgt->biggest_fire);
+    cluster_destroy(&tgt->biggest_fire);
     memset(tgt, 0, sizeof(struct ClusterStats));
 }
 
@@ -138,7 +138,6 @@ cluster_stats_print(struct ClusterStats stats)
            "           Lat: %10.6lf\n"
            "           Lon: %11.6lf\n"
            "         Count: %2d\n"
-           "        Radius: %06.3lf km\n"
            "         Power: %5.0lf MW\n\n"
            "        Counts:\n"
            "         Total: %10u\n"
@@ -148,8 +147,7 @@ cluster_stats_print(struct ClusterStats stats)
            "   Pct < 10 MW: %10u%%\n",
            stats.biggest_sat, stats.biggest_sector, start_str, end_str, biggest_centroid.lat,
            biggest_centroid.lon, cluster_pixel_count(stats.biggest_fire),
-           cluster_radius(stats.biggest_fire), cluster_total_power(stats.biggest_fire),
-           stats.num_clusters, stats.num_power_lt_1mw,
+           cluster_total_power(stats.biggest_fire), stats.num_clusters, stats.num_power_lt_1mw,
            stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
            stats.num_power_lt_10mw * 100 / stats.num_clusters);
 }
@@ -345,7 +343,7 @@ main()
                 GArray *clusters_array = cluster_list_clusters(clusters);
 
                 const char *sat = cluster_list_satellite(clusters);
-                const char *sector = cluster_list_satellite(clusters);
+                const char *sector = cluster_list_sector(clusters);
                 time_t start = cluster_list_scan_start(clusters);
                 time_t end = cluster_list_scan_end(clusters);
 
@@ -353,12 +351,7 @@ main()
 
                     struct Cluster *curr_clust = g_array_index(clusters_array, struct Cluster *, i);
 
-                    struct Coord centroid = cluster_centroid(curr_clust);
-
-                    int failure = cluster_db_add_row(add_stmt, sat, sector, start, centroid.lat,
-                                                     centroid.lon, cluster_total_power(curr_clust),
-                                                     cluster_radius(curr_clust),
-                                                     cluster_pixel_count(curr_clust));
+                    int failure = cluster_db_add_row(add_stmt, sat, sector, start, end, curr_clust);
 
                     Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
 

@@ -5,6 +5,7 @@
 
 #include <glib.h>
 
+#include "firepoint.h"
 #include "geo.h"
 
 /**
@@ -29,20 +30,23 @@ struct Cluster *cluster_new(void);
 /** Cleanup a Cluster. */
 void cluster_destroy(struct Cluster **cluster);
 
+/** Add a FirePoint to this Cluster. */
+void cluster_add_fire_point(struct Cluster *cluster, struct FirePoint *fire_point);
+
 /** Create a deep copy of a Cluster. */
-struct Cluster *cluster_copy(struct Cluster *cluster);
+struct Cluster *cluster_copy(struct Cluster const *cluster);
 
 /** Get the total power of all pixels in the Cluster. */
-double cluster_total_power(struct Cluster *cluster);
-
-/** Get a representative radius of the Cluster. */
-double cluster_radius(struct Cluster *cluster);
+double cluster_total_power(struct Cluster const *cluster);
 
 /** Get the number of SatPixels in a Cluster. */
-int cluster_pixel_count(struct Cluster *cluster);
+unsigned int cluster_pixel_count(struct Cluster const *cluster);
+
+/** Get access to the pixels in the cluster. */
+const struct PixelList *cluster_pixels(struct Cluster const *cluster);
 
 /** Get the centroid of a cluster. */
-struct Coord cluster_centroid(struct Cluster *cluster);
+struct Coord cluster_centroid(struct Cluster const *cluster);
 
 /** Compare Cluster objects for sorting in descending order of power. */
 int cluster_descending_power_compare(const void *ap, const void *bp);

@@ -484,6 +484,18 @@ pixel_list_destroy(struct PixelList plist[static 1])
 }
 
 struct PixelList *
+pixel_list_copy(struct PixelList plist[static 1])
+{
+    assert(plist);
+
+    size_t copy_size = plist->len >= 4 ? plist->len : 4;
+    struct PixelList *copy = pixel_list_new_with_capacity(copy_size);
+    memcpy(copy, plist, sizeof(struct PixelList) + copy_size * sizeof(struct SatPixel));
+
+    return copy;
+}
+
+struct PixelList *
 pixel_list_append(struct PixelList list[static 1], struct SatPixel apix[static 1])
 {
     if (list->len == list->capacity) {
@@ -502,17 +514,35 @@ pixel_list_clear(struct PixelList list[static 1])
     return list;
 }
 
+struct Coord
+pixel_list_centroid(struct PixelList list[static 1])
+{
+    assert(list);
+
+    struct Coord centroid = {.lat = 0.0, .lon = 0.0};
+    for (unsigned int i = 0; i < list->len; ++i) {
+        struct Coord coord = sat_pixel_centroid(&list->pixels[i]);
+        centroid.lat += coord.lat;
+        centroid.lon += coord.lon;
+    }
+
+    centroid.lat /= (double)list->len;
+    centroid.lon /= (double)list->len;
+
+    return centroid;
+}
+
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
 size_t
-pixel_list_binary_serialize_buffer_size(struct PixelList plist[static 1])
+pixel_list_binary_serialize_buffer_size(struct PixelList const plist[static 1])
 {
     return sizeof(struct PixelList) + sizeof(struct SatPixel) * plist->len;
 }
 
 size_t
-pixel_list_binary_serialize(struct PixelList plist[static 1], size_t buf_size,
+pixel_list_binary_serialize(struct PixelList const plist[static 1], size_t buf_size,
                             unsigned char buffer[buf_size])
 {
     memcpy(buffer, plist, buf_size);

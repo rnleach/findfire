@@ -112,6 +112,9 @@ struct PixelList *pixel_list_new_with_capacity(size_t capacity);
 /** Destroy a PixelList.  */
 struct PixelList *pixel_list_destroy(struct PixelList plist[static 1]);
 
+/** Create a deep copy of the PixelList. */
+struct PixelList *pixel_list_copy(struct PixelList plist[static 1]);
+
 /** Append a SatPixel to the list.
  *
  * Reallocates the backing array if necessary and returns the new pointer, so always use the return
@@ -129,13 +132,16 @@ struct PixelList *pixel_list_append(struct PixelList list[static 1],
  */
 struct PixelList *pixel_list_clear(struct PixelList list[static 1]);
 
+/** Calculate the centroid of a PixelList. */
+struct Coord pixel_list_centroid(struct PixelList list[static 1]);
+
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
 // The binary formatting is for storing or retrieving from a database.
 
 /** Calculate the amount of space needed in a buffer to encode a PixelList into binary. */
-size_t pixel_list_binary_serialize_buffer_size(struct PixelList plist[static 1]);
+size_t pixel_list_binary_serialize_buffer_size(struct PixelList const plist[static 1]);
 
 /** Encode the PixelList into a binary format suitable for storing in a database.
  *
@@ -144,7 +150,7 @@ size_t pixel_list_binary_serialize_buffer_size(struct PixelList plist[static 1])
  *
  * \return The number of bytes written.
  */
-size_t pixel_list_binary_serialize(struct PixelList plist[static 1], size_t buf_size,
+size_t pixel_list_binary_serialize(struct PixelList const plist[static 1], size_t buf_size,
                                    unsigned char buffer[buf_size]);
 
 /** Deserialize an array of bytes into a PixelList.

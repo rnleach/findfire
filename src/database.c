@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "util.h"
 
@@ -16,11 +17,11 @@ cluster_db_connect(char const *path)
                   "satellite  TEXT    NOT NULL,                  \n"
                   "sector     TEXT    NOT NULL,                  \n"
                   "start_time INTEGER NOT NULL,                  \n"
+                  "end_time   INTEGER NOT NULL,                  \n"
                   "lat        REAL    NOT NULL,                  \n"
                   "lon        REAL    NOT NULL,                  \n"
                   "power      REAL    NOT NULL,                  \n"
-                  "radius     REAL    NOT NULL,                  \n"
-                  "cell_count INTEGER NOT NULL)                  \n";
+                  "pixels     BLOB NOT NULL)                     \n";
     char *err_message = 0;
 
     rc = sqlite3_exec(handle, query, 0, 0, &err_message);
@@ -58,8 +59,8 @@ cluster_db_prepare_to_add(sqlite3 *db)
         return 0;
     }
 
-    query = "INSERT INTO clusters (                                             \n"
-            "satellite, sector, start_time, lat, lon, power, radius, cell_count \n"
+    query = "INSERT INTO clusters (                                           \n"
+            "satellite, sector, start_time, end_time, lat, lon, power, pixels \n"
             ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
     sqlite3_stmt *stmt = 0;
@@ -89,7 +90,7 @@ cluster_db_finalize_add(sqlite3 *db, sqlite3_stmt **stmt)
 
 int
 cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector, time_t scan_start,
-                   float lat, float lon, float power, float radius, int num_points)
+                   time_t scan_end, struct Cluster const *cluster)
 {
     int rc = sqlite3_bind_text(stmt, 1, satellite, -1, 0);
     Stopif(rc != SQLITE_OK, return 1, "Error binding satellite: %s", sqlite3_errstr(rc));
@@ -100,20 +101,35 @@ cluster_db_add_row(sqlite3_stmt *stmt, char const *satellite, char const *sector
     rc = sqlite3_bind_int64(stmt, 3, scan_start);
     Stopif(rc != SQLITE_OK, return 1, "Error binding start time: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_double(stmt, 4, lat);
+    rc = sqlite3_bind_int64(stmt, 4, scan_end);
+    Stopif(rc != SQLITE_OK, return 1, "Error binding start time: %s", sqlite3_errstr(rc));
+
+    struct Coord centroid = cluster_centroid(cluster);
+
+    rc = sqlite3_bind_double(stmt, 5, centroid.lat);
     Stopif(rc != SQLITE_OK, return 1, "Error binding lat: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_double(stmt, 5, lon);
+    rc = sqlite3_bind_double(stmt, 6, centroid.lon);
     Stopif(rc != SQLITE_OK, return 1, "Error binding lon: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_double(stmt, 6, power);
+    rc = sqlite3_bind_double(stmt, 7, cluster_total_power(cluster));
     Stopif(rc != SQLITE_OK, return 1, "Error binding power: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_double(stmt, 7, radius);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding radius: %s", sqlite3_errstr(rc));
+    unsigned char buffer[1024] = {0};
+    unsigned char *buf_ptr = buffer;
+    void (*transient_free)(void *) = SQLITE_TRANSIENT;
+    size_t buff_size = pixel_list_binary_serialize_buffer_size(cluster_pixels(cluster));
+    if (buff_size > sizeof(buffer)) {
+        transient_free = free; // free function from stdlib.h
+        buf_ptr = calloc(buff_size, sizeof(unsigned char));
+        Stopif(!buf_ptr, exit(EXIT_FAILURE), "calloc failure: out of memory");
+    }
 
-    rc = sqlite3_bind_int(stmt, 8, num_points);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding cell count: %s", sqlite3_errstr(rc));
+    size_t num_bytes_serialized =
+        pixel_list_binary_serialize(cluster_pixels(cluster), buff_size, buf_ptr);
+    Stopif(num_bytes_serialized != buff_size, exit(EXIT_FAILURE),
+           "Buffer size error serializing PixelList");
+    rc = sqlite3_bind_blob(stmt, 8, buf_ptr, buff_size, transient_free);
 
     rc = sqlite3_step(stmt);
     Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, return 1, "Error stepping: %s",
