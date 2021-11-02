@@ -2,7 +2,7 @@
 /**
  * \file geo.h
  *
- *  Geographic types and calculations.
+ *  \brief Geographic types and calculations.
  *
  * For the purpose of working with GOES-R/S satellite imagery working with quadrilaterals
  * representing the area of a scan pixel on earth as viewed from the satellite is all that is
@@ -29,9 +29,9 @@ struct Coord {
     double lon;
 };
 
-/** Determine if these coordinates are close to each other.
+/** \brief Determine if these coordinates are close to each other.
  *
- * The \param eps parameter is the maximum distance between points in the same units as the
+ * The \a eps parameter is the maximum distance between points in the same units as the
  * coordinates that two points can have and still be considered close.
  */
 bool coord_are_close(struct Coord left, struct Coord right, double eps);
@@ -41,16 +41,21 @@ bool coord_are_close(struct Coord left, struct Coord right, double eps);
  *-----------------------------------------------------------------------------------------------*/
 /** The coordinates describing the area of a pixel viewed from a GOES-R/S satellite. */
 struct SatPixel {
-    struct Coord ul;
-    struct Coord ll;
-    struct Coord lr;
-    struct Coord ur;
+    union {
+        struct {
+            struct Coord ul;
+            struct Coord ll;
+            struct Coord lr;
+            struct Coord ur;
+        };
+        struct Coord coords[4];
+    };
 };
 
 /** Calculate the centroid of a SatPixel.
  *
  * This function uses an algorithm that assumes the pixel is a quadrilateral, which is enforced
- * by the definition of the \a SatPixel type.
+ * by the definition of the SatPixel type.
  */
 struct Coord sat_pixel_centroid(struct SatPixel pxl[static 1]);
 
