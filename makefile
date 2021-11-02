@@ -17,14 +17,14 @@ TARGET1 = $(BUILDDIR)/$(PROG1)
 TARGET2 = $(BUILDDIR)/$(PROG2)
 TEST_TARGET = $(BUILDDIR)/$(TEST)
 
-CFLAGS = -g -Wall -Werror -std=c11 -I$(SOURCEDIR)
+CFLAGS = -Wall -Werror -std=c11 -I$(SOURCEDIR)
 LDLIBS = -lm
 ifeq ($(DEBUG),1)
-	CFLAGS +=
+	CFLAGS += -g
 	LDLIBS +=
 	BUILDDIR := $(DEBUGDIR)
 else
-	CFLAGS += -fPIC -flto -O3 
+	CFLAGS += -DNDEBUG -fPIC -flto -O3 
 	LDLIBS += -flto -fPIC
 	BUILDDIR := $(RELEASEDIR)
 endif
