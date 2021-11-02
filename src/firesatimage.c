@@ -94,7 +94,7 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
             if (power_mw > 0.0) {
 
                 double ips[4] = {i - 0.5, i - 0.5, i + 0.5, i + 0.5};
-                double jps[4] = {j + 0.5, j - 0.5, j - 0.5, j + 0.5};
+                double jps[4] = {j - 0.5, j + 0.5, j + 0.5, j - 0.5};
 
                 double xps[4] = {0};
                 double yps[4] = {0};
