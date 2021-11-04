@@ -41,9 +41,13 @@ ERR_CLEANUP:
 int
 cluster_db_close(sqlite3 **db)
 {
-    int rc = sqlite3_close(*db);
-    *db = 0;
-    return rc;
+    if (*db) {
+        int rc = sqlite3_close(*db);
+        *db = 0;
+        return rc;
+    }
+
+    return SQLITE_OK;
 }
 
 sqlite3_stmt *

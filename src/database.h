@@ -17,7 +17,7 @@ sqlite3 *cluster_db_connect(char const *path);
 /**
  * \brief Close and finalize the connection to the database.
  *
- * The supplied pointer will be zeroed out.
+ * The supplied pointer will be zeroed out. If the database handle is already NULL, that's OK.
  *
  * \returns SQLITE_OK if there is no error, otherwise it returns an sqlite3 error code.
  */

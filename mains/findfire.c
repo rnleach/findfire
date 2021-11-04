@@ -32,12 +32,19 @@
 #include <time.h>
 
 #include "cluster.h"
+#include "courier.h"
 #include "database.h"
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
 char const *kml_file = "/home/ryan/wxdata/findfire.kml";
 char const *data_dir = "/media/ryan/SAT/GOESX";
+
+#if defined(__APPLE__) && defined(__MACH__)
+#    define pthread_setname(a) pthread_setname_np(a)
+#elif defined(__linux__)
+#    define pthread_setname(a) pthread_setname_np(pthread_self(), (a))
+#endif
 
 static void
 program_initialization()
@@ -369,19 +376,102 @@ cluster_list_stats_print(struct ClusterListStats clstats)
            clstats.min_num_clusters);
 }
 
-int
-main()
+/*-------------------------------------------------------------------------------------------------
+ *                             Steps in the processing pipeline.
+ *-----------------------------------------------------------------------------------------------*/
+struct PipelineLink {
+    Courier *from;
+    Courier *to;
+};
+
+struct WalkerArgs {
+    time_t newest_scan_start_time;
+    Courier *to_cluster_list_loader;
+};
+
+static void *
+directory_walker(void *arg)
 {
-    program_initialization();
-    int rc = EXIT_FAILURE; // We'll set it to success once we've achieved succes.
+    static char const threadname[] = "findfire-walker";
+    static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
+    pthread_setname(threadname);
+
+    struct WalkerArgs *args = arg;
+    time_t newest_scan_start_time = args->newest_scan_start_time;
+    Courier *to_cluster_list_loader = args->to_cluster_list_loader;
+
+    courier_open(to_cluster_list_loader);
+
+    struct DirWalkState dir_walk_state = dir_walk_new_with_root(data_dir);
+    char const *path = dir_walk_next_path(&dir_walk_state);
+
+    while (path) {
+        if (!skip_path(path, newest_scan_start_time)) {
+            printf("Processing: %s\n", path);
+
+            char *owned_path = 0;
+            asprintf(&owned_path, "%s", path);
+            courier_send(to_cluster_list_loader, owned_path);
+        }
+
+        path = dir_walk_next_path(&dir_walk_state);
+    }
+
+    dir_walk_destroy(&dir_walk_state);
+
+    courier_close(to_cluster_list_loader);
+    return 0;
+}
+
+static void *
+fire_cluster_list_loader(void *arg)
+{
+    static char const threadname[] = "findfire-loader";
+    static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
+    pthread_setname(threadname);
+
+    struct PipelineLink *links = arg;
+    Courier *from_dir_walker = links->from;
+    Courier *to_database = links->to;
+
+    courier_open(to_database);
+    courier_wait_until_ready(from_dir_walker);
+
+    void *item = 0;
+    while ((item = courier_receive(from_dir_walker))) {
+        char *path = item;
+
+        struct ClusterList *clusters = cluster_list_from_file(path);
+        if (!cluster_list_error(clusters)) {
+            courier_send(to_database, clusters);
+        } else {
+            printf("    Error processing file.\n");
+            cluster_list_destroy(&clusters);
+        }
+
+        free(path);
+    }
+
+    courier_close(to_database);
+
+    return 0;
+}
+
+static void *
+database_filler(void *arg)
+{
+    static char const threadname[] = "findfire-dbase";
+    static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
+    pthread_setname(threadname);
 
     sqlite3 *cluster_db = 0;
     sqlite3_stmt *add_stmt = 0;
 
     cluster_db = cluster_db_connect(database_file);
-    Stopif(!cluster_db, goto CLEANUP_AND_EXIT, "Error opening database.");
+    Stopif(!cluster_db, goto CLEANUP_AND_RETURN, "Error opening database. (%s %u)", __FILE__,
+           __LINE__);
     add_stmt = cluster_db_prepare_to_add(cluster_db);
-    Stopif(!add_stmt, goto CLEANUP_AND_EXIT, "Error preparing add statement.");
+    Stopif(!add_stmt, goto CLEANUP_AND_RETURN, "Error preparing add statement.");
 
     // Stats on individual clusters.
     struct ClusterStats cluster_stats = cluster_stats_new();
@@ -389,51 +479,36 @@ main()
     // Stats about satellite images.
     struct ClusterListStats clstats = cluster_list_stats_new();
 
-    time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
+    Courier *from_cluster_list_loader = arg;
+    courier_wait_until_ready(from_cluster_list_loader);
 
-    struct DirWalkState dir_walk_state = dir_walk_new_with_root(data_dir);
-    char const *path = dir_walk_next_path(&dir_walk_state);
+    void *item;
+    while ((item = courier_receive(from_cluster_list_loader))) {
+        struct ClusterList *clusters = item;
 
-    while (path) {
+        GArray *clusters_array = cluster_list_clusters(clusters);
 
-        if (!skip_path(path, newest_scan_start_time)) {
+        const char *sat = cluster_list_satellite(clusters);
+        const char *sector = cluster_list_sector(clusters);
+        time_t start = cluster_list_scan_start(clusters);
+        time_t end = cluster_list_scan_end(clusters);
 
-            printf("Processing: %s\n", path);
+        for (unsigned int i = 0; i < clusters_array->len; ++i) {
 
-            struct ClusterList *clusters = cluster_list_from_file(path);
-            if (!cluster_list_error(clusters)) {
-                GArray *clusters_array = cluster_list_clusters(clusters);
+            struct Cluster *curr_clust = g_array_index(clusters_array, struct Cluster *, i);
 
-                const char *sat = cluster_list_satellite(clusters);
-                const char *sector = cluster_list_sector(clusters);
-                time_t start = cluster_list_scan_start(clusters);
-                time_t end = cluster_list_scan_end(clusters);
+            int failure = cluster_db_add_row(add_stmt, sat, sector, start, end, curr_clust);
 
-                for (unsigned int i = 0; i < clusters_array->len; ++i) {
+            Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
-                    struct Cluster *curr_clust = g_array_index(clusters_array, struct Cluster *, i);
-
-                    int failure = cluster_db_add_row(add_stmt, sat, sector, start, end, curr_clust);
-
-                    Stopif(failure, goto CLEANUP_AND_EXIT, "Error adding row to database.");
-
-                    cluster_stats =
-                        cluster_stats_update(cluster_stats, sat, sector, start, end, curr_clust);
-                }
-
-                clstats = cluster_list_stats_update(clstats, clusters);
-
-            } else {
-                printf("    Error processing file.\n");
-            }
-
-            cluster_list_destroy(&clusters);
+            cluster_stats =
+                cluster_stats_update(cluster_stats, sat, sector, start, end, curr_clust);
         }
 
-        path = dir_walk_next_path(&dir_walk_state);
-    }
+        clstats = cluster_list_stats_update(clstats, clusters);
 
-    dir_walk_destroy(&dir_walk_state);
+        cluster_list_destroy(&clusters);
+    }
 
     cluster_stats_print(cluster_stats);
     save_cluster_kml(cluster_stats.biggest_fire, cluster_stats.biggest_start,
@@ -444,11 +519,70 @@ main()
     cluster_list_stats_print(clstats);
     cluster_list_stats_destroy(&clstats);
 
+CLEANUP_AND_RETURN:
+    cluster_db_finalize_add(cluster_db, &add_stmt);
+    cluster_db_close(&cluster_db);
+    return 0;
+}
+
+/*-------------------------------------------------------------------------------------------------
+ *                                             MAIN
+ *-----------------------------------------------------------------------------------------------*/
+int
+main()
+{
+    int rc = EXIT_FAILURE;
+    program_initialization();
+
+    Courier from_dir_walk = courier_new();
+    Courier from_cluster_loader = courier_new();
+    struct PipelineLink loader_link = {.from = &from_dir_walk, .to = &from_cluster_loader};
+
+    pthread_t threads[4] = {0};
+    sqlite3 *cluster_db = 0;
+
+    cluster_db = cluster_db_connect(database_file);
+    Stopif(!cluster_db, goto CLEANUP_AND_EXIT, "Error opening database. (%s %u)", __FILE__,
+           __LINE__);
+
+    time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
+    // Close it up and set it to NULL, we no longer need it and it will interefere with the other
+    // threads if left open.
+    cluster_db_close(&cluster_db);
+
+    struct WalkerArgs walker_args = {.newest_scan_start_time = newest_scan_start_time,
+                                     .to_cluster_list_loader = &from_dir_walk};
+
+    int s = pthread_create(&threads[0], 0, directory_walker, &walker_args);
+    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "directory_walker");
+    s = pthread_create(&threads[1], 0, fire_cluster_list_loader, &loader_link);
+    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "fire_cluster_list_loader");
+    s = pthread_create(&threads[2], 0, fire_cluster_list_loader, &loader_link);
+    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "fire_cluster_list_loader");
+    s = pthread_create(&threads[3], 0, database_filler, &from_cluster_loader);
+    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "database_filler");
+
     rc = EXIT_SUCCESS;
 
 CLEANUP_AND_EXIT:
-    cluster_db_finalize_add(cluster_db, &add_stmt);
+
+    // Already closed in successful case, but maybe not if there was an error. No harm in closing
+    // it again since it will be NULL.
     cluster_db_close(&cluster_db);
+
+    for (unsigned int i = 0; i < sizeof(threads) / sizeof(threads[0]); ++i) {
+        if (threads[i]) {
+            s = pthread_join(threads[i], 0);
+            if (s) {
+                fprintf(stderr, "Error joining thread %u\n", i);
+                rc = EXIT_FAILURE;
+            }
+        }
+    }
+
+    courier_destroy(&from_cluster_loader);
+    courier_destroy(&from_dir_walk);
+
     program_finalization();
 
     return rc;

@@ -18,7 +18,7 @@ TARGET2 = $(BUILDDIR)/$(PROG2)
 TEST_TARGET = $(BUILDDIR)/$(TEST)
 
 CFLAGS = -Wall -Werror -std=c11 -I$(SOURCEDIR)
-LDLIBS = -lm
+LDLIBS = -lm -lpthread
 ifeq ($(DEBUG),1)
 	CFLAGS += -g
 	LDLIBS +=
