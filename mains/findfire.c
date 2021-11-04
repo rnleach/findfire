@@ -41,7 +41,7 @@ char const *kml_file = "/home/ryan/wxdata/findfire.kml";
 char const *data_dir = "/media/ryan/SAT/GOESX";
 
 #if defined(__APPLE__) && defined(__MACH__)
-#    define pthread_setname(a) 
+#    define pthread_setname(a)
 #elif defined(__linux__)
 #    define pthread_setname(a) pthread_setname_np(pthread_self(), (a))
 #endif
