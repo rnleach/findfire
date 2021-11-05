@@ -11,7 +11,7 @@
  * The goal of having all this data together is for other programs to read the data from the
  * database and perform more analysis.
  *
- * This program queries an existing database to find if a file has been processed already before 
+ * This program queries an existing database to find if a file has been processed already before
  * processing it.
  *
  * At the end of processing, some summary statistics are printed to the screen and a file called
@@ -34,7 +34,7 @@
 #include "firesatimage.h"
 
 char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
-char const *kml_file = "/home/ryan/wxdata/findfire.kml";
+char *kml_file = 0;
 char const *data_dir = "/media/ryan/SAT/GOESX";
 
 #if defined(__APPLE__) && defined(__MACH__)
@@ -51,11 +51,25 @@ program_initialization()
     tzset();
 
     GDALAllRegister();
+
+    // Initialize with with environment variables
+    if (getenv("CLUSTER_DB")) {
+        database_file = getenv("CLUSTER_DB");
+    }
+    asprintf(&kml_file, "%s.kml", database_file);
+
+    if (getenv("SAT_ARCHIVE")) {
+        data_dir = getenv("SAT_ARCHIVE");
+    }
+
+    fprintf(stdout, "Database: %s\n     KML: %s\n Archive: %s\n", database_file, kml_file,
+            data_dir);
 }
 
 static void
 program_finalization()
 {
+    free(kml_file);
 }
 
 static bool
