@@ -571,16 +571,18 @@ main()
     Courier from_cluster_loader = courier_new();
     struct PipelineLink loader_link = {.from = &from_dir_walk, .to = &from_cluster_loader};
 
-    pthread_t threads[4] = {0};
+    pthread_t threads[6] = {0};
 
     int s = pthread_create(&threads[0], 0, directory_walker, &from_dir_walk);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "directory_walker");
-    s = pthread_create(&threads[1], 0, fire_cluster_list_loader, &loader_link);
-    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "fire_cluster_list_loader");
-    s = pthread_create(&threads[2], 0, fire_cluster_list_loader, &loader_link);
-    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "fire_cluster_list_loader");
-    s = pthread_create(&threads[3], 0, database_filler, &from_cluster_loader);
+    s = pthread_create(&threads[1], 0, database_filler, &from_cluster_loader);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "database_filler");
+
+    for (unsigned int i = 2; i < sizeof(threads) / sizeof(threads[0]); ++i) {
+        s = pthread_create(&threads[i], 0, fire_cluster_list_loader, &loader_link);
+        Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s(%u) thread.",
+               "fire_cluster_list_loader", i - 2);
+    }
 
     rc = EXIT_SUCCESS;
 
