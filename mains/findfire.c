@@ -497,20 +497,18 @@ database_filler(void *arg)
     while ((item = courier_receive(from_cluster_list_loader))) {
         struct ClusterList *clusters = item;
 
-        GArray *clusters_array = cluster_list_clusters(clusters);
+        int failure = cluster_db_add(cluster_db, add_stmt, clusters);
+        Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
         const char *sat = cluster_list_satellite(clusters);
         const char *sector = cluster_list_sector(clusters);
         time_t start = cluster_list_scan_start(clusters);
         time_t end = cluster_list_scan_end(clusters);
+        GArray *clusters_array = cluster_list_clusters(clusters);
 
         for (unsigned int i = 0; i < clusters_array->len; ++i) {
 
             struct Cluster *curr_clust = g_array_index(clusters_array, struct Cluster *, i);
-
-            int failure = cluster_db_add_row(add_stmt, sat, sector, start, end, curr_clust);
-
-            Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
             cluster_stats =
                 cluster_stats_update(cluster_stats, sat, sector, start, end, curr_clust);

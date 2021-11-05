@@ -8,12 +8,11 @@
 
 #include "util.h"
 
+/*-------------------------------------------------------------------------------------------------
+ *                                 ClusterDatabase Open/Close
+ *-----------------------------------------------------------------------------------------------*/
 struct ClusterDatabase {
     sqlite3 *ptr;
-};
-
-struct ClusterDatabaseAdd {
-    sqlite3_stmt *ptr;
 };
 
 struct ClusterDatabase *
@@ -67,24 +66,29 @@ cluster_db_close(struct ClusterDatabase **db)
     return 0;
 }
 
+/*-------------------------------------------------------------------------------------------------
+ *                                ClusterDatabase Adding Rows
+ *-----------------------------------------------------------------------------------------------*/
+struct ClusterDatabaseAdd {
+    sqlite3_stmt *ptr;
+};
+
 struct ClusterDatabaseAdd *
 cluster_db_prepare_to_add(struct ClusterDatabase *db)
 {
     assert(db);
 
+    // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
+    sqlite3_busy_timeout(db->ptr, 5000);
+
     struct ClusterDatabaseAdd *add = 0;
     sqlite3_stmt *stmt = 0;
-    char *err_message = 0;
 
-    char *query = "BEGIN TRANSACTION";
-    int rc = sqlite3_exec(db->ptr, query, 0, 0, &err_message);
-    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error starting transaction: %s", err_message);
+    char *query = "INSERT INTO clusters (                                           \n"
+                  "satellite, sector, start_time, end_time, lat, lon, power, pixels \n"
+                  ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
-    query = "INSERT INTO clusters (                                           \n"
-            "satellite, sector, start_time, end_time, lat, lon, power, pixels \n"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-    rc = sqlite3_prepare_v2(db->ptr, query, -1, &stmt, 0);
+    int rc = sqlite3_prepare_v2(db->ptr, query, -1, &stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing statement: %s", sqlite3_errstr(rc));
 
     add = malloc(sizeof(struct ClusterDatabaseAdd));
@@ -97,7 +101,6 @@ cluster_db_prepare_to_add(struct ClusterDatabase *db)
 ERR_CLEANUP:
     free(add);
     sqlite3_finalize(stmt);
-    sqlite3_free(err_message);
 
     return 0;
 }
@@ -109,76 +112,100 @@ cluster_db_finalize_add(struct ClusterDatabase *db, struct ClusterDatabaseAdd **
 
     assert(db && db->ptr && stmt && (*stmt) && (*stmt)->ptr);
 
-    int rc = 0;
-    char *err_message = 0;
-
-    char *query = "COMMIT TRANSACTION";
-    rc = sqlite3_exec(db->ptr, query, 0, 0, &err_message);
-    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error committing transaction: %s", err_message);
-
-ERR_CLEANUP:
-    rc = sqlite3_finalize((*stmt)->ptr);
+    int rc = sqlite3_finalize((*stmt)->ptr);
     free(*stmt);
     *stmt = 0;
-    sqlite3_free(err_message);
     return rc;
 }
 
 int
-cluster_db_add_row(struct ClusterDatabaseAdd *stmt, char const *satellite, char const *sector,
-                   time_t scan_start, time_t scan_end, struct Cluster const *cluster)
+cluster_db_add(struct ClusterDatabase *db, struct ClusterDatabaseAdd *stmt,
+               struct ClusterList *clist)
 {
-    assert(stmt && stmt->ptr);
+    assert(stmt && stmt->ptr && clist);
 
-    int rc = sqlite3_bind_text(stmt->ptr, 1, satellite, -1, 0);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding satellite: %s", sqlite3_errstr(rc));
+    int rc = SQLITE_OK;
+    char *err_message = 0;
 
-    rc = sqlite3_bind_text(stmt->ptr, 2, sector, -1, 0);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding sector: %s", sqlite3_errstr(rc));
+    char *begin_trans = "BEGIN TRANSACTION";
+    rc = sqlite3_exec(db->ptr, begin_trans, 0, 0, &err_message);
+    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error starting transaction: %s", err_message);
 
-    rc = sqlite3_bind_int64(stmt->ptr, 3, scan_start);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding start time: %s", sqlite3_errstr(rc));
+    char const *satellite = cluster_list_satellite(clist);
+    char const *sector = cluster_list_sector(clist);
+    time_t scan_start = cluster_list_scan_start(clist);
+    time_t scan_end = cluster_list_scan_end(clist);
 
-    rc = sqlite3_bind_int64(stmt->ptr, 4, scan_end);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding start time: %s", sqlite3_errstr(rc));
-
-    struct Coord centroid = cluster_centroid(cluster);
-
-    rc = sqlite3_bind_double(stmt->ptr, 5, centroid.lat);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding lat: %s", sqlite3_errstr(rc));
-
-    rc = sqlite3_bind_double(stmt->ptr, 6, centroid.lon);
-    Stopif(rc != SQLITE_OK, return 1, "Error binding lon: %s", sqlite3_errstr(rc));
-
-    rc = sqlite3_bind_double(stmt->ptr, 7, cluster_total_power(cluster));
-    Stopif(rc != SQLITE_OK, return 1, "Error binding power: %s", sqlite3_errstr(rc));
+    GArray *clusters = cluster_list_clusters(clist);
 
     unsigned char buffer[1024] = {0};
-    unsigned char *buf_ptr = buffer;
-    void (*transient_free)(void *) = SQLITE_TRANSIENT;
-    size_t buff_size = pixel_list_binary_serialize_buffer_size(cluster_pixels(cluster));
-    if (buff_size > sizeof(buffer)) {
-        transient_free = free; // free function from stdlib.h
-        buf_ptr = calloc(buff_size, sizeof(unsigned char));
-        Stopif(!buf_ptr, exit(EXIT_FAILURE), "calloc failure: out of memory");
+
+    for (unsigned int i = 0; i < clusters->len; ++i) {
+
+        struct Cluster *cluster = g_array_index(clusters, struct Cluster *, i);
+
+        rc = sqlite3_bind_text(stmt->ptr, 1, satellite, -1, 0);
+        Stopif(rc != SQLITE_OK, return 1, "Error binding satellite: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_text(stmt->ptr, 2, sector, -1, 0);
+        Stopif(rc != SQLITE_OK, return 1, "Error binding sector: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_int64(stmt->ptr, 3, scan_start);
+        Stopif(rc != SQLITE_OK, return 1, "Error binding start time: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_int64(stmt->ptr, 4, scan_end);
+        Stopif(rc != SQLITE_OK, return 1, "Error binding start time: %s", sqlite3_errstr(rc));
+
+        struct Coord centroid = cluster_centroid(cluster);
+
+        rc = sqlite3_bind_double(stmt->ptr, 5, centroid.lat);
+        Stopif(rc != SQLITE_OK, return 1, "Error binding lat: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_double(stmt->ptr, 6, centroid.lon);
+        Stopif(rc != SQLITE_OK, return 1, "Error binding lon: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_double(stmt->ptr, 7, cluster_total_power(cluster));
+        Stopif(rc != SQLITE_OK, return 1, "Error binding power: %s", sqlite3_errstr(rc));
+
+        unsigned char *buf_ptr = buffer;
+        void (*transient_free)(void *) = SQLITE_TRANSIENT;
+        size_t buff_size = pixel_list_binary_serialize_buffer_size(cluster_pixels(cluster));
+        if (buff_size > sizeof(buffer)) {
+            transient_free = free; // free function from stdlib.h
+            buf_ptr = calloc(buff_size, sizeof(unsigned char));
+            Stopif(!buf_ptr, exit(EXIT_FAILURE), "calloc failure: out of memory");
+        }
+
+        size_t num_bytes_serialized =
+            pixel_list_binary_serialize(cluster_pixels(cluster), buff_size, buf_ptr);
+        Stopif(num_bytes_serialized != buff_size, exit(EXIT_FAILURE),
+               "Buffer size error serializing PixelList");
+        rc = sqlite3_bind_blob(stmt->ptr, 8, buf_ptr, buff_size, transient_free);
+
+        rc = sqlite3_step(stmt->ptr);
+        Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, return 1, "Error stepping: %s",
+               sqlite3_errstr(rc));
+
+        rc = sqlite3_reset(stmt->ptr);
+        Stopif(rc != SQLITE_OK, return 1, "Error resetting: %s", sqlite3_errstr(rc));
     }
 
-    size_t num_bytes_serialized =
-        pixel_list_binary_serialize(cluster_pixels(cluster), buff_size, buf_ptr);
-    Stopif(num_bytes_serialized != buff_size, exit(EXIT_FAILURE),
-           "Buffer size error serializing PixelList");
-    rc = sqlite3_bind_blob(stmt->ptr, 8, buf_ptr, buff_size, transient_free);
-
-    rc = sqlite3_step(stmt->ptr);
-    Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, return 1, "Error stepping: %s",
-           sqlite3_errstr(rc));
-
-    rc = sqlite3_reset(stmt->ptr);
-    Stopif(rc != SQLITE_OK, return 1, "Error resetting: %s", sqlite3_errstr(rc));
+    char *commit_trans = "COMMIT TRANSACTION";
+    rc = sqlite3_exec(db->ptr, commit_trans, 0, 0, &err_message);
+    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error committing transaction: %s", err_message);
 
     return 0;
+
+ERR_CLEANUP:
+
+    sqlite3_reset(stmt->ptr);
+    sqlite3_free(err_message);
+    return 1;
 }
 
+/*-------------------------------------------------------------------------------------------------
+ *                                   ClusterDatabase Query
+ *-----------------------------------------------------------------------------------------------*/
 time_t
 cluster_db_newest_scan_start(struct ClusterDatabase *db, char const *satellite, char const *sector)
 {

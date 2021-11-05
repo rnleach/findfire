@@ -42,12 +42,12 @@ ClusterDatabaseAddH cluster_db_prepare_to_add(ClusterDatabaseH db);
 int cluster_db_finalize_add(ClusterDatabaseH db, ClusterDatabaseAddH *stmt);
 
 /**
- * \brief Binds values and steps through adding the values to the database.
+ * \brief Adds an entire ClusterList to the database.
  *
  * \returns the 0 on success and non-zero on error.
  */
-int cluster_db_add_row(ClusterDatabaseAddH stmt, char const *satellite, char const *sector,
-                       time_t scan_start, time_t scan_end, struct Cluster const *cluster);
+int cluster_db_add(ClusterDatabaseH db, ClusterDatabaseAddH stmt, struct ClusterList *clist);
+
 /**
  * \brief Find the latest valid time in the database so you can safely skip anything older.
  *
