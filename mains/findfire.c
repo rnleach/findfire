@@ -61,6 +61,33 @@ program_finalization()
 {
 }
 
+static bool
+skip_path(char const *path, time_t newest_scan_start_time)
+{
+    if (strcmp("nc", file_ext(path)) != 0) {
+        // Only process files with the '.nc' extension.
+        return true;
+    }
+
+    if (strstr(path, "FDCF")) {
+        // Skip full disk.
+        return true;
+    }
+
+    if (strstr(path, "FDCM")) {
+        // Skip meso-sector for now, I don't have many of those.
+        return true;
+    }
+
+    time_t scan_start = parse_time_string(cluster_find_start_time(path));
+    if (scan_start < newest_scan_start_time) {
+        // Don't try to add data that's already there.
+        return true;
+    }
+
+    return false;
+}
+
 static void
 save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, char const *sat,
                  char const *sector)
@@ -91,33 +118,6 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, char const *
     fclose(out);
 
     return;
-}
-
-static bool
-skip_path(char const *path, time_t newest_scan_start_time)
-{
-    if (strcmp("nc", file_ext(path)) != 0) {
-        // Only process files with the '.nc' extension.
-        return true;
-    }
-
-    if (strstr(path, "FDCF")) {
-        // Skip Full Disk
-        return true;
-    }
-
-    if (strstr(path, "FDCM")) {
-        // Skip meso-sector for now, I don't have many of those.
-        return true;
-    }
-
-    time_t scan_start = parse_time_string(cluster_find_start_time(path));
-    if (scan_start < newest_scan_start_time) {
-        // Don't try to add data that's already there.
-        return true;
-    }
-
-    return false;
 }
 
 struct ClusterStats {
@@ -478,8 +478,8 @@ database_filler(void *arg)
     courier_register_receiver(from_cluster_list_loader);
     courier_wait_until_ready_to_receive(from_cluster_list_loader);
 
-    sqlite3 *cluster_db = 0;
-    sqlite3_stmt *add_stmt = 0;
+    ClusterDatabaseH cluster_db = 0;
+    ClusterDatabaseAddH add_stmt = 0;
 
     cluster_db = cluster_db_connect(database_file);
     Stopif(!cluster_db, goto CLEANUP_AND_RETURN, "Error opening database. (%s %u)", __FILE__,
@@ -558,13 +558,13 @@ main()
     struct PipelineLink loader_link = {.from = &from_dir_walk, .to = &from_cluster_loader};
 
     pthread_t threads[4] = {0};
-    sqlite3 *cluster_db = 0;
+    ClusterDatabaseH cluster_db = 0;
 
     cluster_db = cluster_db_connect(database_file);
     Stopif(!cluster_db, goto CLEANUP_AND_EXIT, "Error opening database. (%s %u)", __FILE__,
            __LINE__);
 
-    time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db);
+    time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db, "G17", "FDCC");
     // Close it up and set it to NULL, we no longer need it and it will interefere with the other
     // threads if left open.
     cluster_db_close(&cluster_db);
