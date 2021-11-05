@@ -400,7 +400,8 @@ directory_walker(void *arg)
     time_t newest_scan_start_time = args->newest_scan_start_time;
     Courier *to_cluster_list_loader = args->to_cluster_list_loader;
 
-    courier_open(to_cluster_list_loader);
+    courier_register_sender(to_cluster_list_loader);
+    courier_wait_until_ready_to_send(to_cluster_list_loader);
 
     struct DirWalkState dir_walk_state = dir_walk_new_with_root(data_dir);
     char const *path = dir_walk_next_path(&dir_walk_state);
@@ -411,15 +412,16 @@ directory_walker(void *arg)
 
             char *owned_path = 0;
             asprintf(&owned_path, "%s", path);
-            courier_send(to_cluster_list_loader, owned_path);
+            bool success = courier_send(to_cluster_list_loader, owned_path);
+
+            Stopif(!success, break, "Failed to send to loader.");
         }
 
         path = dir_walk_next_path(&dir_walk_state);
     }
 
     dir_walk_destroy(&dir_walk_state);
-
-    courier_close(to_cluster_list_loader);
+    courier_done_sending(to_cluster_list_loader);
     return 0;
 }
 
@@ -434,25 +436,33 @@ fire_cluster_list_loader(void *arg)
     Courier *from_dir_walker = links->from;
     Courier *to_database = links->to;
 
-    courier_open(to_database);
-    courier_wait_until_ready(from_dir_walker);
+    courier_register_receiver(from_dir_walker);
+    courier_register_sender(to_database);
+
+    courier_wait_until_ready_to_receive(from_dir_walker);
+    courier_wait_until_ready_to_send(to_database);
 
     void *item = 0;
     while ((item = courier_receive(from_dir_walker))) {
         char *path = item;
 
+        bool success_sending = true;
+
         struct ClusterList *clusters = cluster_list_from_file(path);
         if (!cluster_list_error(clusters)) {
-            courier_send(to_database, clusters);
+            success_sending = courier_send(to_database, clusters);
         } else {
             printf("    Error processing file.\n");
             cluster_list_destroy(&clusters);
         }
 
         free(path);
+
+        Stopif(!success_sending, break, "Failed to send to database.");
     }
 
-    courier_close(to_database);
+    courier_done_receiving(from_dir_walker);
+    courier_done_sending(to_database);
 
     return 0;
 }
@@ -463,6 +473,10 @@ database_filler(void *arg)
     static char const threadname[] = "findfire-dbase";
     static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
     pthread_setname(threadname);
+
+    Courier *from_cluster_list_loader = arg;
+    courier_register_receiver(from_cluster_list_loader);
+    courier_wait_until_ready_to_receive(from_cluster_list_loader);
 
     sqlite3 *cluster_db = 0;
     sqlite3_stmt *add_stmt = 0;
@@ -478,9 +492,6 @@ database_filler(void *arg)
 
     // Stats about satellite images.
     struct ClusterListStats clstats = cluster_list_stats_new();
-
-    Courier *from_cluster_list_loader = arg;
-    courier_wait_until_ready(from_cluster_list_loader);
 
     void *item;
     while ((item = courier_receive(from_cluster_list_loader))) {
@@ -520,6 +531,7 @@ database_filler(void *arg)
     cluster_list_stats_destroy(&clstats);
 
 CLEANUP_AND_RETURN:
+    courier_done_receiving(from_cluster_list_loader);
     cluster_db_finalize_add(cluster_db, &add_stmt);
     cluster_db_close(&cluster_db);
     return 0;
@@ -528,6 +540,13 @@ CLEANUP_AND_RETURN:
 /*-------------------------------------------------------------------------------------------------
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
+static void
+generic_destroy_cluster_list(void *cl)
+{
+    struct ClusterList *list = cl;
+    cluster_list_destroy(&list);
+}
+
 int
 main()
 {
@@ -580,8 +599,8 @@ CLEANUP_AND_EXIT:
         }
     }
 
-    courier_destroy(&from_cluster_loader);
-    courier_destroy(&from_dir_walk);
+    courier_destroy(&from_cluster_loader, generic_destroy_cluster_list);
+    courier_destroy(&from_dir_walk, free);
 
     program_finalization();
 
