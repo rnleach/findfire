@@ -11,8 +11,8 @@
  * The goal of having all this data together is for other programs to read the data from the
  * database and perform more analysis.
  *
- * This program queries an existing database to find what the latest entry is in the database and
- * assumes it can skip any files that can contain older data.
+ * This program queries an existing database to find if a file has been processed already before 
+ * processing it.
  *
  * At the end of processing, some summary statistics are printed to the screen and a file called
  * findfire.kml is output in the same location as the database file findfire.sqlite that has the
