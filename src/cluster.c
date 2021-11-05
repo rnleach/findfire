@@ -241,8 +241,8 @@ cluster_find_start_time(char const *fname)
     return start;
 }
 
-static char const *
-find_end_time(char const *fname)
+char const *
+cluster_find_end_time(char const *fname)
 {
     char const *end = strstr(fname, "_e");
     if (end)
@@ -339,7 +339,7 @@ cluster_list_from_file(char const *full_path)
 
     // Get the start and end times
     clist->start = parse_time_string(cluster_find_start_time(fname));
-    clist->end = parse_time_string(find_end_time(fname));
+    clist->end = parse_time_string(cluster_find_end_time(fname));
 
     // Get the clusters member.
     struct FireSatImage fdata = {0};

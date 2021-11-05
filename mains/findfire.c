@@ -14,9 +14,6 @@
  * This program queries an existing database to find what the latest entry is in the database and
  * assumes it can skip any files that can contain older data.
  *
- * \todo: create more sophisticated checking for the oldest scan, or better yet for a scan existing
- * at all.
- *
  * At the end of processing, some summary statistics are printed to the screen and a file called
  * findfire.kml is output in the same location as the database file findfire.sqlite that has the
  * largest Cluster processed this time.
@@ -62,26 +59,47 @@ program_finalization()
 }
 
 static bool
-skip_path(char const *path, time_t newest_scan_start_time)
+skip_path(char const *path, ClusterDatabaseH db)
 {
+    char *satellite = 0;
+    char *sector = 0;
+
     if (strcmp("nc", file_ext(path)) != 0) {
         // Only process files with the '.nc' extension.
         return true;
     }
 
     if (strstr(path, "FDCF")) {
+        sector = "FDCF";
         // Skip full disk.
         return true;
     }
 
+    if (strstr(path, "FDCC")) {
+        sector = "FDCC";
+    }
+
     if (strstr(path, "FDCM")) {
+        sector = "FDCM";
         // Skip meso-sector for now, I don't have many of those.
         return true;
     }
 
+    if (strstr(path, "G16")) {
+        satellite = "G16";
+    }
+
+    if (strstr(path, "G17")) {
+        satellite = "G17";
+    }
+
     time_t scan_start = parse_time_string(cluster_find_start_time(path));
-    if (scan_start < newest_scan_start_time) {
-        // Don't try to add data that's already there.
+    time_t scan_end = parse_time_string(cluster_find_end_time(path));
+
+    int num_rows = cluster_db_count_rows(db, satellite, sector, scan_start, scan_end);
+    Stopif(num_rows < 0, return false, "Error querying num_rows, proceeding anyway.");
+
+    if (num_rows > 0) {
         return true;
     }
 
@@ -384,11 +402,6 @@ struct PipelineLink {
     Courier *to;
 };
 
-struct WalkerArgs {
-    time_t newest_scan_start_time;
-    Courier *to_cluster_list_loader;
-};
-
 static void *
 directory_walker(void *arg)
 {
@@ -396,9 +409,11 @@ directory_walker(void *arg)
     static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
     pthread_setname(threadname);
 
-    struct WalkerArgs *args = arg;
-    time_t newest_scan_start_time = args->newest_scan_start_time;
-    Courier *to_cluster_list_loader = args->to_cluster_list_loader;
+    Courier *to_cluster_list_loader = arg;
+
+    ClusterDatabaseH cluster_db = 0;
+    cluster_db = cluster_db_connect(database_file);
+    Stopif(!cluster_db, exit(EXIT_FAILURE), "Error opening database. (%s %u)", __FILE__, __LINE__);
 
     courier_register_sender(to_cluster_list_loader);
     courier_wait_until_ready_to_send(to_cluster_list_loader);
@@ -407,7 +422,7 @@ directory_walker(void *arg)
     char const *path = dir_walk_next_path(&dir_walk_state);
 
     while (path) {
-        if (!skip_path(path, newest_scan_start_time)) {
+        if (!skip_path(path, cluster_db)) {
             printf("Processing: %s\n", path);
 
             char *owned_path = 0;
@@ -422,6 +437,7 @@ directory_walker(void *arg)
 
     dir_walk_destroy(&dir_walk_state);
     courier_done_sending(to_cluster_list_loader);
+    cluster_db_close(&cluster_db);
     return 0;
 }
 
@@ -556,21 +572,8 @@ main()
     struct PipelineLink loader_link = {.from = &from_dir_walk, .to = &from_cluster_loader};
 
     pthread_t threads[4] = {0};
-    ClusterDatabaseH cluster_db = 0;
 
-    cluster_db = cluster_db_connect(database_file);
-    Stopif(!cluster_db, goto CLEANUP_AND_EXIT, "Error opening database. (%s %u)", __FILE__,
-           __LINE__);
-
-    time_t newest_scan_start_time = cluster_db_newest_scan_start(cluster_db, "G17", "FDCC");
-    // Close it up and set it to NULL, we no longer need it and it will interefere with the other
-    // threads if left open.
-    cluster_db_close(&cluster_db);
-
-    struct WalkerArgs walker_args = {.newest_scan_start_time = newest_scan_start_time,
-                                     .to_cluster_list_loader = &from_dir_walk};
-
-    int s = pthread_create(&threads[0], 0, directory_walker, &walker_args);
+    int s = pthread_create(&threads[0], 0, directory_walker, &from_dir_walk);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "directory_walker");
     s = pthread_create(&threads[1], 0, fire_cluster_list_loader, &loader_link);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "fire_cluster_list_loader");
@@ -582,10 +585,6 @@ main()
     rc = EXIT_SUCCESS;
 
 CLEANUP_AND_EXIT:
-
-    // Already closed in successful case, but maybe not if there was an error. No harm in closing
-    // it again since it will be NULL.
-    cluster_db_close(&cluster_db);
 
     for (unsigned int i = 0; i < sizeof(threads) / sizeof(threads[0]); ++i) {
         if (threads[i]) {

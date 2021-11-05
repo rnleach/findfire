@@ -124,9 +124,12 @@ GArray *cluster_list_clusters(struct ClusterList *list);
 /**
  * \brief Parse the file name and find the scan start time.
  */
-// TODO: MOVE TO util.h since this operates on file names only and is not directly related to
-// Clusters.
 char const *cluster_find_start_time(char const *fname);
+
+/**
+ * \brief Parse the file name and find the scan end time.
+ */
+char const *cluster_find_end_time(char const *fname);
 
 /**
  * \brief Get the number of items in the ClusterList.

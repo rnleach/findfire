@@ -19,8 +19,12 @@ struct ClusterDatabase *
 cluster_db_connect(char const *path)
 {
     sqlite3 *handle = 0;
-    int rc = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0);
+    int rc = sqlite3_open_v2(path, &handle,
+                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error connecting to %s", path);
+
+    // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
+    sqlite3_busy_timeout(handle, 5000);
 
     char *query = "CREATE TABLE IF NOT EXISTS clusters(          \n"
                   "satellite  TEXT    NOT NULL,                  \n"
@@ -30,7 +34,7 @@ cluster_db_connect(char const *path)
                   "lat        REAL    NOT NULL,                  \n"
                   "lon        REAL    NOT NULL,                  \n"
                   "power      REAL    NOT NULL,                  \n"
-                  "pixels     BLOB NOT NULL)                     \n";
+                  "pixels     BLOB    NOT NULL)                  \n";
     char *err_message = 0;
 
     rc = sqlite3_exec(handle, query, 0, 0, &err_message);
@@ -77,9 +81,6 @@ struct ClusterDatabaseAdd *
 cluster_db_prepare_to_add(struct ClusterDatabase *db)
 {
     assert(db);
-
-    // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
-    sqlite3_busy_timeout(db->ptr, 5000);
 
     struct ClusterDatabaseAdd *add = 0;
     sqlite3_stmt *stmt = 0;
