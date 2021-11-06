@@ -26,15 +26,23 @@ cluster_db_connect(char const *path)
     // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
     sqlite3_busy_timeout(handle, 5000);
 
-    char *query = "CREATE TABLE IF NOT EXISTS clusters(          \n"
-                  "satellite  TEXT    NOT NULL,                  \n"
-                  "sector     TEXT    NOT NULL,                  \n"
-                  "start_time INTEGER NOT NULL,                  \n"
-                  "end_time   INTEGER NOT NULL,                  \n"
-                  "lat        REAL    NOT NULL,                  \n"
-                  "lon        REAL    NOT NULL,                  \n"
-                  "power      REAL    NOT NULL,                  \n"
-                  "pixels     BLOB    NOT NULL)                  \n";
+    char *query = "CREATE TABLE IF NOT EXISTS clusters(              \n"
+                  "satellite  TEXT    NOT NULL,                      \n"
+                  "sector     TEXT    NOT NULL,                      \n"
+                  "start_time INTEGER NOT NULL,                      \n"
+                  "end_time   INTEGER NOT NULL,                      \n"
+                  "lat        REAL    NOT NULL,                      \n"
+                  "lon        REAL    NOT NULL,                      \n"
+                  "power      REAL    NOT NULL,                      \n"
+                  "pixels     BLOB    NOT NULL);                     \n"
+                  "                                                  \n"
+                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups \n"
+                  "  ON clusters (satellite, sector, start_time,     \n"
+                  "               end_time, lat, lon);               \n"
+                  "                                                  \n"
+                  "CREATE INDEX IF NOT EXISTS file_processed         \n"
+                  "  ON clusters (satellite, sector, start_time,     \n"
+                  "               end_time);                         \n";
     char *err_message = 0;
 
     rc = sqlite3_exec(handle, query, 0, 0, &err_message);
