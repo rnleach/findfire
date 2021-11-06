@@ -85,8 +85,6 @@ skip_path(char const *path, ClusterDatabaseH db)
 
     if (strstr(path, "FDCF")) {
         sector = "FDCF";
-        // Skip full disk.
-        return true;
     }
 
     if (strstr(path, "FDCC")) {
