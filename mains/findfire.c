@@ -73,7 +73,7 @@ program_finalization()
 }
 
 static bool
-skip_path(char const *path, ClusterDatabaseH db)
+skip_path(char const *path, ClusterDatabaseQueryPresentH query)
 {
     char *satellite = 0;
     char *sector = 0;
@@ -108,10 +108,10 @@ skip_path(char const *path, ClusterDatabaseH db)
     time_t scan_start = parse_time_string(cluster_find_start_time(path));
     time_t scan_end = parse_time_string(cluster_find_end_time(path));
 
-    int num_rows = cluster_db_count_rows(db, satellite, sector, scan_start, scan_end);
-    Stopif(num_rows < 0, return false, "Error querying num_rows, proceeding anyway.");
+    int num_rows = cluster_db_present(query, satellite, sector, scan_start, scan_end);
+    Stopif(num_rows < -1, return false, "Error querying num_rows, proceeding anyway.");
 
-    if (num_rows > 0) {
+    if (num_rows >= 0) {
         return true;
     }
 
@@ -427,6 +427,11 @@ directory_walker(void *arg)
     cluster_db = cluster_db_connect(database_file);
     Stopif(!cluster_db, exit(EXIT_FAILURE), "Error opening database. (%s %u)", __FILE__, __LINE__);
 
+    ClusterDatabaseQueryPresentH present_query = 0;
+    present_query = cluster_database_prepare_to_query_present(cluster_db);
+    Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query. (%s %u)", __FILE__,
+           __LINE__);
+
     courier_register_sender(to_cluster_list_loader);
     courier_wait_until_ready_to_send(to_cluster_list_loader);
 
@@ -434,7 +439,7 @@ directory_walker(void *arg)
     char const *path = dir_walk_next_path(&dir_walk_state);
 
     while (path) {
-        if (!skip_path(path, cluster_db)) {
+        if (!skip_path(path, present_query)) {
             printf("Processing: %s\n", path);
 
             char *owned_path = 0;
@@ -449,6 +454,7 @@ directory_walker(void *arg)
 
     dir_walk_destroy(&dir_walk_state);
     courier_done_sending(to_cluster_list_loader);
+    cluster_db_finalize_query_present(cluster_db, &present_query);
     cluster_db_close(&cluster_db);
     return 0;
 }

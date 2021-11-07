@@ -11,6 +11,9 @@ typedef struct ClusterDatabase *ClusterDatabaseH;
 /** A handle to an add transaction. */
 typedef struct ClusterDatabaseAdd *ClusterDatabaseAddH;
 
+/** A handle to a query to check if a file is already in the database. */
+typedef struct ClusterDatabaseQueryPresent *ClusterDatabaseQueryPresentH;
+
 /**
  * \brief Open a connection to the database to store clusters.
  *
@@ -57,9 +60,24 @@ int cluster_db_add(ClusterDatabaseH db, ClusterDatabaseAddH stmt, struct Cluster
 time_t cluster_db_newest_scan_start(ClusterDatabaseH db, char const *satellite, char const *sector);
 
 /**
+ * \brief Prepare to query the database if data from a satellite image is already in the database.
+ *
+ * \return NULL or the 0 pointer on error.
+ */
+ClusterDatabaseQueryPresentH cluster_database_prepare_to_query_present(ClusterDatabaseH db);
+
+/**
+ * \brief Finalize the 'is present' query.
+ *
+ * \returns 0 if there is no error.
+ */
+int cluster_db_finalize_query_present(ClusterDatabaseH db, ClusterDatabaseQueryPresentH *stmt);
+
+/**
  * \brief Check to see if an entry for these values already exists in the database.
  *
- * \returns the number of items in the database with these values or a negative value on error.
+ * \returns the number of items in the database with these values, -1 if there is nothing in the
+ * database concerning this satellite, sector, time combination.
  */
-int cluster_db_count_rows(ClusterDatabaseH db, char const *satellite, char const *sector,
-                          time_t start, time_t end);
+int cluster_db_present(ClusterDatabaseQueryPresentH query, char const *satellite,
+                       char const *sector, time_t start, time_t end);
