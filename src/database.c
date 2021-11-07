@@ -93,7 +93,7 @@ cluster_db_prepare_to_add(struct ClusterDatabase *db)
     struct ClusterDatabaseAdd *add = 0;
     sqlite3_stmt *stmt = 0;
 
-    char *query = "INSERT INTO clusters (                                           \n"
+    char *query = "INSERT OR REPLACE INTO clusters (                                \n"
                   "satellite, sector, start_time, end_time, lat, lon, power, pixels \n"
                   ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
