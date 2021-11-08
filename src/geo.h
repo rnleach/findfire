@@ -176,17 +176,3 @@ struct PixelList *pixel_list_binary_deserialize(unsigned char buffer[static size
  */
 void pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1]);
 
-/*-------------------------------------------------------------------------------------------------
- *                                            Misc
- *-----------------------------------------------------------------------------------------------*/
-/**
- * \brief the simple great circle distance calculation.
- *
- * \param lat1 the latitude of the first point in degrees.
- * \param lon1 the longitude of the first point in degrees.
- * \param lat2 the latitude of the second point in degrees.
- * \param lon2 the longitude of the second point in degrees.
- *
- * \return the distance between the points in kilometers.
- */
-double great_circle_distance(double lat1, double lon1, double lat2, double lon2);
