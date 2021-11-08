@@ -381,7 +381,7 @@ cluster_db_finalize_query_present(ClusterDatabaseH db, ClusterDatabaseQueryPrese
 {
     static_assert(SQLITE_OK == 0, "SQLITE_OK must equal 0 or we'll have problems here.");
 
-    assert(db && db->ptr && stmt && (*stmt) && (*stmt)->stmt_cluster && (*stmt)->stmt_no_fire);
+    assert(db && db->ptr && stmt && (*stmt) && (*stmt)->count_stmt && (*stmt)->no_fire_stmt);
 
     int rc = SQLITE_OK;
     int rc_x = sqlite3_finalize((*stmt)->no_fire_stmt);
