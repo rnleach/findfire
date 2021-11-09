@@ -55,5 +55,5 @@ char const *satfire_sector_name(enum Sector const sector);
  * \returns Sector that corresponds to the first sector name found, or SATFIRE_SECTOR_NONE
  * if none was found.
  */
-enum Sector satfire_sector_string_contains_satellite(char const *str);
+enum Sector satfire_sector_string_contains_sector(char const *str);
 
