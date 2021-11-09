@@ -7,6 +7,7 @@
 
 #include "firepoint.h"
 #include "geo.h"
+#include "satellite.h"
 
 /**
  * \file cluster.h
@@ -87,13 +88,8 @@ void cluster_list_destroy(struct ClusterList **list);
  */
 const char *cluster_list_sector(struct ClusterList *list);
 
-/** \brief Get the name of the satellite.
- *
- * This is a static string determined at compile time.
- *
- * "G16" and "G17" are the only currently supported values.
- */
-const char *cluster_list_satellite(struct ClusterList *list);
+/** \brief Get the name of the satellite. */
+enum Satellite cluster_list_satellite(struct ClusterList *list);
 
 /** Get the start time of the scan. */
 time_t cluster_list_scan_start(struct ClusterList *list);

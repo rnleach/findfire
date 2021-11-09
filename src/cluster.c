@@ -115,9 +115,7 @@ struct ClusterList {
     /// FDCM is the mesosector scale
     char sector[5];
     /// This is the source satellite.
-    ///
-    /// At the time of writing it will either be "G16" or "G17"
-    char satellite[4];
+    enum Satellite satellite;
     /// Start time of the scan
     time_t start;
     /// End time of the scan
@@ -156,7 +154,7 @@ cluster_list_sector(struct ClusterList *list)
     return list->sector;
 }
 
-const char *
+enum Satellite
 cluster_list_satellite(struct ClusterList *list)
 {
     assert(list);
@@ -201,18 +199,6 @@ cluster_list_clusters(struct ClusterList *list)
     }
 
     return list->clusters;
-}
-
-static char const *
-find_satellite_start(char const *fname)
-{
-    char const *g17 = strstr(fname, "G17");
-    if (g17) {
-        return g17;
-    }
-
-    char const *g16 = strstr(fname, "G16");
-    return g16;
 }
 
 static char const *
@@ -325,11 +311,11 @@ cluster_list_from_file(char const *full_path)
 
     char const *fname = get_file_name(full_path);
 
-    // Get the satellite name
-    char const *sat_start = find_satellite_start(fname);
+    // Get the satellite
+    enum Satellite satellite = satfire_satellite_string_contains_satellite(fname);
     err_msg = "Error parsing satellite name";
-    Stopif(!sat_start, goto ERR_RETURN, "Error parsing satellite name");
-    memcpy(clist->satellite, sat_start, 3);
+    Stopif(satellite == SATFIRE_NO_SATELLITE, goto ERR_RETURN, "Error parsing satellite name");
+    clist->satellite = satellite;
 
     // Get the sector name
     char const *sect_start = find_sector_start(fname);

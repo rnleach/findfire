@@ -14,6 +14,9 @@
  *
  * To deal with those edge cases, this module deals directly with the approximate equality of
  * floating point values.
+ *
+ * IMPORTANT: The types and functions in this module do not handle geographic features that
+ * straddle the international date line correctly. But this doesn't really come up in our use case.
  */
 
 #include <math.h>
@@ -25,8 +28,8 @@
  *-----------------------------------------------------------------------------------------------*/
 /** A coordinate consisting of a latitude and a longitude. */
 struct Coord {
-    double lat;
-    double lon;
+    double lat; /**< Latitude. Should be -90 to 90, but that's not checked or enforced.    */
+    double lon; /**< Longitude. Should be -180 to 180, but that's not checked or enforced. */
 };
 
 /** \brief Determine if these coordinates are close to each other.
@@ -35,6 +38,27 @@ struct Coord {
  * coordinates that two points can have and still be considered close.
  */
 bool coord_are_close(struct Coord left, struct Coord right, double eps);
+
+/*-------------------------------------------------------------------------------------------------
+ *                                       BoundingBox
+ *-----------------------------------------------------------------------------------------------*/
+/** \brief Represents a "square" area in latitude-longitude coordinates. */
+struct BoundingBox {
+    struct Coord ll; /**< The lower left corner of the box.  */
+    struct Coord ur; /**< The upper right corner of the box. */
+};
+
+/** \brief Check to see if a Coord is inside of a BoundingBox.
+ *
+ * \param box is the bounding box in question.
+ * \param coord is the coordinate, or point, in question.
+ * \param eps is a fuzzy factor. Any point 'eps' close to the box will be considered internal as
+ * well. If \a eps is 0.0, then the comparison is exact.
+ *
+ * \returns \c true if the point \a coord is interior to the box.
+ */
+bool bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coord,
+                                 double eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         SatPixels
@@ -175,4 +199,3 @@ struct PixelList *pixel_list_binary_deserialize(unsigned char buffer[static size
  * document.
  */
 void pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1]);
-

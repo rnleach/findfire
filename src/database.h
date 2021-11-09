@@ -4,6 +4,7 @@
 
 #include "cluster.h"
 #include "geo.h"
+#include "satellite.h"
 
 /** A handle to a ClusterDatabase connection. */
 typedef struct ClusterDatabase *ClusterDatabaseH;
@@ -57,7 +58,8 @@ int cluster_db_add(ClusterDatabaseH db, ClusterDatabaseAddH stmt, struct Cluster
  * \returns 0 if there is an error or the database is empty, otherwise returns the scan start
  * time of the latest path for that satellite and sector.
  */
-time_t cluster_db_newest_scan_start(ClusterDatabaseH db, char const *satellite, char const *sector);
+time_t cluster_db_newest_scan_start(ClusterDatabaseH db, enum Satellite satellite,
+                                    char const *sector);
 
 /**
  * \brief Prepare to query the database if data from a satellite image is already in the database.
@@ -79,5 +81,5 @@ int cluster_db_finalize_query_present(ClusterDatabaseH db, ClusterDatabaseQueryP
  * \returns the number of items in the database with these values, -1 if there is nothing in the
  * database concerning this satellite, sector, time combination.
  */
-int cluster_db_present(ClusterDatabaseQueryPresentH query, char const *satellite,
+int cluster_db_present(ClusterDatabaseQueryPresentH query, enum Satellite satellite,
                        char const *sector, time_t start, time_t end);

@@ -6,6 +6,7 @@
 
 #include <sqlite3.h>
 
+#include "satellite.h"
 #include "util.h"
 
 /*-------------------------------------------------------------------------------------------------
@@ -166,7 +167,7 @@ cluster_db_add_cluster(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
     rc = sqlite3_exec(db->ptr, begin_trans, 0, 0, &err_message);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error starting transaction: %s", err_message);
 
-    char const *satellite = cluster_list_satellite(clist);
+    enum Satellite satellite = cluster_list_satellite(clist);
     char const *sector = cluster_list_sector(clist);
     time_t scan_start = cluster_list_scan_start(clist);
     time_t scan_end = cluster_list_scan_end(clist);
@@ -179,7 +180,7 @@ cluster_db_add_cluster(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
 
         struct Cluster *cluster = g_array_index(clusters, struct Cluster *, i);
 
-        rc = sqlite3_bind_text(stmt->add_ptr, 1, satellite, -1, 0);
+        rc = sqlite3_bind_text(stmt->add_ptr, 1, satfire_satellite_name(satellite), -1, 0);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s",
                sqlite3_errstr(rc));
 
@@ -250,12 +251,12 @@ cluster_db_add_no_fire(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
     int rc = SQLITE_OK;
     char *err_message = 0;
 
-    char const *satellite = cluster_list_satellite(clist);
+    enum Satellite satellite = cluster_list_satellite(clist);
     char const *sector = cluster_list_sector(clist);
     time_t scan_start = cluster_list_scan_start(clist);
     time_t scan_end = cluster_list_scan_end(clist);
 
-    rc = sqlite3_bind_text(stmt->no_fire_ptr, 1, satellite, -1, 0);
+    rc = sqlite3_bind_text(stmt->no_fire_ptr, 1, satfire_satellite_name(satellite), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s", sqlite3_errstr(rc));
 
     rc = sqlite3_bind_text(stmt->no_fire_ptr, 2, sector, -1, 0);
@@ -299,13 +300,14 @@ cluster_db_add(struct ClusterDatabase *db, struct ClusterDatabaseAdd *stmt,
  *                                   ClusterDatabase Query
  *-----------------------------------------------------------------------------------------------*/
 time_t
-cluster_db_newest_scan_start(struct ClusterDatabase *db, char const *satellite, char const *sector)
+cluster_db_newest_scan_start(struct ClusterDatabase *db, enum Satellite satellite,
+                             char const *sector)
 {
     time_t newest_scan_time = 0;
     char *query = 0;
     asprintf(&query,
              "SELECT MAX(start_time) FROM clusters WHERE satellite = '%s' AND sector = '%s'",
-             satellite, sector);
+             satfire_satellite_name(satellite), sector);
 
     sqlite3_stmt *stmt = 0;
     int rc = sqlite3_prepare_v2(db->ptr, query, -1, &stmt, 0);
@@ -398,13 +400,13 @@ cluster_db_finalize_query_present(ClusterDatabaseH db, ClusterDatabaseQueryPrese
 }
 
 int
-cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, char const *satellite,
+cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, enum Satellite satellite,
                    char const *sector, time_t start, time_t end)
 {
     int rc = SQLITE_OK;
     int num_rows = -2; // indicates an error return value.
 
-    rc = sqlite3_bind_text(stmt->count_stmt, 1, satellite, -1, 0);
+    rc = sqlite3_bind_text(stmt->count_stmt, 1, satfire_satellite_name(satellite), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s", sqlite3_errstr(rc));
 
     rc = sqlite3_bind_text(stmt->count_stmt, 2, sector, -1, 0);
@@ -426,7 +428,7 @@ cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, char const *satelli
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error resetting: %s", sqlite3_errstr(rc));
 
     if (num_rows == 0) {
-        rc = sqlite3_bind_text(stmt->no_fire_stmt, 1, satellite, -1, 0);
+        rc = sqlite3_bind_text(stmt->no_fire_stmt, 1, satfire_satellite_name(satellite), -1, 0);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s",
                sqlite3_errstr(rc));
 

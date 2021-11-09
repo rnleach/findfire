@@ -138,12 +138,10 @@ triangle_centroid(struct Coord v1, struct Coord v2, struct Coord v3)
     return (struct Coord){.lat = avg_lat, .lon = avg_lon};
 }
 
-struct BoundingBox {
-    struct Coord ll;
-    struct Coord ur;
-};
-
-static bool
+/*-------------------------------------------------------------------------------------------------
+ *                                       BoundingBox
+ *-----------------------------------------------------------------------------------------------*/
+bool
 bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coord, double eps)
 {
     bool lon_in_range = (coord.lon - box.ur.lon) < eps && (coord.lon - box.ll.lon) > -eps;
@@ -602,4 +600,3 @@ pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
 
     return;
 }
-
