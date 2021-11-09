@@ -208,12 +208,12 @@ cluster_list_filter(struct ClusterList *list, struct BoundingBox box)
 
     GArray *clusters = list->clusters;
 
-    for(unsigned int i = 0; i < clusters->len; ++i){
+    for (unsigned int i = 0; i < clusters->len; ++i) {
         struct Cluster *clust = g_array_index(clusters, struct Cluster *, i);
 
         struct Coord centroid = cluster_centroid(clust);
 
-        if(!bounding_box_contains_coord(box, centroid, 0.0)) {
+        if (!bounding_box_contains_coord(box, centroid, 0.0)) {
             clusters = g_array_remove_index_fast(clusters, i);
             --i; // Decrement this so we inspect this index again since a new value is there.
         }
@@ -337,7 +337,7 @@ cluster_list_from_file(char const *full_path)
     // Get the satellite
     enum Satellite satellite = satfire_satellite_string_contains_satellite(fname);
     err_msg = "Error parsing satellite name";
-    Stopif(satellite == SATFIRE_NO_SATELLITE, goto ERR_RETURN, "Error parsing satellite name");
+    Stopif(satellite == SATFIRE_SATELLITE_NONE, goto ERR_RETURN, "Error parsing satellite name");
     clist->satellite = satellite;
 
     // Get the sector name

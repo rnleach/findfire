@@ -117,11 +117,11 @@ const char *cluster_list_error_msg(struct ClusterList *list);
  */
 GArray *cluster_list_clusters(struct ClusterList *list);
 
-/** \brief Filter the ClusterList to only include fires with their centroid in the BoundingBox. 
+/** \brief Filter the ClusterList to only include fires with their centroid in the BoundingBox.
  *
  * \returns NULL on error or a reference to the same \a list that was passed in.
  */
-struct ClusterList * cluster_list_filter(struct ClusterList *list, struct BoundingBox box);
+struct ClusterList *cluster_list_filter(struct ClusterList *list, struct BoundingBox box);
 
 /**
  * \brief Parse the file name and find the scan start time.

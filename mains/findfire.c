@@ -76,7 +76,7 @@ program_finalization()
 static bool
 skip_path(char const *path, ClusterDatabaseQueryPresentH query)
 {
-    enum Satellite satellite = SATFIRE_NO_SATELLITE;
+    enum Satellite satellite = SATFIRE_SATELLITE_NONE;
     char *sector = 0;
 
     if (strcmp("nc", file_ext(path)) != 0) {
@@ -98,12 +98,12 @@ skip_path(char const *path, ClusterDatabaseQueryPresentH query)
         return true;
     }
 
-    if (strstr(path, satfire_satellite_name(SATFIRE_G16))) {
-        satellite = SATFIRE_G16;
+    if (strstr(path, satfire_satellite_name(SATFIRE_SATELLITE_G16))) {
+        satellite = SATFIRE_SATELLITE_G16;
     }
 
-    if (strstr(path, satfire_satellite_name(SATFIRE_G17))) {
-        satellite = SATFIRE_G17;
+    if (strstr(path, satfire_satellite_name(SATFIRE_SATELLITE_G17))) {
+        satellite = SATFIRE_SATELLITE_G17;
     }
 
     time_t scan_start = parse_time_string(cluster_find_start_time(path));
@@ -168,7 +168,7 @@ cluster_stats_new(void)
 {
     return (struct ClusterStats){
         .biggest_fire = cluster_new(),
-        .biggest_sat = SATFIRE_NO_SATELLITE,
+        .biggest_sat = SATFIRE_SATELLITE_NONE,
         .biggest_sector = {0},
         .biggest_start = 0,
         .biggest_end = 0,
@@ -276,25 +276,25 @@ static struct ClusterListStats
 cluster_list_stats_new(void)
 {
     return (struct ClusterListStats){
-        .min_num_clusters_sat = SATFIRE_NO_SATELLITE,
+        .min_num_clusters_sat = SATFIRE_SATELLITE_NONE,
         .min_num_clusters_sector = {0},
         .min_num_clusters = UINT_MAX,
         .min_num_clusters_start = 0,
         .min_num_clusters_end = 0,
 
-        .max_num_clusters_sat = SATFIRE_NO_SATELLITE,
+        .max_num_clusters_sat = SATFIRE_SATELLITE_NONE,
         .max_num_clusters_sector = {0},
         .max_num_clusters = 0,
         .max_num_clusters_start = 0,
         .max_num_clusters_end = 0,
 
-        .max_total_power_sat = SATFIRE_NO_SATELLITE,
+        .max_total_power_sat = SATFIRE_SATELLITE_NONE,
         .max_total_power_sector = {0},
         .max_total_power = 0.0,
         .max_total_power_start = 0,
         .max_total_power_end = 0,
 
-        .min_total_power_sat = SATFIRE_NO_SATELLITE,
+        .min_total_power_sat = SATFIRE_SATELLITE_NONE,
         .min_total_power_sector = {0},
         .min_total_power = HUGE_VAL,
         .min_total_power_start = 0,

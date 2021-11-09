@@ -8,12 +8,12 @@
 char const *
 satfire_satellite_name(enum Satellite const sat)
 {
-    assert(sat == SATFIRE_G16 || sat == SATFIRE_G17);
+    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17);
 
     switch (sat) {
-    case SATFIRE_G16:
+    case SATFIRE_SATELLITE_G16:
         return "G16";
-    case SATFIRE_G17:
+    case SATFIRE_SATELLITE_G17:
         return "G17";
     default:
         exit(EXIT_FAILURE);
@@ -25,21 +25,21 @@ satfire_satellite_string_contains_satellite(char const *str)
 {
     assert(str);
 
-    if (strstr(str, satfire_satellite_name(SATFIRE_G16))) {
-        return SATFIRE_G16;
+    if (strstr(str, satfire_satellite_name(SATFIRE_SATELLITE_G16))) {
+        return SATFIRE_SATELLITE_G16;
     }
 
-    if (strstr(str, satfire_satellite_name(SATFIRE_G17))) {
-        return SATFIRE_G17;
+    if (strstr(str, satfire_satellite_name(SATFIRE_SATELLITE_G17))) {
+        return SATFIRE_SATELLITE_G17;
     }
 
-    return SATFIRE_NO_SATELLITE;
+    return SATFIRE_SATELLITE_NONE;
 }
 
 time_t
 satfire_satellite_operational(enum Satellite const sat)
 {
-    assert(sat == SATFIRE_G16 || sat == SATFIRE_G17);
+    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17);
 
     static struct tm G16_Oper = {.tm_sec = 0,
                                  .tm_min = 0,
@@ -56,10 +56,10 @@ satfire_satellite_operational(enum Satellite const sat)
                                  .tm_year = 2019 - 1900};
     struct tm *target = 0;
     switch (sat) {
-    case SATFIRE_G16:
+    case SATFIRE_SATELLITE_G16:
         target = &G16_Oper;
         break;
-    case SATFIRE_G17:
+    case SATFIRE_SATELLITE_G17:
         target = &G17_Oper;
         break;
     default:
@@ -82,12 +82,12 @@ satfire_satellite_data_area(enum Satellite const sat)
     static struct BoundingBox const G17_BB = {.ll = (struct Coord){.lat = -60.0, .lon = -180.0},
                                               .ur = (struct Coord){.lat = 60.0, .lon = -77.0}};
 
-    assert(sat == SATFIRE_G16 || sat == SATFIRE_G17);
+    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17);
 
     switch (sat) {
-    case SATFIRE_G16:
+    case SATFIRE_SATELLITE_G16:
         return G16_BB;
-    case SATFIRE_G17:
+    case SATFIRE_SATELLITE_G17:
         return G17_BB;
     default:
         exit(EXIT_FAILURE);
