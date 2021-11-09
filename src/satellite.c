@@ -73,8 +73,10 @@ struct BoundingBox
 satfire_satellite_data_area(enum Satellite const sat)
 {
     // Centered over -75.2
+    // -26.0 Longitude to get Africa and the islands off it's west coast out, they are a common
+    // source of false detections.
     static struct BoundingBox const G16_BB = {.ll = (struct Coord){.lat = -60.0, .lon = -135.0},
-                                              .ur = (struct Coord){.lat = 60.0, .lon = -15.0}};
+                                              .ur = (struct Coord){.lat = 60.0, .lon = -26.0}};
 
     // Centered over -137.2
     static struct BoundingBox const G17_BB = {.ll = (struct Coord){.lat = -60.0, .lon = -180.0},
