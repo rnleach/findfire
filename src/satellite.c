@@ -93,3 +93,47 @@ satfire_satellite_data_area(enum Satellite const sat)
         exit(EXIT_FAILURE);
     }
 }
+
+char const *
+satfire_sector_name(enum Sector const sector)
+{
+    assert(sector == SATFIRE_SECTOR_FULL || sector == SATFIRE_SECTOR_CONUS ||
+           sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2);
+
+    switch (sector) {
+    case SATFIRE_SECTOR_FULL:
+        return "FDCF";
+    case SATFIRE_SECTOR_CONUS:
+        return "FDCC";
+    case SATFIRE_SECTOR_MESO1:
+        return "FDCM1";
+    case SATFIRE_SECTOR_MESO2:
+        return "FDCM2";
+    default:
+        exit(EXIT_FAILURE);
+    }
+}
+
+enum Sector
+satfire_sector_string_contains_sector(char const *str)
+{
+    assert(str);
+
+    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_FULL))) {
+        return SATFIRE_SECTOR_FULL;
+    }
+
+    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_CONUS))) {
+        return SATFIRE_SECTOR_CONUS;
+    }
+
+    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_MESO1))) {
+        return SATFIRE_SECTOR_MESO1;
+    }
+
+    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_MESO2))) {
+        return SATFIRE_SECTOR_MESO2;
+    }
+
+    return SATFIRE_SECTOR_NONE;
+}

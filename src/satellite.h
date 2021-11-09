@@ -17,6 +17,16 @@ enum Satellite {
     SATFIRE_SATELLITE_NONE = SATFIRE_SATELLITE_NUM /**< Used as an error code. */
 };
 
+/** \brief The satellite scan sectors this library recognizes. */
+enum Sector {
+    SATFIRE_SECTOR_FULL,  /**< The full disk scan sector. */
+    SATFIRE_SECTOR_CONUS, /**< The CONUS, Continental U.S. scan sector. */
+    SATFIRE_SECTOR_MESO1, /**< There are two floating meso sectors. */
+    SATFIRE_SECTOR_MESO2, /**< There are two floating meso sectors. */
+    SATFIRE_SECTOR_NUM,   /**< The number of valid members in this enumeration. */
+    SATFIRE_SECTOR_NONE = SATFIRE_SECTOR_NUM /**< Used as an error code. */
+};
+
 /** \brief Get a string representing the name of the satellite. */
 char const *satfire_satellite_name(enum Satellite const sat);
 
@@ -36,3 +46,14 @@ time_t satfire_satellite_operational(enum Satellite const sat);
  * satellite. Early investigations into the data have shown a lot of suspicous data in these areas.
  */
 struct BoundingBox satfire_satellite_data_area(enum Satellite const sat);
+
+/** \brief Get a string representing the sector. */
+char const *satfire_sector_name(enum Sector const sector);
+
+/** \brief Scan the string for the occurrence of a sector name and return the first one found.
+ *
+ * \returns Sector that corresponds to the first sector name found, or SATFIRE_SECTOR_NONE
+ * if none was found.
+ */
+enum Sector satfire_sector_string_contains_satellite(char const *str);
+
