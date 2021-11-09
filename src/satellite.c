@@ -72,11 +72,13 @@ satfire_satellite_operational(enum Satellite const sat)
 struct BoundingBox
 satfire_satellite_data_area(enum Satellite const sat)
 {
-    static struct BoundingBox const G16_BB = {.ll = (struct Coord){.lat = -60.0, .lon = -120.0},
-                                              .ur = (struct Coord){.lat = 60.0, .lon = -25.0}};
+    // Centered over -75.2
+    static struct BoundingBox const G16_BB = {.ll = (struct Coord){.lat = -60.0, .lon = -135.0},
+                                              .ur = (struct Coord){.lat = 60.0, .lon = -15.0}};
 
+    // Centered over -137.2
     static struct BoundingBox const G17_BB = {.ll = (struct Coord){.lat = -60.0, .lon = -180.0},
-                                              .ur = (struct Coord){.lat = 60.0, .lon = -80.0}};
+                                              .ur = (struct Coord){.lat = 60.0, .lon = -77.0}};
 
     assert(sat == SATFIRE_G16 || sat == SATFIRE_G17);
 

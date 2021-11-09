@@ -201,6 +201,29 @@ cluster_list_clusters(struct ClusterList *list)
     return list->clusters;
 }
 
+struct ClusterList *
+cluster_list_filter(struct ClusterList *list, struct BoundingBox box)
+{
+    assert(list);
+
+    GArray *clusters = list->clusters;
+
+    for(unsigned int i = 0; i < clusters->len; ++i){
+        struct Cluster *clust = g_array_index(clusters, struct Cluster *, i);
+
+        struct Coord centroid = cluster_centroid(clust);
+
+        if(!bounding_box_contains_coord(box, centroid, 0.0)) {
+            clusters = g_array_remove_index_fast(clusters, i);
+            --i; // Decrement this so we inspect this index again since a new value is there.
+        }
+    }
+
+    list->clusters = clusters; // In case g_array_remove_index_fast() moved the array.
+
+    return list;
+}
+
 static char const *
 find_sector_start(char const *fname)
 {
