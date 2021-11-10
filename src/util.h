@@ -1,4 +1,5 @@
 #pragma once
+// Skip files that don't fit the proper naming convention.
 /** \file util.h
  * \brief Utility functions and macros used throughout the project.
  *

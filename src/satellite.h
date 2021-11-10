@@ -56,4 +56,3 @@ char const *satfire_sector_name(enum Sector const sector);
  * if none was found.
  */
 enum Sector satfire_sector_string_contains_sector(char const *str);
-

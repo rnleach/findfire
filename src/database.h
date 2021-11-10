@@ -59,7 +59,7 @@ int cluster_db_add(ClusterDatabaseH db, ClusterDatabaseAddH stmt, struct Cluster
  * time of the latest path for that satellite and sector.
  */
 time_t cluster_db_newest_scan_start(ClusterDatabaseH db, enum Satellite satellite,
-                                    char const *sector);
+                                    enum Sector sector);
 
 /**
  * \brief Prepare to query the database if data from a satellite image is already in the database.
@@ -82,4 +82,4 @@ int cluster_db_finalize_query_present(ClusterDatabaseH db, ClusterDatabaseQueryP
  * database concerning this satellite, sector, time combination.
  */
 int cluster_db_present(ClusterDatabaseQueryPresentH query, enum Satellite satellite,
-                       char const *sector, time_t start, time_t end);
+                       enum Sector sector, time_t start, time_t end);

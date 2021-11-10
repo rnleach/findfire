@@ -168,7 +168,7 @@ cluster_db_add_cluster(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error starting transaction: %s", err_message);
 
     enum Satellite satellite = cluster_list_satellite(clist);
-    char const *sector = cluster_list_sector(clist);
+    enum Sector sector = cluster_list_sector(clist);
     time_t scan_start = cluster_list_scan_start(clist);
     time_t scan_end = cluster_list_scan_end(clist);
 
@@ -184,7 +184,7 @@ cluster_db_add_cluster(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s",
                sqlite3_errstr(rc));
 
-        rc = sqlite3_bind_text(stmt->add_ptr, 2, sector, -1, 0);
+        rc = sqlite3_bind_text(stmt->add_ptr, 2, satfire_sector_name(sector), -1, 0);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding sector: %s", sqlite3_errstr(rc));
 
         rc = sqlite3_bind_int64(stmt->add_ptr, 3, scan_start);
@@ -252,14 +252,14 @@ cluster_db_add_no_fire(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
     char *err_message = 0;
 
     enum Satellite satellite = cluster_list_satellite(clist);
-    char const *sector = cluster_list_sector(clist);
+    enum Sector sector = cluster_list_sector(clist);
     time_t scan_start = cluster_list_scan_start(clist);
     time_t scan_end = cluster_list_scan_end(clist);
 
     rc = sqlite3_bind_text(stmt->no_fire_ptr, 1, satfire_satellite_name(satellite), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_text(stmt->no_fire_ptr, 2, sector, -1, 0);
+    rc = sqlite3_bind_text(stmt->no_fire_ptr, 2, satfire_sector_name(sector), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding sector: %s", sqlite3_errstr(rc));
 
     rc = sqlite3_bind_int64(stmt->no_fire_ptr, 3, scan_start);
@@ -301,13 +301,13 @@ cluster_db_add(struct ClusterDatabase *db, struct ClusterDatabaseAdd *stmt,
  *-----------------------------------------------------------------------------------------------*/
 time_t
 cluster_db_newest_scan_start(struct ClusterDatabase *db, enum Satellite satellite,
-                             char const *sector)
+                             enum Sector sector)
 {
     time_t newest_scan_time = 0;
     char *query = 0;
     asprintf(&query,
              "SELECT MAX(start_time) FROM clusters WHERE satellite = '%s' AND sector = '%s'",
-             satfire_satellite_name(satellite), sector);
+             satfire_satellite_name(satellite), satfire_sector_name(sector));
 
     sqlite3_stmt *stmt = 0;
     int rc = sqlite3_prepare_v2(db->ptr, query, -1, &stmt, 0);
@@ -401,7 +401,7 @@ cluster_db_finalize_query_present(ClusterDatabaseH db, ClusterDatabaseQueryPrese
 
 int
 cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, enum Satellite satellite,
-                   char const *sector, time_t start, time_t end)
+                   enum Sector sector, time_t start, time_t end)
 {
     int rc = SQLITE_OK;
     int num_rows = -2; // indicates an error return value.
@@ -409,7 +409,7 @@ cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, enum Satellite sate
     rc = sqlite3_bind_text(stmt->count_stmt, 1, satfire_satellite_name(satellite), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s", sqlite3_errstr(rc));
 
-    rc = sqlite3_bind_text(stmt->count_stmt, 2, sector, -1, 0);
+    rc = sqlite3_bind_text(stmt->count_stmt, 2, satfire_sector_name(sector), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding sector: %s", sqlite3_errstr(rc));
 
     rc = sqlite3_bind_int64(stmt->count_stmt, 3, start);
@@ -432,7 +432,7 @@ cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, enum Satellite sate
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s",
                sqlite3_errstr(rc));
 
-        rc = sqlite3_bind_text(stmt->no_fire_stmt, 2, sector, -1, 0);
+        rc = sqlite3_bind_text(stmt->no_fire_stmt, 2, satfire_sector_name(sector), -1, 0);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding sector: %s", sqlite3_errstr(rc));
 
         rc = sqlite3_bind_int64(stmt->no_fire_stmt, 3, start);

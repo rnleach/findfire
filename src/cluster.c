@@ -108,24 +108,13 @@ cluster_descending_power_compare(const void *ap, const void *bp)
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/
 struct ClusterList {
-    /// This is the sector, "FDCC", "FDCF", or "FDCM"
-    ///
-    /// FDCC is the CONUS scale
-    /// FDCF is the full disk scale
-    /// FDCM is the mesosector scale
-    char sector[5];
-    /// This is the source satellite.
+    enum Sector sector;
     enum Satellite satellite;
-    /// Start time of the scan
-    time_t start;
-    /// End time of the scan
-    time_t end;
-    /// List of struct Cluster objects associated with the above metadata.
-    GArray *clusters;
-    /// Error message.
-    char *err_msg;
-    /// Error flag. False indicates no error.
-    bool error;
+    time_t start;     /**< Start time of the scan. */
+    time_t end;       /**< End time of the scan*/
+    GArray *clusters; /**< List of struct Cluster objects associated with the above metadata. */
+    char *err_msg;    /**< Error message. */
+    bool error;       /**< Error flag. False indicates no error. */
 };
 
 void
@@ -147,7 +136,7 @@ cluster_list_destroy(struct ClusterList **list)
     *list = 0;
 }
 
-const char *
+enum Sector
 cluster_list_sector(struct ClusterList *list)
 {
     assert(list);
@@ -222,23 +211,6 @@ cluster_list_filter(struct ClusterList *list, struct BoundingBox box)
     list->clusters = clusters; // In case g_array_remove_index_fast() moved the array.
 
     return list;
-}
-
-static char const *
-find_sector_start(char const *fname)
-{
-    char const *fdcc = strstr(fname, "FDCC");
-    if (fdcc) {
-        return fdcc;
-    }
-
-    char const *fdcf = strstr(fname, "FDCF");
-    if (fdcf) {
-        return fdcf;
-    }
-
-    char const *fdcm = strstr(fname, "FDCM");
-    return fdcm;
 }
 
 char const *
@@ -341,10 +313,10 @@ cluster_list_from_file(char const *full_path)
     clist->satellite = satellite;
 
     // Get the sector name
-    char const *sect_start = find_sector_start(fname);
+    enum Sector sector = satfire_sector_string_contains_sector(fname);
     err_msg = "Error parsing sector name";
-    Stopif(!sect_start, goto ERR_RETURN, "Error parsing sector name");
-    memcpy(clist->sector, sect_start, 4);
+    Stopif(sector == SATFIRE_SECTOR_NONE, goto ERR_RETURN, "Error parsing sector name");
+    clist->sector = sector;
 
     // Get the start and end times
     clist->start = parse_time_string(cluster_find_start_time(fname));

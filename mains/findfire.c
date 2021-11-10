@@ -76,36 +76,25 @@ program_finalization()
 static bool
 skip_path(char const *path, ClusterDatabaseQueryPresentH query)
 {
-    enum Satellite satellite = SATFIRE_SATELLITE_NONE;
-    char *sector = 0;
-
     if (strcmp("nc", file_ext(path)) != 0) {
         // Only process files with the '.nc' extension.
         return true;
     }
 
-    if (strstr(path, "FDCF")) {
-        sector = "FDCF";
-    }
+    enum Satellite satellite = satfire_satellite_string_contains_satellite(path);
+    enum Sector sector = satfire_sector_string_contains_sector(path);
 
-    if (strstr(path, "FDCC")) {
-        sector = "FDCC";
-    }
-
-    if (strstr(path, "FDCM")) {
-        sector = "FDCM";
-        // Skip meso-sector for now, I don't have many of those.
+    if (satellite == SATFIRE_SATELLITE_NONE || sector == SATFIRE_SECTOR_NONE) {
         return true;
     }
 
-    if (strstr(path, satfire_satellite_name(SATFIRE_SATELLITE_G16))) {
-        satellite = SATFIRE_SATELLITE_G16;
+    // Skip meso-sectors for now, I don't have many of those.
+    if (sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2) {
+        return true;
     }
 
-    if (strstr(path, satfire_satellite_name(SATFIRE_SATELLITE_G17))) {
-        satellite = SATFIRE_SATELLITE_G17;
-    }
-
+    // TODO: Need to add error checking to here. On error, parse_time_string should return the
+    // time 0 since that is way out of bounds for the GOES R/S/T/.... era.
     time_t scan_start = parse_time_string(cluster_find_start_time(path));
     time_t scan_end = parse_time_string(cluster_find_end_time(path));
 
@@ -120,8 +109,8 @@ skip_path(char const *path, ClusterDatabaseQueryPresentH query)
 }
 
 static void
-save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, char const *sat,
-                 char const *sector)
+save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satellite sat,
+                 enum Sector sector)
 {
     FILE *out = fopen(kml_file, "wb");
     Stopif(!out, return, "Unable to open file for writing: %s", kml_file);
@@ -134,7 +123,8 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, char const *
     kml_end_style(out);
 
     char *description = 0;
-    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf", sat, sector,
+    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf",
+             satfire_satellite_name(sat), satfire_sector_name(sector),
              cluster_total_power(biggest));
 
     kml_start_placemark(out, "Biggest Fire", description, "#fire");
@@ -154,7 +144,7 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, char const *
 struct ClusterStats {
     struct Cluster *biggest_fire;
     enum Satellite biggest_sat;
-    char biggest_sector[5];
+    enum Sector biggest_sector;
     time_t biggest_start;
     time_t biggest_end;
 
@@ -169,7 +159,7 @@ cluster_stats_new(void)
     return (struct ClusterStats){
         .biggest_fire = cluster_new(),
         .biggest_sat = SATFIRE_SATELLITE_NONE,
-        .biggest_sector = {0},
+        .biggest_sector = SATFIRE_SECTOR_NONE,
         .biggest_start = 0,
         .biggest_end = 0,
         .num_clusters = 0,
@@ -186,7 +176,7 @@ cluster_stats_destroy(struct ClusterStats *tgt)
 }
 
 static struct ClusterStats
-cluster_stats_update(struct ClusterStats stats, enum Satellite sat, char const sector[static 5],
+cluster_stats_update(struct ClusterStats stats, enum Satellite sat, enum Sector sector,
                      time_t start, time_t end, struct Cluster *cluster)
 {
     double cluster_power = cluster_total_power(cluster);
@@ -195,7 +185,7 @@ cluster_stats_update(struct ClusterStats stats, enum Satellite sat, char const s
         cluster_destroy(&stats.biggest_fire);
         stats.biggest_fire = cluster_copy(cluster);
         stats.biggest_sat = sat;
-        memcpy(stats.biggest_sector, sector, 4);
+        stats.biggest_sector = sector;
         stats.biggest_start = start;
         stats.biggest_end = end;
     }
@@ -239,34 +229,35 @@ cluster_stats_print(struct ClusterStats stats)
            "    Pct < 1 MW: %10u%%\n"
            " Power < 10 MW: %10u\n"
            "   Pct < 10 MW: %10u%%\n",
-           satfire_satellite_name(stats.biggest_sat), stats.biggest_sector, start_str, end_str,
-           biggest_centroid.lat, biggest_centroid.lon, cluster_pixel_count(stats.biggest_fire),
-           cluster_total_power(stats.biggest_fire), stats.num_clusters, stats.num_power_lt_1mw,
+           satfire_satellite_name(stats.biggest_sat), satfire_sector_name(stats.biggest_sector),
+           start_str, end_str, biggest_centroid.lat, biggest_centroid.lon,
+           cluster_pixel_count(stats.biggest_fire), cluster_total_power(stats.biggest_fire),
+           stats.num_clusters, stats.num_power_lt_1mw,
            stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
            stats.num_power_lt_10mw * 100 / stats.num_clusters);
 }
 
 struct ClusterListStats {
     enum Satellite min_num_clusters_sat;
-    char min_num_clusters_sector[5];
+    enum Sector min_num_clusters_sector;
     unsigned int min_num_clusters;
     time_t min_num_clusters_start;
     time_t min_num_clusters_end;
 
     enum Satellite max_num_clusters_sat;
-    char max_num_clusters_sector[5];
+    enum Sector max_num_clusters_sector;
     unsigned int max_num_clusters;
     time_t max_num_clusters_start;
     time_t max_num_clusters_end;
 
     enum Satellite max_total_power_sat;
-    char max_total_power_sector[5];
+    enum Sector max_total_power_sector;
     double max_total_power;
     time_t max_total_power_start;
     time_t max_total_power_end;
 
     enum Satellite min_total_power_sat;
-    char min_total_power_sector[5];
+    enum Sector min_total_power_sector;
     double min_total_power;
     time_t min_total_power_start;
     time_t min_total_power_end;
@@ -277,25 +268,25 @@ cluster_list_stats_new(void)
 {
     return (struct ClusterListStats){
         .min_num_clusters_sat = SATFIRE_SATELLITE_NONE,
-        .min_num_clusters_sector = {0},
+        .min_num_clusters_sector = SATFIRE_SECTOR_NONE,
         .min_num_clusters = UINT_MAX,
         .min_num_clusters_start = 0,
         .min_num_clusters_end = 0,
 
         .max_num_clusters_sat = SATFIRE_SATELLITE_NONE,
-        .max_num_clusters_sector = {0},
+        .max_num_clusters_sector = SATFIRE_SECTOR_NONE,
         .max_num_clusters = 0,
         .max_num_clusters_start = 0,
         .max_num_clusters_end = 0,
 
         .max_total_power_sat = SATFIRE_SATELLITE_NONE,
-        .max_total_power_sector = {0},
+        .max_total_power_sector = SATFIRE_SECTOR_NONE,
         .max_total_power = 0.0,
         .max_total_power_start = 0,
         .max_total_power_end = 0,
 
         .min_total_power_sat = SATFIRE_SATELLITE_NONE,
-        .min_total_power_sector = {0},
+        .min_total_power_sector = SATFIRE_SECTOR_NONE,
         .min_total_power = HUGE_VAL,
         .min_total_power_start = 0,
         .min_total_power_end = 0,
@@ -316,7 +307,7 @@ cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *c
     if (num_clust > clstats.max_num_clusters) {
         clstats.max_num_clusters = num_clust;
         clstats.max_num_clusters_sat = cluster_list_satellite(clusters);
-        memcpy(clstats.max_num_clusters_sector, cluster_list_sector(clusters), 4);
+        clstats.max_num_clusters_sector = cluster_list_sector(clusters);
         clstats.max_num_clusters_start = cluster_list_scan_start(clusters);
         clstats.max_num_clusters_end = cluster_list_scan_end(clusters);
     }
@@ -324,7 +315,7 @@ cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *c
     if (num_clust < clstats.min_num_clusters) {
         clstats.min_num_clusters = num_clust;
         clstats.min_num_clusters_sat = cluster_list_satellite(clusters);
-        memcpy(clstats.min_num_clusters_sector, cluster_list_sector(clusters), 4);
+        clstats.min_num_clusters_sector = cluster_list_sector(clusters);
         clstats.min_num_clusters_start = cluster_list_scan_start(clusters);
         clstats.min_num_clusters_end = cluster_list_scan_end(clusters);
     }
@@ -333,7 +324,7 @@ cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *c
     if (total_power > clstats.max_total_power) {
         clstats.max_total_power = total_power;
         clstats.max_total_power_sat = cluster_list_satellite(clusters);
-        memcpy(clstats.max_total_power_sector, cluster_list_sector(clusters), 4);
+        clstats.max_total_power_sector = cluster_list_sector(clusters);
         clstats.max_total_power_start = cluster_list_scan_start(clusters);
         clstats.max_total_power_end = cluster_list_scan_end(clusters);
     }
@@ -341,7 +332,7 @@ cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *c
     if (total_power < clstats.min_total_power) {
         clstats.min_total_power = total_power;
         clstats.min_total_power_sat = cluster_list_satellite(clusters);
-        memcpy(clstats.min_total_power_sector, cluster_list_sector(clusters), 4);
+        clstats.min_total_power_sector = cluster_list_sector(clusters);
         clstats.min_total_power_start = cluster_list_scan_start(clusters);
         clstats.min_total_power_end = cluster_list_scan_end(clusters);
     }
@@ -364,8 +355,9 @@ cluster_list_stats_print(struct ClusterListStats clstats)
            "                start: %s"
            "                  end: %s"
            "      Max Total Power: %.0lf GW\n\n",
-           satfire_satellite_name(clstats.max_total_power_sat), clstats.max_total_power_sector,
-           start_str, end_str, clstats.max_total_power / 100.0);
+           satfire_satellite_name(clstats.max_total_power_sat),
+           satfire_sector_name(clstats.max_total_power_sector), start_str, end_str,
+           clstats.max_total_power / 100.0);
 
     ctime_r(&clstats.min_total_power_start, start_str);
     ctime_r(&clstats.min_total_power_end, end_str);
@@ -377,8 +369,9 @@ cluster_list_stats_print(struct ClusterListStats clstats)
            "                start: %s"
            "                  end: %s"
            "      Min Total Power: %.0lf MW\n\n",
-           satfire_satellite_name(clstats.min_total_power_sat), clstats.min_total_power_sector,
-           start_str, end_str, clstats.min_total_power);
+           satfire_satellite_name(clstats.min_total_power_sat),
+           satfire_sector_name(clstats.min_total_power_sector), start_str, end_str,
+           clstats.min_total_power);
 
     ctime_r(&clstats.max_num_clusters_start, start_str);
     ctime_r(&clstats.max_num_clusters_end, end_str);
@@ -390,8 +383,9 @@ cluster_list_stats_print(struct ClusterListStats clstats)
            "                    start: %s"
            "                      end: %s"
            "           Total Clusters: %u\n\n",
-           satfire_satellite_name(clstats.max_num_clusters_sat), clstats.max_num_clusters_sector,
-           start_str, end_str, clstats.max_num_clusters);
+           satfire_satellite_name(clstats.max_num_clusters_sat),
+           satfire_sector_name(clstats.max_num_clusters_sector), start_str, end_str,
+           clstats.max_num_clusters);
 
     ctime_r(&clstats.min_num_clusters_start, start_str);
     ctime_r(&clstats.min_num_clusters_end, end_str);
@@ -403,8 +397,9 @@ cluster_list_stats_print(struct ClusterListStats clstats)
            "                    start: %s"
            "                      end: %s"
            "           Total Clusters: %u\n\n",
-           satfire_satellite_name(clstats.min_num_clusters_sat), clstats.min_num_clusters_sector,
-           start_str, end_str, clstats.min_num_clusters);
+           satfire_satellite_name(clstats.min_num_clusters_sat),
+           satfire_sector_name(clstats.min_num_clusters_sector), start_str, end_str,
+           clstats.min_num_clusters);
 }
 
 /*-------------------------------------------------------------------------------------------------
@@ -540,7 +535,7 @@ database_filler(void *arg)
         Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
         enum Satellite sat = cluster_list_satellite(clusters);
-        const char *sector = cluster_list_sector(clusters);
+        enum Sector sector = cluster_list_sector(clusters);
         time_t start = cluster_list_scan_start(clusters);
         time_t end = cluster_list_scan_end(clusters);
         GArray *clusters_array = cluster_list_clusters(clusters);
@@ -560,7 +555,7 @@ database_filler(void *arg)
 
     cluster_stats_print(cluster_stats);
     save_cluster_kml(cluster_stats.biggest_fire, cluster_stats.biggest_start,
-                     cluster_stats.biggest_end, satfire_satellite_name(cluster_stats.biggest_sat),
+                     cluster_stats.biggest_end, cluster_stats.biggest_sat,
                      cluster_stats.biggest_sector);
     cluster_stats_destroy(&cluster_stats);
 

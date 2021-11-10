@@ -77,16 +77,8 @@ struct ClusterList *cluster_list_from_file(char const *full_path);
  */
 void cluster_list_destroy(struct ClusterList **list);
 
-/** \brief Get the name of the satellite sector.
- *
- * This is a static string determined at compile time.
- *
- * Potential values are "FDCC", "FDCF", and "FDCM".
- * FDCC is the CONUS sector.
- * FDCF is the Full Disk sector.
- * FDCM is the Meso-sector.
- */
-const char *cluster_list_sector(struct ClusterList *list);
+/** \brief Get the satellite sector.  */
+enum Sector cluster_list_sector(struct ClusterList *list);
 
 /** \brief Get the name of the satellite. */
 enum Satellite cluster_list_satellite(struct ClusterList *list);
