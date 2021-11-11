@@ -206,35 +206,40 @@ cluster_stats_update(struct ClusterStats stats, enum Satellite sat, enum Sector 
 static void
 cluster_stats_print(struct ClusterStats stats)
 {
-    char start_str[128] = {0};
-    ctime_r(&stats.biggest_start, start_str);
-    char end_str[128] = {0};
-    ctime_r(&stats.biggest_end, end_str);
+    if (stats.num_clusters > 0) {
 
-    struct Coord biggest_centroid = cluster_centroid(stats.biggest_fire);
+        char start_str[128] = {0};
+        ctime_r(&stats.biggest_start, start_str);
+        char end_str[128] = {0};
+        ctime_r(&stats.biggest_end, end_str);
 
-    printf("\nIndividual Cluster Stats\n\n"
-           "Most Powerfull:\n"
-           "     satellite: %s\n"
-           "        sector: %s\n"
-           "         start: %s"
-           "           end: %s"
-           "           Lat: %10.6lf\n"
-           "           Lon: %11.6lf\n"
-           "         Count: %2d\n"
-           "         Power: %5.0lf MW\n\n"
-           "        Counts:\n"
-           "         Total: %10u\n"
-           "  Power < 1 MW: %10u\n"
-           "    Pct < 1 MW: %10u%%\n"
-           " Power < 10 MW: %10u\n"
-           "   Pct < 10 MW: %10u%%\n",
-           satfire_satellite_name(stats.biggest_sat), satfire_sector_name(stats.biggest_sector),
-           start_str, end_str, biggest_centroid.lat, biggest_centroid.lon,
-           cluster_pixel_count(stats.biggest_fire), cluster_total_power(stats.biggest_fire),
-           stats.num_clusters, stats.num_power_lt_1mw,
-           stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
-           stats.num_power_lt_10mw * 100 / stats.num_clusters);
+        struct Coord biggest_centroid = cluster_centroid(stats.biggest_fire);
+
+        printf("\nIndividual Cluster Stats\n\n"
+               "Most Powerfull:\n"
+               "     satellite: %s\n"
+               "        sector: %s\n"
+               "         start: %s"
+               "           end: %s"
+               "           Lat: %10.6lf\n"
+               "           Lon: %11.6lf\n"
+               "         Count: %2d\n"
+               "         Power: %5.0lf MW\n\n"
+               "        Counts:\n"
+               "         Total: %10u\n"
+               "  Power < 1 MW: %10u\n"
+               "    Pct < 1 MW: %10u%%\n"
+               " Power < 10 MW: %10u\n"
+               "   Pct < 10 MW: %10u%%\n",
+               satfire_satellite_name(stats.biggest_sat), satfire_sector_name(stats.biggest_sector),
+               start_str, end_str, biggest_centroid.lat, biggest_centroid.lon,
+               cluster_pixel_count(stats.biggest_fire), cluster_total_power(stats.biggest_fire),
+               stats.num_clusters, stats.num_power_lt_1mw,
+               stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
+               stats.num_power_lt_10mw * 100 / stats.num_clusters);
+    } else {
+        printf("\nNo new clusters added to the database.");
+    }
 }
 
 struct ClusterListStats {
@@ -417,7 +422,40 @@ directory_walker(void *arg)
     static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
     pthread_setname(threadname);
 
-    Courier *to_cluster_list_loader = arg;
+    struct DirWalkState dir_walk_state = dir_walk_new_with_root(data_dir);
+    char const *path = dir_walk_next_path(&dir_walk_state);
+
+    Courier *to_filter = arg;
+    courier_register_sender(to_filter);
+    courier_wait_until_ready_to_send(to_filter);
+
+    while (path) {
+
+        char *owned_path = 0;
+        asprintf(&owned_path, "%s", path);
+        bool success = courier_send(to_filter, owned_path);
+
+        Stopif(!success, break, "Failed to send to filter.");
+
+        path = dir_walk_next_path(&dir_walk_state);
+    }
+
+    dir_walk_destroy(&dir_walk_state);
+    courier_done_sending(to_filter);
+
+    return 0;
+}
+
+static void *
+path_filter(void *arg)
+{
+    static char const threadname[] = "findfire-filter";
+    static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
+    pthread_setname(threadname);
+
+    struct PipelineLink *links = arg;
+    Courier *from_dir_walker = links->from;
+    Courier *to_cluster_list_loader = links->to;
 
     ClusterDatabaseH cluster_db = 0;
     cluster_db = cluster_db_connect(database_file);
@@ -428,30 +466,30 @@ directory_walker(void *arg)
     Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query. (%s %u)", __FILE__,
            __LINE__);
 
+    courier_register_receiver(from_dir_walker);
     courier_register_sender(to_cluster_list_loader);
+
+    courier_wait_until_ready_to_receive(from_dir_walker);
     courier_wait_until_ready_to_send(to_cluster_list_loader);
 
-    struct DirWalkState dir_walk_state = dir_walk_new_with_root(data_dir);
-    char const *path = dir_walk_next_path(&dir_walk_state);
+    void *item = 0;
+    while ((item = courier_receive(from_dir_walker))) {
+        char *path = item;
 
-    while (path) {
         if (!skip_path(path, present_query)) {
             printf("Processing: %s\n", path);
 
-            char *owned_path = 0;
-            asprintf(&owned_path, "%s", path);
-            bool success = courier_send(to_cluster_list_loader, owned_path);
+            bool success = courier_send(to_cluster_list_loader, path);
 
             Stopif(!success, break, "Failed to send to loader.");
         }
-
-        path = dir_walk_next_path(&dir_walk_state);
     }
 
-    dir_walk_destroy(&dir_walk_state);
+    courier_done_receiving(from_dir_walker);
     courier_done_sending(to_cluster_list_loader);
     cluster_db_finalize_query_present(cluster_db, &present_query);
     cluster_db_close(&cluster_db);
+
     return 0;
 }
 
@@ -463,17 +501,17 @@ fire_cluster_list_loader(void *arg)
     pthread_setname(threadname);
 
     struct PipelineLink *links = arg;
-    Courier *from_dir_walker = links->from;
+    Courier *from_filter = links->from;
     Courier *to_database = links->to;
 
-    courier_register_receiver(from_dir_walker);
+    courier_register_receiver(from_filter);
     courier_register_sender(to_database);
 
-    courier_wait_until_ready_to_receive(from_dir_walker);
+    courier_wait_until_ready_to_receive(from_filter);
     courier_wait_until_ready_to_send(to_database);
 
     void *item = 0;
-    while ((item = courier_receive(from_dir_walker))) {
+    while ((item = courier_receive(from_filter))) {
         char *path = item;
 
         bool success_sending = true;
@@ -495,7 +533,7 @@ fire_cluster_list_loader(void *arg)
         Stopif(!success_sending, break, "Failed to send to database.");
     }
 
-    courier_done_receiving(from_dir_walker);
+    courier_done_receiving(from_filter);
     courier_done_sending(to_database);
 
     return 0;
@@ -585,21 +623,28 @@ main()
     int rc = EXIT_FAILURE;
     program_initialization();
 
-    Courier from_dir_walk = courier_new();
-    Courier from_cluster_loader = courier_new();
-    struct PipelineLink loader_link = {.from = &from_dir_walk, .to = &from_cluster_loader};
+    Courier dir_walk = courier_new();
+    Courier filter = courier_new();
+    Courier cluster_loader = courier_new();
+    struct PipelineLink dir_walk_filter_link = {.from = &dir_walk, .to = &filter};
+    struct PipelineLink filter_to_loader = {.from = &filter, .to = &cluster_loader};
 
-    pthread_t threads[6] = {0};
+    pthread_t threads[10] = {0};
 
-    int s = pthread_create(&threads[0], 0, directory_walker, &from_dir_walk);
+    int s = pthread_create(&threads[0], 0, directory_walker, &dir_walk);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "directory_walker");
-    s = pthread_create(&threads[1], 0, database_filler, &from_cluster_loader);
+    s = pthread_create(&threads[1], 0, database_filler, &cluster_loader);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "database_filler");
 
-    for (unsigned int i = 2; i < sizeof(threads) / sizeof(threads[0]); ++i) {
-        s = pthread_create(&threads[i], 0, fire_cluster_list_loader, &loader_link);
+    for (unsigned int i = 2; i < 6; ++i) {
+        s = pthread_create(&threads[i], 0, path_filter, &dir_walk_filter_link);
+        Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s(%u) thread.", "path_filter", i);
+    }
+
+    for (unsigned int i = 6; i < sizeof(threads) / sizeof(threads[0]); ++i) {
+        s = pthread_create(&threads[i], 0, fire_cluster_list_loader, &filter_to_loader);
         Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s(%u) thread.",
-               "fire_cluster_list_loader", i - 2);
+               "fire_cluster_list_loader", i);
     }
 
     rc = EXIT_SUCCESS;
@@ -616,8 +661,9 @@ CLEANUP_AND_EXIT:
         }
     }
 
-    courier_destroy(&from_cluster_loader, generic_destroy_cluster_list);
-    courier_destroy(&from_dir_walk, free);
+    courier_destroy(&cluster_loader, generic_destroy_cluster_list);
+    courier_destroy(&filter, free);
+    courier_destroy(&dir_walk, free);
 
     program_finalization();
 
