@@ -8,13 +8,16 @@
 char const *
 satfire_satellite_name(enum Satellite const sat)
 {
-    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17);
+    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17 ||
+           sat == SATFIRE_SATELLITE_NONE);
 
     switch (sat) {
     case SATFIRE_SATELLITE_G16:
         return "G16";
     case SATFIRE_SATELLITE_G17:
         return "G17";
+    case SATFIRE_SATELLITE_NONE:
+        return "NONE";
     default:
         exit(EXIT_FAILURE);
     }
@@ -98,7 +101,8 @@ char const *
 satfire_sector_name(enum Sector const sector)
 {
     assert(sector == SATFIRE_SECTOR_FULL || sector == SATFIRE_SECTOR_CONUS ||
-           sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2);
+           sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2 ||
+           sector == SATFIRE_SECTOR_NONE);
 
     switch (sector) {
     case SATFIRE_SECTOR_FULL:
@@ -109,6 +113,8 @@ satfire_sector_name(enum Sector const sector)
         return "FDCM1";
     case SATFIRE_SECTOR_MESO2:
         return "FDCM2";
+    case SATFIRE_SECTOR_NONE:
+        return "NONE";
     default:
         exit(EXIT_FAILURE);
     }
