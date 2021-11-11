@@ -74,6 +74,7 @@ struct SatPixel {
         };
         struct Coord coords[4];
     };
+    double power;
 };
 
 /** Calculate the centroid of a SatPixel.
@@ -83,7 +84,7 @@ struct SatPixel {
  */
 struct Coord sat_pixel_centroid(struct SatPixel const pxl[static 1]);
 
-/** Tests if these pixels are basically the same pixel.
+/** Tests if these pixels are basically the same pixel in a geographic sense (not including power).
  *
  * This compares the four corners of the pixel using the coord_are_close() function.
  */
@@ -163,6 +164,9 @@ struct PixelList *pixel_list_clear(struct PixelList list[static 1]);
 
 /** Calculate the centroid of a PixelList. */
 struct Coord pixel_list_centroid(struct PixelList const list[static 1]);
+
+/** Calculate the total power in a PixelList. */
+double pixel_list_total_power(struct PixelList const list[static 1]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format

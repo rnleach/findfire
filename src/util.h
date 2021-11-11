@@ -156,7 +156,7 @@ void kml_start_multigeometry(FILE *output);
 void kml_end_multigeometry(FILE *output);
 
 /** Start a Polygon. */
-void kml_start_polygon(FILE *output);
+void kml_start_polygon(FILE *output, bool extrude, bool tessellate, char const *altitudeMode);
 
 /** End a Polygon. */
 void kml_end_polygon(FILE *output);
@@ -177,7 +177,7 @@ void kml_end_linear_ring(FILE *output);
  *
  * This could be the an outer or inner ring in progress.
  */
-void kml_linear_ring_add_vertex(FILE *output, double lat, double lon);
+void kml_linear_ring_add_vertex(FILE *output, double lat, double lon, double z);
 
 /** Write out a KML Point. */
 void kml_point(FILE *output, double lat, double lon);

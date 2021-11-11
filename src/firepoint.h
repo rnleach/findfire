@@ -19,6 +19,4 @@ struct FirePoint {
     int y;
     /// The polygon describing the scanned area.
     struct SatPixel pixel;
-    /// The power of the fire in that pixel in megawatts.
-    float power;
 };

@@ -47,7 +47,7 @@ cluster_add_fire_point(struct Cluster *cluster, struct FirePoint *fire_point)
     assert(fire_point);
 
     cluster->pixels = pixel_list_append(cluster->pixels, &fire_point->pixel);
-    cluster->power += fire_point->power;
+    cluster->power += fire_point->pixel.power;
 }
 
 struct Cluster *

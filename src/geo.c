@@ -530,6 +530,19 @@ pixel_list_centroid(struct PixelList const list[static 1])
     return centroid;
 }
 
+double
+pixel_list_total_power(struct PixelList const list[static 1])
+{
+    assert(list);
+
+    double total_power = 0.0;
+
+    for (unsigned int i = 0; i < list->len; ++i) {
+        total_power += list->pixels[i].power;
+    }
+
+    return total_power;
+}
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
@@ -578,17 +591,19 @@ pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
     kml_start_multigeometry(strm);
     for (unsigned int i = 0; i < plist->len; ++i) {
         struct SatPixel pixel = plist->pixels[i];
-        kml_start_polygon(strm);
+        kml_start_polygon(strm, true, true, "relativeToGround");
         kml_polygon_start_outer_ring(strm);
         kml_start_linear_ring(strm);
 
+        // Google earth uses z-coordinates as meters.
+        double power_as_height = 1000.0 * log10(pixel.power);
         for (unsigned int j = 0; j < sizeof(pixel.coords) / sizeof(pixel.coords[0]); ++j) {
             struct Coord coord = pixel.coords[j];
-            kml_linear_ring_add_vertex(strm, coord.lat, coord.lon);
+            kml_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
         }
         // Close the loop.
         struct Coord coord = pixel.coords[0];
-        kml_linear_ring_add_vertex(strm, coord.lat, coord.lon);
+        kml_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
 
         kml_end_linear_ring(strm);
         kml_polygon_end_outer_ring(strm);

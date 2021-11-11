@@ -372,10 +372,28 @@ kml_end_multigeometry(FILE *output)
 }
 
 void
-kml_start_polygon(FILE *output)
+kml_start_polygon(FILE *output, bool extrude, bool tessellate, char const *altitudeMode)
 {
     assert(output);
+
     fputs("<Polygon>\n", output);
+
+    if (altitudeMode) {
+        assert(strcmp(altitudeMode, "clampToGround") == 0 ||
+               strcmp(altitudeMode, "relativeToGround") == 0 ||
+               strcmp(altitudeMode, "absolute") == 0);
+
+        fprintf(output, "<altitudeMode>%s</altitudeMode>\n", altitudeMode);
+    }
+
+    if (extrude) {
+        fputs("<extrude>1</extrude>\n", output);
+    }
+
+    if (tessellate) {
+        fputs("<tessellate>1</tessellate>\n", output);
+    }
+
     return;
 }
 
@@ -422,10 +440,10 @@ kml_end_linear_ring(FILE *output)
 }
 
 void
-kml_linear_ring_add_vertex(FILE *output, double lat, double lon)
+kml_linear_ring_add_vertex(FILE *output, double lat, double lon, double z)
 {
     assert(output);
-    fprintf(output, "%lf,%lf,0\n", lon, lat);
+    fprintf(output, "%lf,%lf,%lf\n", lon, lat, z);
     return;
 }
 

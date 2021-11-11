@@ -116,9 +116,9 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
                 struct Coord lr = {.lat = xps[2], .lon = yps[2]};
                 struct Coord ur = {.lat = xps[3], .lon = yps[3]};
 
-                struct SatPixel pixel = {.ul = ul, .ll = ll, .lr = lr, .ur = ur};
+                struct SatPixel pixel = {.ul = ul, .ll = ll, .lr = lr, .ur = ur, .power = power_mw};
 
-                struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel, .power = power_mw};
+                struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel};
                 points = g_array_append_val(points, pnt);
             }
         }
