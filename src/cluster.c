@@ -9,6 +9,8 @@
 #include "geo.h"
 #include "util.h"
 
+char const *out_of_memory = "memory allocation error";
+
 /*-------------------------------------------------------------------------------------------------
                                                  Cluster
 -------------------------------------------------------------------------------------------------*/
@@ -23,7 +25,7 @@ struct Cluster *
 cluster_new(void)
 {
     struct Cluster *new = malloc(sizeof(struct Cluster));
-    Stopif(!new, exit(EXIT_FAILURE), "malloc fail: out of memory");
+    Stopif(!new, exit(EXIT_FAILURE), "%s", out_of_memory);
 
     *new = (struct Cluster){.power = 0.0, .pixels = pixel_list_new()};
 
@@ -56,7 +58,7 @@ cluster_copy(struct Cluster const *cluster)
     assert(cluster);
 
     struct Cluster *copy = malloc(sizeof(struct Cluster));
-    Stopif(!copy, exit(EXIT_FAILURE), "malloc fail: out of memory");
+    Stopif(!copy, exit(EXIT_FAILURE), "%s", out_of_memory);
 
     *copy = (struct Cluster){.power = cluster->power, .pixels = pixel_list_copy(cluster->pixels)};
 
