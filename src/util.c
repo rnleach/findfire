@@ -239,6 +239,38 @@ kml_end_document(FILE *output)
 }
 
 void
+kml_start_folder(FILE *output, char const *name, char const *description, bool is_open)
+{
+    assert(output);
+
+    fputs("<Folder>\n", output);
+
+    if (name) {
+        fprintf(output, "<name>%s</name>\n", name);
+    }
+
+    if (description) {
+        fprintf(output, "<description>%s</description>\n", description);
+    }
+
+    if (is_open) {
+        fputs("<open>1</open>\n", output);
+    }
+
+    return;
+}
+
+void
+kml_end_folder(FILE *output)
+{
+    assert(output);
+
+    fputs("</Folder>\n", output);
+
+    return;
+}
+
+void
 kml_start_placemark(FILE *output, char const *name, char const *description, char const *style_url)
 {
     assert(output);

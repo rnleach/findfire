@@ -122,17 +122,23 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satelli
     kml_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
     kml_end_style(out);
 
+    kml_start_folder(out, "BiggestFire", 0, true);
+    kml_timespan(out, start, end);
+
     char *description = 0;
-    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf",
+    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf MW",
              satfire_satellite_name(sat), satfire_sector_name(sector),
              cluster_total_power(biggest));
 
     kml_start_placemark(out, "Biggest Fire", description, "#fire");
-    kml_timespan(out, start, end);
-    pixel_list_kml_write(out, cluster_pixels(biggest));
+    struct Coord centroid = pixel_list_centroid(cluster_pixels(biggest));
+    kml_point(out, centroid.lat, centroid.lon);
     kml_end_placemark(out);
-
     free(description);
+
+    pixel_list_kml_write(out, cluster_pixels(biggest));
+
+    kml_end_folder(out);
 
     kml_end_document(out);
 

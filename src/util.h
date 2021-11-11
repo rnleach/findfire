@@ -121,6 +121,12 @@ void kml_start_document(FILE *output);
 /** \brief Write out a KML footer for a file closing the Document element. */
 void kml_end_document(FILE *output);
 
+/** \brief Start a KML folder. */
+void kml_start_folder(FILE *output, char const *name, char const *description, bool is_open);
+
+/** \brief Close a folder element. */
+void kml_end_folder(FILE *output);
+
 /** \brief Start a Placemark. */
 void kml_start_placemark(FILE *output, char const *name, char const *description,
                          char const *style_url);

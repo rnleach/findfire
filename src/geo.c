@@ -583,20 +583,77 @@ pixel_list_binary_deserialize(unsigned char buffer[static sizeof(size_t)])
 /*-------------------------------------------------------------------------------------------------
  *                                         KML Export
  *-----------------------------------------------------------------------------------------------*/
+static double
+power_as_height_meters(double power_mw)
+{
+    double power_as_height = power_mw;
+
+    return power_as_height;
+}
+
+static void
+pixel_list_kml_write_pixel_style(FILE *strm, double power_as_height)
+{
+    double const max_power_height = 3000.0;
+    double const max_green_for_orange = 0.647;
+    double const full_red_power_as_height = max_power_height / 2.0;
+
+    double rd = 1.0;
+    double gd = 0.0;
+    double bd = 0.0;
+    double ad = 0.6;
+
+    power_as_height = fmin(power_as_height, max_power_height);
+
+    if (power_as_height <= full_red_power_as_height) {
+        gd = (full_red_power_as_height - power_as_height) / full_red_power_as_height *
+             max_green_for_orange;
+
+    } else {
+        gd = (power_as_height - full_red_power_as_height) /
+             (max_power_height - full_red_power_as_height);
+        bd = gd;
+    }
+
+    int ri = (int)(rd * 255);
+    int gi = (int)(gd * 255);
+    int bi = (int)(bd * 255);
+    int ai = (int)(ad * 255);
+
+    assert(ri < 256 && gi < 256 && bi < 256 && ai < 256);
+
+    char color[9] = {0};
+    sprintf(color, "%02x%02x%02x%02x", ai, bi, gi, ri);
+
+    kml_start_style(strm, 0);
+    kml_poly_style(strm, color, true, false);
+    kml_end_style(strm);
+
+    return;
+}
+
 void
 pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
 {
     assert(plist);
 
-    kml_start_multigeometry(strm);
+    char desc[32] = {0};
     for (unsigned int i = 0; i < plist->len; ++i) {
         struct SatPixel pixel = plist->pixels[i];
+
+        // Google earth uses z-coordinates as meters.
+        double power_as_height = power_as_height_meters(pixel.power);
+
+        sprintf(desc, "<h3>%.0lf MW</h3><br>", pixel.power);
+
+        kml_start_placemark(strm, 0, desc, 0);
+
+        pixel_list_kml_write_pixel_style(strm, power_as_height);
+
         kml_start_polygon(strm, true, true, "relativeToGround");
         kml_polygon_start_outer_ring(strm);
         kml_start_linear_ring(strm);
 
-        // Google earth uses z-coordinates as meters.
-        double power_as_height = 1000.0 * log10(pixel.power);
         for (unsigned int j = 0; j < sizeof(pixel.coords) / sizeof(pixel.coords[0]); ++j) {
             struct Coord coord = pixel.coords[j];
             kml_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
@@ -608,10 +665,9 @@ pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
         kml_end_linear_ring(strm);
         kml_polygon_end_outer_ring(strm);
         kml_end_polygon(strm);
+
+        kml_end_placemark(strm);
     }
-    struct Coord centroid = pixel_list_centroid(plist);
-    kml_point(strm, centroid.lat, centroid.lon);
-    kml_end_multigeometry(strm);
 
     return;
 }
