@@ -637,14 +637,16 @@ pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
 {
     assert(plist);
 
-    char desc[32] = {0};
+    char desc[128] = {0};
     for (unsigned int i = 0; i < plist->len; ++i) {
         struct SatPixel pixel = plist->pixels[i];
 
         // Google earth uses z-coordinates as meters.
         double power_as_height = power_as_height_meters(pixel.power);
 
-        sprintf(desc, "<h3>%.0lf MW</h3><br>", pixel.power);
+        sprintf(desc, 
+                "<h3>Power: %.0lfMW</h3><br/><h3>From nadir: %.0lf&deg;</h3><br/>", 
+                pixel.power, pixel.scan_angle);
 
         kml_start_placemark(strm, 0, desc, 0);
 
