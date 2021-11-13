@@ -65,6 +65,7 @@ bool bounding_box_contains_coord(struct BoundingBox const box, struct Coord cons
  *-----------------------------------------------------------------------------------------------*/
 /** The coordinates describing the area of a pixel viewed from a GOES-R/S satellite. */
 struct SatPixel {
+    /// The corner points of the pixel.
     union {
         struct {
             struct Coord ul;
@@ -74,7 +75,16 @@ struct SatPixel {
         };
         struct Coord coords[4];
     };
+    /// The radiative power in MegaWatts in this pixel.
     double power;
+    /// This is the angle in degrees from nadir. For instance, a point on the equator at -150
+    /// longitude has a scan angle of 13 degrees if nadir has longitude -137 degrees. And a point
+    /// at 45 degrees latitude and -137 degrees longitude for the same satellite would have a
+    /// scan_anlge of 45 degrees. If the distance in latitude from nadir is dlat and the distance
+    /// in longitude from nadir is dlon, then the scan angle is sqrt(dlat^2 + dlon^2). Lines of
+    /// constant scan angle represent concentric circles spreading out from nadir, and the angle
+    /// between the zenith and the satellites viewing angle are constant along this line.
+    double scan_angle;
 };
 
 /** Calculate the centroid of a SatPixel.

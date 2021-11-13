@@ -19,6 +19,8 @@ struct Cluster {
     double power;
     /// Pixels making up the cluster.
     struct PixelList *pixels;
+    /// The maximum scan angle of any point in this cluster
+    double max_scan_angle;
 };
 
 struct Cluster *
@@ -27,7 +29,7 @@ cluster_new(void)
     struct Cluster *new = malloc(sizeof(struct Cluster));
     Stopif(!new, exit(EXIT_FAILURE), "%s", out_of_memory);
 
-    *new = (struct Cluster){.power = 0.0, .pixels = pixel_list_new()};
+    *new = (struct Cluster){.power = 0.0, .pixels = pixel_list_new(), .max_scan_angle = 0.0};
 
     return new;
 }
@@ -50,6 +52,7 @@ cluster_add_fire_point(struct Cluster *cluster, struct FirePoint *fire_point)
 
     cluster->pixels = pixel_list_append(cluster->pixels, &fire_point->pixel);
     cluster->power += fire_point->pixel.power;
+    cluster->max_scan_angle = fmax(cluster->max_scan_angle, fire_point->pixel.scan_angle);
 }
 
 struct Cluster *
@@ -70,6 +73,13 @@ cluster_total_power(struct Cluster const *cluster)
 {
     assert(cluster);
     return cluster->power;
+}
+
+double
+cluster_max_scan_angle(struct Cluster const *cluster)
+{
+    assert(cluster);
+    return cluster->max_scan_angle;
 }
 
 unsigned int

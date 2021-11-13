@@ -40,6 +40,9 @@ struct Cluster *cluster_copy(struct Cluster const *cluster);
 /** Get the total power of all pixels in the Cluster. */
 double cluster_total_power(struct Cluster const *cluster);
 
+/** Get the max scan angle of any pixel in this cluster. */
+double cluster_max_scan_angle(struct Cluster const *cluster);
+
 /** Get the number of SatPixels in a Cluster. */
 unsigned int cluster_pixel_count(struct Cluster const *cluster);
 

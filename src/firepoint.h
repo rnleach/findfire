@@ -13,10 +13,10 @@
  * a fire.
  */
 struct FirePoint {
+    /// The polygon describing the scanned area.
+    struct SatPixel pixel;
     /// The x-coordinate (column number, often indexed as 'i') in the grid.
     int x;
     /// The y-coordinate (row number, often indexed as 'j') in the grid.
     int y;
-    /// The polygon describing the scanned area.
-    struct SatPixel pixel;
 };

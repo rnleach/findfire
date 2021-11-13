@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <libgen.h>
+#include <tgmath.h>
 
 #include "firesatimage.h"
 
@@ -87,18 +88,21 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
+    double lon0 = 0.0, lat0 = 0.0, z0 = 0.0;
+    OCTTransform(trans, 1, &lat0, &lon0, &z0);
+
     for (int j = 0; j < fdata->y_size; ++j) {
         for (int i = 0; i < fdata->x_size; ++i) {
 
             float power_mw = g_array_index(buffer, float, j * fdata->x_size + i);
             if (power_mw > 0.0) {
 
-                double ips[4] = {i - 0.5, i - 0.5, i + 0.5, i + 0.5};
-                double jps[4] = {j - 0.5, j + 0.5, j + 0.5, j - 0.5};
+                double ips[5] = {i - 0.5, i - 0.5, i + 0.5, i + 0.5, i};
+                double jps[5] = {j - 0.5, j + 0.5, j + 0.5, j - 0.5, j};
 
-                double xps[4] = {0};
-                double yps[4] = {0};
-                double zps[4] = {0};
+                double xps[5] = {0};
+                double yps[5] = {0};
+                double zps[5] = {0};
 
                 for (size_t k = 0; k < sizeof(xps) / sizeof(xps[0]); ++k) {
                     xps[k] = fdata->geo_transform[0] + ips[k] * fdata->geo_transform[1] +
@@ -111,12 +115,19 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
                 // yps -> longitudes.
                 OCTTransform(trans, sizeof(xps) / sizeof(xps[0]), xps, yps, zps);
 
+                double scan_angle = hypot(xps[4] - lat0, yps[4] - lon0);
+
                 struct Coord ul = {.lat = xps[0], .lon = yps[0]};
                 struct Coord ll = {.lat = xps[1], .lon = yps[1]};
                 struct Coord lr = {.lat = xps[2], .lon = yps[2]};
                 struct Coord ur = {.lat = xps[3], .lon = yps[3]};
 
-                struct SatPixel pixel = {.ul = ul, .ll = ll, .lr = lr, .ur = ur, .power = power_mw};
+                struct SatPixel pixel = {.ul = ul,
+                                         .ll = ll,
+                                         .lr = lr,
+                                         .ur = ur,
+                                         .power = power_mw,
+                                         .scan_angle = scan_angle};
 
                 struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel};
                 points = g_array_append_val(points, pnt);

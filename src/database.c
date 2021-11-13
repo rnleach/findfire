@@ -27,29 +27,30 @@ cluster_db_connect(char const *path)
     // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
     sqlite3_busy_timeout(handle, 5000);
 
-    char *query = "CREATE TABLE IF NOT EXISTS clusters (             \n"
-                  "  satellite  TEXT    NOT NULL,                    \n"
-                  "  sector     TEXT    NOT NULL,                    \n"
-                  "  start_time INTEGER NOT NULL,                    \n"
-                  "  end_time   INTEGER NOT NULL,                    \n"
-                  "  lat        REAL    NOT NULL,                    \n"
-                  "  lon        REAL    NOT NULL,                    \n"
-                  "  power      REAL    NOT NULL,                    \n"
-                  "  pixels     BLOB    NOT NULL);                   \n"
-                  "                                                  \n"
-                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups \n"
-                  "  ON clusters (satellite, sector, start_time,     \n"
-                  "               end_time, lat, lon);               \n"
-                  "                                                  \n"
-                  "CREATE INDEX IF NOT EXISTS file_processed         \n"
-                  "  ON clusters (satellite, sector, start_time,     \n"
-                  "               end_time);                         \n"
-                  "                                                  \n"
-                  "CREATE TABLE IF NOT EXISTS no_fire (              \n"
-                  "  satellite  TEXT    NOT NULL,                    \n"
-                  "  sector     TEXT    NOT NULL,                    \n"
-                  "  start_time INTEGER NOT NULL,                    \n"
-                  "  end_time   INTEGER NOT NULL);                   \n";
+    char *query = "CREATE TABLE IF NOT EXISTS clusters (                 \n"
+                  "  satellite      TEXT    NOT NULL,                    \n"
+                  "  sector         TEXT    NOT NULL,                    \n"
+                  "  start_time     INTEGER NOT NULL,                    \n"
+                  "  end_time       INTEGER NOT NULL,                    \n"
+                  "  lat            REAL    NOT NULL,                    \n"
+                  "  lon            REAL    NOT NULL,                    \n"
+                  "  power          REAL    NOT NULL,                    \n"
+                  "  max_scan_angle REAL    NOT NULL,                    \n"
+                  "  pixels         BLOB    NOT NULL);                   \n"
+                  "                                                      \n"
+                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups     \n"
+                  "  ON clusters (satellite, sector, start_time,         \n"
+                  "               end_time, lat, lon);                   \n"
+                  "                                                      \n"
+                  "CREATE INDEX IF NOT EXISTS file_processed             \n"
+                  "  ON clusters (satellite, sector, start_time,         \n"
+                  "               end_time);                             \n"
+                  "                                                      \n"
+                  "CREATE TABLE IF NOT EXISTS no_fire (                  \n"
+                  "  satellite  TEXT    NOT NULL,                        \n"
+                  "  sector     TEXT    NOT NULL,                        \n"
+                  "  start_time INTEGER NOT NULL,                        \n"
+                  "  end_time   INTEGER NOT NULL);                       \n";
 
     char *err_message = 0;
 
@@ -103,9 +104,10 @@ cluster_db_prepare_to_add(struct ClusterDatabase *db)
     sqlite3_stmt *add_stmt = 0;
     sqlite3_stmt *no_fire_stmt = 0;
 
-    char *add_query = "INSERT OR REPLACE INTO clusters (                                  \n"
-                      "  satellite, sector, start_time, end_time, lat, lon, power, pixels)\n"
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)                                    \n";
+    char *add_query =
+        "INSERT OR REPLACE INTO clusters (                                                  \n"
+        "  satellite, sector, start_time, end_time, lat, lon, power, max_scan_angle, pixels)\n"
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)                                                 \n";
 
     int rc = sqlite3_prepare_v2(db->ptr, add_query, -1, &add_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing statement: %s", sqlite3_errstr(rc));
@@ -206,6 +208,10 @@ cluster_db_add_cluster(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
         rc = sqlite3_bind_double(stmt->add_ptr, 7, cluster_total_power(cluster));
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding power: %s", sqlite3_errstr(rc));
 
+        rc = sqlite3_bind_double(stmt->add_ptr, 8, cluster_max_scan_angle(cluster));
+        Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding max scan angle: %s",
+               sqlite3_errstr(rc));
+
         unsigned char *buf_ptr = buffer;
         void (*transient_free)(void *) = SQLITE_TRANSIENT;
         size_t buff_size = pixel_list_binary_serialize_buffer_size(cluster_pixels(cluster));
@@ -219,7 +225,7 @@ cluster_db_add_cluster(struct ClusterDatabase *db, struct ClusterDatabaseAdd *st
             pixel_list_binary_serialize(cluster_pixels(cluster), buff_size, buf_ptr);
         Stopif(num_bytes_serialized != buff_size, exit(EXIT_FAILURE),
                "Buffer size error serializing PixelList");
-        rc = sqlite3_bind_blob(stmt->add_ptr, 8, buf_ptr, buff_size, transient_free);
+        rc = sqlite3_bind_blob(stmt->add_ptr, 9, buf_ptr, buff_size, transient_free);
 
         rc = sqlite3_step(stmt->add_ptr);
         Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, goto ERR_CLEANUP,
