@@ -525,9 +525,6 @@ fire_cluster_list_loader(void *arg)
         struct ClusterList *clusters = cluster_list_from_file(path);
         if (!cluster_list_error(clusters)) {
 
-            struct BoundingBox box = satfire_satellite_data_area(cluster_list_satellite(clusters));
-            clusters = cluster_list_filter(clusters, box);
-
             success_sending = courier_send(to_database, clusters);
         } else {
             printf("    Error processing file.\n");

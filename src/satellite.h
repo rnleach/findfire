@@ -40,13 +40,6 @@ enum Satellite satfire_satellite_string_contains_satellite(char const *str);
 /** \brief Get the earliest operational date for the satellite. */
 time_t satfire_satellite_operational(enum Satellite const sat);
 
-/** \brief Get the area we consider as valid for fire data characterization.
- *
- * This is set up so we can easily exclude data near the limb of the Earth as viewed by the
- * satellite. Early investigations into the data have shown a lot of suspicous data in these areas.
- */
-struct BoundingBox satfire_satellite_data_area(enum Satellite const sat);
-
 /** \brief Get a string representing the sector. */
 char const *satfire_sector_name(enum Sector const sector);
 
