@@ -118,10 +118,9 @@ fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
                 double dlat = xps[4] - lat0;
                 double dlon = yps[4] - lon0;
                 double scan_angle = hypot(dlat, dlon);
-                if(scan_angle > 90.0) {
+                if (scan_angle > 90.0) {
                     // International date line got us!
                     scan_angle = hypot(dlat, dlon - 360.0);
-
                 }
 
                 struct Coord ul = {.lat = xps[0], .lon = yps[0]};

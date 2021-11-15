@@ -57,7 +57,7 @@ void kamel_end_folder(FILE *output);
 
 /** \brief Start a Placemark. */
 void kamel_start_placemark(FILE *output, char const *name, char const *description,
-                         char const *style_url);
+                           char const *style_url);
 
 /** \brief Finish a Placemark. */
 void kamel_end_placemark(FILE *output);
@@ -127,4 +127,3 @@ void kamel_linear_ring_add_vertex(FILE *output, double lat, double lon, double z
 
 /** Write out a KML Point. */
 void kamel_point(FILE *output, double lat, double lon, double z);
-

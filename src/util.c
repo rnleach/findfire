@@ -214,4 +214,3 @@ dir_walk_next_path(struct DirWalkState state[static 1])
     // If we get here, we've run out of entries.
     return 0;
 }
-

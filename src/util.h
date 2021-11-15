@@ -110,4 +110,3 @@ void dir_walk_destroy(struct DirWalkState done[static 1]);
  * added to the stack and all files under that root will be returned.
  */
 char const *dir_walk_next_path(struct DirWalkState stck[static 1]);
-
