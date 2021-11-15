@@ -8,6 +8,8 @@
 #include <string.h>
 #include <tgmath.h>
 
+#include "kamel.h"
+
 /*-------------------------------------------------------------------------------------------------
  *                                    Helper types and functions
  *-----------------------------------------------------------------------------------------------*/
@@ -625,9 +627,9 @@ pixel_list_kml_write_pixel_style(FILE *strm, double power_as_height)
     char color[9] = {0};
     sprintf(color, "%02x%02x%02x%02x", ai, bi, gi, ri);
 
-    kml_start_style(strm, 0);
-    kml_poly_style(strm, color, true, false);
-    kml_end_style(strm);
+    kamel_start_style(strm, 0);
+    kamel_poly_style(strm, color, true, false);
+    kamel_end_style(strm);
 
     return;
 }
@@ -647,27 +649,27 @@ pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
         sprintf(desc, "<h3>Power: %.0lfMW</h3><h3>From nadir: %.0lf&deg;</h3>", pixel.power,
                 pixel.scan_angle);
 
-        kml_start_placemark(strm, 0, desc, 0);
+        kamel_start_placemark(strm, 0, desc, 0);
 
         pixel_list_kml_write_pixel_style(strm, power_as_height);
 
-        kml_start_polygon(strm, true, true, "relativeToGround");
-        kml_polygon_start_outer_ring(strm);
-        kml_start_linear_ring(strm);
+        kamel_start_polygon(strm, true, true, "relativeToGround");
+        kamel_polygon_start_outer_ring(strm);
+        kamel_start_linear_ring(strm);
 
         for (unsigned int j = 0; j < sizeof(pixel.coords) / sizeof(pixel.coords[0]); ++j) {
             struct Coord coord = pixel.coords[j];
-            kml_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
+            kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
         }
         // Close the loop.
         struct Coord coord = pixel.coords[0];
-        kml_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
+        kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
 
-        kml_end_linear_ring(strm);
-        kml_polygon_end_outer_ring(strm);
-        kml_end_polygon(strm);
+        kamel_end_linear_ring(strm);
+        kamel_polygon_end_outer_ring(strm);
+        kamel_end_polygon(strm);
 
-        kml_end_placemark(strm);
+        kamel_end_placemark(strm);
     }
 
     return;

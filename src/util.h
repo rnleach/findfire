@@ -1,5 +1,4 @@
 #pragma once
-// Skip files that don't fit the proper naming convention.
 /** \file util.h
  * \brief Utility functions and macros used throughout the project.
  *
@@ -112,78 +111,3 @@ void dir_walk_destroy(struct DirWalkState done[static 1]);
  */
 char const *dir_walk_next_path(struct DirWalkState stck[static 1]);
 
-/*-------------------------------------------------------------------------------------------------
- *                                     Create KML Files
- *-----------------------------------------------------------------------------------------------*/
-/** \brief Write out a KML header for a file opening the Document element. */
-void kml_start_document(FILE *output);
-
-/** \brief Write out a KML footer for a file closing the Document element. */
-void kml_end_document(FILE *output);
-
-/** \brief Start a KML folder. */
-void kml_start_folder(FILE *output, char const *name, char const *description, bool is_open);
-
-/** \brief Close a folder element. */
-void kml_end_folder(FILE *output);
-
-/** \brief Start a Placemark. */
-void kml_start_placemark(FILE *output, char const *name, char const *description,
-                         char const *style_url);
-
-/** \brief Finish a Placemark. */
-void kml_end_placemark(FILE *output);
-
-/** Start a style definition. */
-void kml_start_style(FILE *output, char const *style_id);
-
-/** End a style definition. */
-void kml_end_style(FILE *output);
-
-/** Create a PolyStyle element.
- *
- * This should only go inside a style element.
- */
-void kml_poly_style(FILE *output, char const *color, bool filled, bool outlined);
-
-/** Create a IconStyle element.
- *
- * This should only go inside a style element.
- */
-void kml_icon_style(FILE *output, char const *icon_url, double scale);
-
-/** Create a TimeSpan element. */
-void kml_timespan(FILE *output, time_t start, time_t end);
-
-/** Start a MultiGeometry. */
-void kml_start_multigeometry(FILE *output);
-
-/** End a MultiGeometry. */
-void kml_end_multigeometry(FILE *output);
-
-/** Start a Polygon. */
-void kml_start_polygon(FILE *output, bool extrude, bool tessellate, char const *altitudeMode);
-
-/** End a Polygon. */
-void kml_end_polygon(FILE *output);
-
-/** Start the polygon outer ring.*/
-void kml_polygon_start_outer_ring(FILE *output);
-
-/** End the polygon outer ring.*/
-void kml_polygon_end_outer_ring(FILE *output);
-
-/** Start a LinearRing. */
-void kml_start_linear_ring(FILE *output);
-
-/** End a LinearRing. */
-void kml_end_linear_ring(FILE *output);
-
-/** Add a vertex to the LinearRing.
- *
- * This could be the an outer or inner ring in progress.
- */
-void kml_linear_ring_add_vertex(FILE *output, double lat, double lon, double z);
-
-/** Write out a KML Point. */
-void kml_point(FILE *output, double lat, double lon);
