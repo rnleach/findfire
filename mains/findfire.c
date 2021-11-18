@@ -18,8 +18,7 @@
  * findfire.kml is output in the same location as the database file findfire.sqlite that has the
  * largest Cluster processed this time.
  */
-#include "util.h"
-
+// Standard C
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
@@ -28,17 +27,19 @@
 #include <stdlib.h>
 #include <time.h>
 
+// System installed libraries
+#include <glib.h>
+
+// My headers
 #include "cluster.h"
 #include "database.h"
 #include "firesatimage.h"
 #include "satellite.h"
+#include "util.h"
 
+// Source Libraries
 #include "courier.h"
 #include "kamel.h"
-
-char const *database_file = "/home/ryan/wxdata/findfire.sqlite";
-char *kml_file = 0;
-char const *data_dir = "/media/ryan/SAT/GOESX";
 
 #if defined(__APPLE__) && defined(__MACH__)
 #    define pthread_setname(a)
@@ -46,8 +47,47 @@ char const *data_dir = "/media/ryan/SAT/GOESX";
 #    define pthread_setname(a) pthread_setname_np(pthread_self(), (a))
 #endif
 
+/*-------------------------------------------------------------------------------------------------
+ *                          Program Initialization, Finalization, and Options
+ *-----------------------------------------------------------------------------------------------*/
+static struct FindFireOptions {
+    char *database_file;
+    char *kml_file;
+    char *data_dir;
+    bool only_new;
+    bool verbose;
+
+} options = {0};
+
+// clang-format off
+static GOptionEntry option_entries[] = 
+{
+    {
+        "new", 
+        'n', 
+        G_OPTION_FLAG_NONE, 
+        G_OPTION_ARG_NONE, 
+        &options.only_new, 
+        "Only try to find data newer than what's already in the database for each "
+            "satellite and sector.", 
+        0
+    },
+    {
+        "verbose", 
+        'v', 
+        G_OPTION_FLAG_NONE, 
+        G_OPTION_ARG_NONE, 
+        &options.verbose, 
+        "Show verbose output.", 
+        0
+    },
+
+    {NULL}
+};
+// clang-format on
+
 static void
-program_initialization()
+program_initialization(int argc[static 1], char ***argv)
 {
     // Force to use UTC timezone.
     setenv("TZ", "UTC", 1);
@@ -55,24 +95,121 @@ program_initialization()
 
     GDALAllRegister();
 
-    // Initialize with with environment variables
+    // Initialize with with environment variables and default values.
     if (getenv("CLUSTER_DB")) {
-        database_file = getenv("CLUSTER_DB");
+        asprintf(&options.database_file, "%s", getenv("CLUSTER_DB"));
+        asprintf(&options.kml_file, "%s.kml", options.database_file);
     }
-    asprintf(&kml_file, "%s.kml", database_file);
 
     if (getenv("SAT_ARCHIVE")) {
-        data_dir = getenv("SAT_ARCHIVE");
+        asprintf(&options.data_dir, "%s", getenv("SAT_ARCHIVE"));
     }
 
-    fprintf(stdout, "Database: %s\n     KML: %s\n Archive: %s\n", database_file, kml_file,
-            data_dir);
+    options.only_new = false;
+
+    // Parse command line options.
+    GError *error = 0;
+    GOptionContext *context = g_option_context_new("- Find clusters and add them to a database.");
+    g_option_context_add_main_entries(context, option_entries, 0);
+    g_option_context_parse(context, argc, argv, &error);
+    Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
+
+    Stopif(!options.database_file, exit(EXIT_FAILURE), "Invalid, database_file is NULL");
+    Stopif(!options.data_dir, exit(EXIT_FAILURE), "Invalid, data_dir is NULL");
+
+    // Print out options as configured.
+    if (options.verbose) {
+        fprintf(stdout, "  Database: %s\n", options.database_file);
+        if (options.kml_file) {
+            fprintf(stdout, "Output KML: %s\n", options.kml_file);
+        }
+        fprintf(stdout, "   Archive: %s\n", options.data_dir);
+        fprintf(stdout, "  Only New: %s\n", options.only_new ? "yes" : "no");
+    }
 }
 
 static void
 program_finalization()
 {
-    free(kml_file);
+    free(options.database_file);
+    free(options.kml_file);
+    free(options.data_dir);
+}
+
+/*-------------------------------------------------------------------------------------------------
+ *                       Filters for skipping files / directories
+ *-----------------------------------------------------------------------------------------------*/
+static bool
+standard_dir_filter(char const *path, void *user_data)
+{
+    assert(path);
+    assert(user_data);
+
+    /* This filter assumes the data is stored in a directory tree like:
+     *   SATELLITE/SECTOR/YEAR/DAY_OF_YEAR/HOUR/files
+     *
+     *   e.g.
+     *   G16/ABI-L2-FDCF/2020/238/15/...files...
+     */
+    struct tm *most_recent_data = user_data;
+
+    enum Satellite sat = satfire_satellite_string_contains_satellite(path);
+    enum Sector sector = satfire_sector_string_contains_sector(path);
+    if (sat == SATFIRE_SATELLITE_NONE || sector == SATFIRE_SECTOR_NONE) {
+        // Maybe we need to recurse deeper to be sure...
+        return true;
+    }
+
+    struct tm most_recent = most_recent_data[sat * SATFIRE_SECTOR_NUM + sector];
+    int mr_year = most_recent.tm_year + 1900;
+    int mr_doy = most_recent.tm_yday + 1;
+    int mr_hour = most_recent.tm_hour;
+
+    // Find the year and the day of the year in the string.
+    char const *c = path;
+    int year = -1;
+    int doy = -1;
+    int hour = -1;
+    while (c && *c) {
+        int maybe = atoi(c);
+        if (maybe > 2000) {
+            year = maybe;
+        } else if (maybe > 0) {
+            if (doy == -1) {
+                doy = maybe;
+            } else {
+                hour = maybe;
+                break;
+            }
+        }
+        c = strchr(c, '/');
+        if (c && *c) {
+            c += 1;
+        }
+    }
+
+    if (year == -1) {
+        // Not deep enough to parse year, keep going.
+        return true;
+    } else if (year < mr_year) {
+        // In a past year, recurse no more deeply!
+        return false;
+    } else if (doy == -1) {
+        // Not deep enough to parse day of year, keep going.
+        return true;
+    } else if (doy < mr_doy) {
+        // Same year, but sooner in the year for most recent, recurse no more deeply!
+        return false;
+    } else if (hour == -1) {
+        // Not deep enough to parse hour of day, keep going.
+        return true;
+    } else if (hour < mr_hour) {
+        // Same year, same day of year, but too early in the day, recurse no more deeply!
+        return false;
+    }
+
+    // We must be near the present or the future, so keep going!
+    return true;
 }
 
 static bool
@@ -110,12 +247,20 @@ skip_path(char const *path, ClusterDatabaseQueryPresentH query)
     return false;
 }
 
+/*-------------------------------------------------------------------------------------------------
+ *                             Save a Cluster in a KML File
+ *-----------------------------------------------------------------------------------------------*/
 static void
 save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satellite sat,
                  enum Sector sector)
 {
-    FILE *out = fopen(kml_file, "wb");
-    Stopif(!out, return, "Unable to open file for writing: %s", kml_file);
+    // Return early if no output file is configured.
+    if (!options.kml_file) {
+        return;
+    }
+
+    FILE *out = fopen(options.kml_file, "wb");
+    Stopif(!out, return, "Unable to open file for writing: %s", options.kml_file);
 
     kamel_start_document(out);
 
@@ -149,6 +294,9 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satelli
     return;
 }
 
+/*-------------------------------------------------------------------------------------------------
+ *                               Cluster and Image Statistics
+ *-----------------------------------------------------------------------------------------------*/
 struct ClusterStats {
     struct Cluster *biggest_fire;
     enum Satellite biggest_sat;
@@ -430,8 +578,35 @@ directory_walker(void *arg)
     static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
     pthread_setname(threadname);
 
-    struct DirWalkState dir_walk_state = dir_walk_new_with_root(data_dir);
+    struct DirWalkState dir_walk_state = dir_walk_new_with_root(options.data_dir);
     char const *path = dir_walk_next_path(&dir_walk_state);
+
+    // The date of the most recent file process in the database.
+    struct tm most_recent[SATFIRE_SATELLITE_NUM][SATFIRE_SECTOR_NUM] = {0};
+    if (options.only_new) {
+        int rc = 0;
+        ClusterDatabaseH db = cluster_db_connect(options.database_file);
+
+        for (unsigned int sat_entry = 0; sat_entry < SATFIRE_SATELLITE_NUM; ++sat_entry) {
+            for (unsigned int sector_entry = 0; sector_entry < SATFIRE_SECTOR_NUM; ++sector_entry) {
+
+                time_t ts = cluster_db_newest_scan_start(db, sat_entry, sector_entry);
+                struct tm *res = gmtime_r(&ts, &most_recent[sat_entry][sector_entry]);
+                Stopif(!res, break, "Error converting time stamp.");
+
+                if (options.verbose) {
+                    char buf[32] = {0};
+                    fprintf(stdout, "    Latest: %s %s %s", satfire_satellite_name(sat_entry),
+                            satfire_sector_name(sector_entry), asctime_r(res, buf));
+                }
+            }
+        }
+
+        rc = cluster_db_close(&db);
+        Stopif(rc, goto CLEAN_UP_DIR_WALK_AND_RETURN, "Error querying cluster database.");
+
+        dir_walk_set_directory_filter(&dir_walk_state, standard_dir_filter, most_recent);
+    }
 
     Courier *to_filter = arg;
     courier_register_sender(to_filter);
@@ -448,8 +623,10 @@ directory_walker(void *arg)
         path = dir_walk_next_path(&dir_walk_state);
     }
 
-    dir_walk_destroy(&dir_walk_state);
     courier_done_sending(to_filter);
+
+CLEAN_UP_DIR_WALK_AND_RETURN:
+    dir_walk_destroy(&dir_walk_state);
 
     return 0;
 }
@@ -466,7 +643,7 @@ path_filter(void *arg)
     Courier *to_cluster_list_loader = links->to;
 
     ClusterDatabaseH cluster_db = 0;
-    cluster_db = cluster_db_connect(database_file);
+    cluster_db = cluster_db_connect(options.database_file);
     Stopif(!cluster_db, exit(EXIT_FAILURE), "Error opening database. (%s %u)", __FILE__, __LINE__);
 
     ClusterDatabaseQueryPresentH present_query = 0;
@@ -558,7 +735,7 @@ database_filler(void *arg)
     ClusterDatabaseH cluster_db = 0;
     ClusterDatabaseAddH add_stmt = 0;
 
-    cluster_db = cluster_db_connect(database_file);
+    cluster_db = cluster_db_connect(options.database_file);
     Stopif(!cluster_db, goto CLEANUP_AND_RETURN, "Error opening database. (%s %u)", __FILE__,
            __LINE__);
     add_stmt = cluster_db_prepare_to_add(cluster_db);
@@ -623,10 +800,10 @@ generic_destroy_cluster_list(void *cl)
 }
 
 int
-main()
+main(int argc, char *argv[argc + 1])
 {
     int rc = EXIT_FAILURE;
-    program_initialization();
+    program_initialization(&argc, &argv);
 
     Courier dir_walk = courier_new();
     Courier filter = courier_new();

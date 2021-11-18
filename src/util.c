@@ -119,8 +119,20 @@ dir_walk_new_with_root(char const *root)
     int num_chars = asprintf(&root_copy, "%s", root);
     Stopif(num_chars <= 0, exit(EXIT_FAILURE), "Unable to copy root path: %s", root);
 
-    return (struct DirWalkState){
-        .stack = {[0] = dir}, .paths = {[0] = root_copy}, .top = 0, .current_entry_path = {0}};
+    return (struct DirWalkState){.stack = {[0] = dir},
+                                 .paths = {[0] = root_copy},
+                                 .top = 0,
+                                 .current_entry_path = {0},
+                                 .directory_filter = 0,
+                                 .filter_data = 0};
+}
+
+void
+dir_walk_set_directory_filter(struct DirWalkState stck[static 1],
+                              bool (*filter)(char const *, void *), void *filter_data)
+{
+    stck->directory_filter = filter;
+    stck->filter_data = filter_data;
 }
 
 void
@@ -202,7 +214,14 @@ dir_walk_next_path(struct DirWalkState state[static 1])
         }
 
         if (entry && entry->d_type == DT_DIR && entry->d_name[0] != '.') {
+
             dir_walk_state_push(state, entry);
+
+            if (state->directory_filter &&
+                !state->directory_filter(state->paths[state->top], state->filter_data)) {
+                dir_walk_state_pop(state);
+            }
+
         } else if (entry && entry->d_type == DT_REG) {
 
             if (dir_walk_state_set_current_entry_path(state, entry)) {

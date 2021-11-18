@@ -93,6 +93,8 @@ struct DirWalkState {
     char *paths[DIR_STACK_DEPTH];
     char current_entry_path[MAX_PATH_LEN];
     unsigned int top;
+    bool (*directory_filter)(char const *, void *);
+    void *filter_data;
 };
 
 #undef DIR_STACK_DEPTH
@@ -103,6 +105,13 @@ struct DirWalkState dir_walk_new_with_root(char const *root);
 
 /** Cleanup and free any allocated memory associated with the DirWalkState. */
 void dir_walk_destroy(struct DirWalkState done[static 1]);
+
+/** Set a filter function to determine if the algorithm should proceed into this directory.
+ *
+ * \param filter is a function that returns \c true if you want to process a directory.
+ */
+void dir_walk_set_directory_filter(struct DirWalkState stck[static 1],
+                                   bool (*filter)(char const *, void *), void *filter_data);
 
 /** Get the next regular file entry.
  *
