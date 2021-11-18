@@ -26,6 +26,8 @@ I'm developing this on Linux and my other computer is a Mac. So I know this will
 portability to windows becomes an issue, it may be easier to just write my own data structures.
 
 So far I'm only using the following from GLIB:
+ - The test module.
+ - Command line option parser.
  - GArray
 
 
