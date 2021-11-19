@@ -63,7 +63,9 @@ cluster_copy(struct Cluster const *cluster)
     struct Cluster *copy = malloc(sizeof(struct Cluster));
     Stopif(!copy, exit(EXIT_FAILURE), "%s", out_of_memory);
 
-    *copy = (struct Cluster){.power = cluster->power, .pixels = pixel_list_copy(cluster->pixels)};
+    *copy = (struct Cluster){.power = cluster->power,
+                             .pixels = pixel_list_copy(cluster->pixels),
+                             .max_scan_angle = cluster->max_scan_angle};
 
     return copy;
 }
