@@ -116,7 +116,14 @@ GArray *cluster_list_clusters(struct ClusterList *list);
  *
  * \returns NULL on error or a reference to the same \a list that was passed in.
  */
-struct ClusterList *cluster_list_filter(struct ClusterList *list, struct BoundingBox box);
+struct ClusterList *cluster_list_filter_box(struct ClusterList *list, struct BoundingBox box);
+
+/** \brief Filter the ClusterList to only include fires with their maximum scan angle below a
+ * threshold value.
+ *
+ * \returns NULL on error or a reference to the same \a list that was passed in.
+ */
+struct ClusterList *cluster_list_filter_scan_angle(struct ClusterList *list, double max_scan_angle);
 
 /**
  * \brief Parse the file name and find the scan start time.

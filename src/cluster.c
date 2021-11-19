@@ -203,7 +203,7 @@ cluster_list_clusters(struct ClusterList *list)
 }
 
 struct ClusterList *
-cluster_list_filter(struct ClusterList *list, struct BoundingBox box)
+cluster_list_filter_box(struct ClusterList *list, struct BoundingBox box)
 {
     assert(list);
 
@@ -215,6 +215,29 @@ cluster_list_filter(struct ClusterList *list, struct BoundingBox box)
         struct Coord centroid = cluster_centroid(clust);
 
         if (!bounding_box_contains_coord(box, centroid, 0.0)) {
+            clusters = g_array_remove_index_fast(clusters, i);
+            --i; // Decrement this so we inspect this index again since a new value is there.
+        }
+    }
+
+    list->clusters = clusters; // In case g_array_remove_index_fast() moved the array.
+
+    return list;
+}
+
+struct ClusterList *
+cluster_list_filter_scan_angle(struct ClusterList *list, double max_scan_angle)
+{
+    assert(list);
+
+    GArray *clusters = list->clusters;
+
+    for (unsigned int i = 0; i < clusters->len; ++i) {
+        struct Cluster *clust = g_array_index(clusters, struct Cluster *, i);
+
+        double clust_max_scan_angle = cluster_max_scan_angle(clust);
+
+        if (clust_max_scan_angle >= max_scan_angle) {
             clusters = g_array_remove_index_fast(clusters, i);
             --i; // Decrement this so we inspect this index again since a new value is there.
         }
