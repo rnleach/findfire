@@ -316,6 +316,10 @@ struct ClusterStats {
     unsigned num_clusters;
     unsigned num_power_lt_1mw;
     unsigned num_power_lt_10mw;
+    unsigned num_power_lt_100mw;
+    unsigned num_power_lt_1gw;
+    unsigned num_power_lt_10gw;
+    unsigned num_power_lt_100gw;
 };
 
 static struct ClusterStats
@@ -330,6 +334,10 @@ cluster_stats_new(void)
         .num_clusters = 0,
         .num_power_lt_1mw = 0,
         .num_power_lt_10mw = 0,
+        .num_power_lt_100mw = 0,
+        .num_power_lt_1gw = 0,
+        .num_power_lt_10gw = 0,
+        .num_power_lt_100gw = 0,
     };
 }
 
@@ -364,6 +372,22 @@ cluster_stats_update(struct ClusterStats stats, enum Satellite sat, enum Sector 
             stats.num_power_lt_10mw += 1;
         }
 
+        if (cluster_power < 100.0) {
+            stats.num_power_lt_100mw += 1;
+        }
+
+        if (cluster_power < 1000.0) {
+            stats.num_power_lt_1gw += 1;
+        }
+
+        if (cluster_power < 10000.0) {
+            stats.num_power_lt_10gw += 1;
+        }
+
+        if (cluster_power < 100000.0) {
+            stats.num_power_lt_100gw += 1;
+        }
+
         stats.num_clusters += 1;
     }
 
@@ -390,20 +414,35 @@ cluster_stats_print(struct ClusterStats stats)
                "           end: %s"
                "           Lat: %10.6lf\n"
                "           Lon: %11.6lf\n"
+               "Max Scan Angle: %3.0lf\n"
                "         Count: %2d\n"
                "         Power: %5.0lf MW\n\n"
                "        Counts:\n"
                "         Total: %10u\n"
-               "  Power < 1 MW: %10u\n"
-               "    Pct < 1 MW: %10u%%\n"
-               " Power < 10 MW: %10u\n"
-               "   Pct < 10 MW: %10u%%\n",
+               "Power <   1 MW: %10u\n"
+               "Power <  10 MW: %10u\n"
+               "Power < 100 MW: %10u\n"
+               "Power <   1 GW: %10u\n"
+               "Power <  10 GW: %10u\n"
+               "Power < 100 GW: %10u\n\n"
+               "  Pct <   1 MW: %10u%%\n"
+               "  Pct <  10 MW: %10u%%\n"
+               "  Pct < 100 MW: %10u%%\n"
+               "  Pct <   1 GW: %10u%%\n"
+               "  Pct <  10 GW: %10u%%\n"
+               "  Pct < 100 GW: %10u%%\n",
                satfire_satellite_name(stats.biggest_sat), satfire_sector_name(stats.biggest_sector),
                start_str, end_str, biggest_centroid.lat, biggest_centroid.lon,
-               cluster_pixel_count(stats.biggest_fire), cluster_total_power(stats.biggest_fire),
-               stats.num_clusters, stats.num_power_lt_1mw,
-               stats.num_power_lt_1mw * 100 / stats.num_clusters, stats.num_power_lt_10mw,
-               stats.num_power_lt_10mw * 100 / stats.num_clusters);
+               cluster_max_scan_angle(stats.biggest_fire), cluster_pixel_count(stats.biggest_fire),
+               cluster_total_power(stats.biggest_fire), stats.num_clusters, stats.num_power_lt_1mw,
+               stats.num_power_lt_10mw, stats.num_power_lt_100mw, stats.num_power_lt_1gw,
+               stats.num_power_lt_10gw, stats.num_power_lt_100gw,
+               stats.num_power_lt_1mw * 100 / stats.num_clusters,
+               stats.num_power_lt_10mw * 100 / stats.num_clusters,
+               stats.num_power_lt_100mw * 100 / stats.num_clusters,
+               stats.num_power_lt_1gw * 100 / stats.num_clusters,
+               stats.num_power_lt_10gw * 100 / stats.num_clusters,
+               stats.num_power_lt_100gw * 100 / stats.num_clusters);
     } else {
         printf("\nNo new clusters added to the database.");
     }
