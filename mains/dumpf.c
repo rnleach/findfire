@@ -24,7 +24,7 @@
 #include "kamel.h"
 
 /*-------------------------------------------------------------------------------------------------
- *                          Program Initialization, Finalization, and Options
+ *                                     Command Line Options
  *-----------------------------------------------------------------------------------------------*/
 static struct DumpFOptions {
     char *database_file;
@@ -36,9 +36,124 @@ static struct DumpFOptions {
 
 } options = {0};
 
+static bool
+parse_start_end(const char *arg_name, const char *arg_val, void *user_data, GError **error)
+{
+    assert(!user_data);
+
+    // YYYY-MM-DD-HH
+    Stopif(strlen(arg_val) < 13, goto ERR_RETURN, "Invalid date format.");
+
+    int year = atoi(&arg_val[0]);
+    int month = atoi(&arg_val[5]);
+    int dom = atoi(&arg_val[8]);
+    int hour = atoi(&arg_val[11]);
+
+    Stopif(year <= 0 || month <= 0 || dom <= 0 || hour < 0, goto ERR_RETURN,
+           "Invalid date format.");
+
+    struct tm arg_time = {
+        .tm_year = year - 1900, .tm_mon = month - 1, .tm_mday = dom, .tm_hour = hour};
+    time_t arg_time_stamp = timegm(&arg_time);
+
+    if (strcmp(arg_name, "-s") == 0 || strcmp(arg_name, "--start") == 0) {
+        options.start = arg_time_stamp;
+    } else if (strcmp(arg_name, "-e") == 0 || strcmp(arg_name, "--end") == 0) {
+        options.end = arg_time_stamp;
+    } else {
+        goto ERR_RETURN;
+    }
+
+    return true;
+
+ERR_RETURN:
+    g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED, "Error parsing time arg: %s",
+                arg_val);
+
+    return false;
+}
+
+static bool
+parse_bounding_box(const char *arg_name, const char *arg_val, void *user_data, GError **error)
+{
+    assert(!user_data);
+
+    char *old_c = (char *)arg_val;
+    char *c = (char *)arg_val;
+    double min_lat = strtod(c, &c);
+    Stopif(min_lat == 0.0L && c == old_c, goto ERR_RETURN, "Error parsing minimum latitude from %s",
+           arg_val);
+    ++c; // move past the comma, worst case is the null character
+    old_c = c;
+
+    double min_lon = strtod(c, &c);
+    Stopif(min_lon == 0.0L && c == old_c, goto ERR_RETURN,
+           "Error parsing minimum longitude from %s", arg_val);
+    ++c; // move past the comma, worst case is the null character
+    old_c = c;
+
+    double max_lat = strtod(c, &c);
+    Stopif(max_lat == 0.0L && c == old_c, goto ERR_RETURN, "Error parsing maximum latitude from %s",
+           arg_val);
+    ++c; // move past the comma, worst case is the null character
+    old_c = c;
+
+    double max_lon = strtod(c, &c);
+    Stopif(max_lon == 0.0L && c == old_c, goto ERR_RETURN,
+           "Error parsing maximum longitude from %s", arg_val);
+
+    struct Coord ll = {.lat = min_lat, .lon = min_lon};
+    struct Coord ur = {.lat = max_lat, .lon = max_lon};
+    options.region = (struct BoundingBox){.ll = ll, .ur = ur};
+
+    return true;
+
+ERR_RETURN:
+    g_set_error(error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED, "Error parsing bounding box arg: %s",
+                arg_val);
+
+    return false;
+}
+
 // clang-format off
 static GOptionEntry option_entries[] = 
 {
+    {
+        "output", 
+        'o', 
+        G_OPTION_FLAG_NONE, 
+        G_OPTION_ARG_FILENAME, 
+        &options.kml_file, 
+        "Output KML file path, FILE_NAME.", 
+        "FILE_NAME"
+    },
+    {
+        "start", 
+        's', 
+        G_OPTION_FLAG_NONE, 
+        G_OPTION_ARG_CALLBACK, 
+        parse_start_end, 
+        "The start time in UTC, format YYYY-MM-DD-HH.", 
+        "YYYY-MM-DD-HH"
+    },
+    {
+        "end", 
+        'e', 
+        G_OPTION_FLAG_NONE, 
+        G_OPTION_ARG_CALLBACK, 
+        parse_start_end, 
+        "The end time in UTC, format YYYY-MM-DD-HH.", 
+        "YYYY-MM-DD-HH"
+    },
+    {
+        "region", 
+        'r', 
+        G_OPTION_FLAG_NONE, 
+        G_OPTION_ARG_CALLBACK, 
+        parse_bounding_box, 
+        "The region as a bounding box for which to extract data.", 
+        "MIN_LAT,MIN_LON,MAX_LAT,MAX_LON"
+    },
     {
         "verbose", 
         'v', 
@@ -53,20 +168,15 @@ static GOptionEntry option_entries[] =
 };
 // clang-format on
 
+/*-------------------------------------------------------------------------------------------------
+ *                              Program Initialization and Finalization
+ *-----------------------------------------------------------------------------------------------*/
 static void
 program_initialization(int argc[static 1], char ***argv)
 {
     // Force to use UTC timezone.
     setenv("TZ", "UTC", 1);
     tzset();
-
-    // Initialize with with environment variables and default values.
-    if (getenv("CLUSTER_DB")) {
-        asprintf(&options.database_file, "%s", getenv("CLUSTER_DB"));
-        asprintf(&options.kml_file, "%s.kml", options.database_file);
-    }
-
-    options.verbose = false;
 
     // Parse command line options.
     GError *error = 0;
@@ -75,14 +185,52 @@ program_initialization(int argc[static 1], char ***argv)
     g_option_context_parse(context, argc, argv, &error);
     Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
 
+    // If options weren't set, back fill with default values.
+    if (!options.database_file && getenv("CLUSTER_DB")) {
+        asprintf(&options.database_file, "%s", getenv("CLUSTER_DB"));
+    }
+
+    if (!options.kml_file) {
+        asprintf(&options.kml_file, "%s.kml", options.database_file);
+    }
+
+    // Pick default start and end times to cover all time in the database.
+    struct tm default_start = {.tm_year = 2000 - 1900, .tm_mon = 0, .tm_mday = 1, .tm_hour = 0};
+    if (options.start == 0) {
+        options.start = timegm(&default_start);
+    }
+
+    struct tm default_end = {.tm_year = 2050 - 1900, .tm_mon = 0, .tm_mday = 1, .tm_hour = 0};
+    if (options.end == 0) {
+        options.end = timegm(&default_end);
+    }
+
+    if (options.region.ll.lat == 0.0 && options.region.ll.lon == 0.0 &&
+        options.region.ur.lat == 0.0 && options.region.ur.lon == 0.0) {
+
+        // Default to cover all of Montana cause why not.
+        struct Coord ll = {.lat = 44.0, .lon = -116.5};
+        struct Coord ur = {.lat = 49.5, .lon = -104.0};
+
+        options.region = (struct BoundingBox){.ll = ll, .ur = ur};
+    }
+
     Stopif(!options.database_file, exit(EXIT_FAILURE), "Invalid, database_file is NULL");
+    Stopif(!options.kml_file, exit(EXIT_FAILURE), "Invalid, kml_file is NULL");
+    Stopif(options.start == 0, exit(EXIT_FAILURE), "Invalid start_time");
+    Stopif(options.end == 0, exit(EXIT_FAILURE), "Invalid end_time");
 
     // Print out options as configured.
     if (options.verbose) {
-        fprintf(stdout, "  Database: %s\n", options.database_file);
-        fprintf(stdout, "Output KML: %s\n", options.kml_file);
-        // TODO print out start / start times and BoundingBox
-        assert(false);
+        fprintf(stdout, "\n\n");
+        fprintf(stdout, "    Database: %s\n", options.database_file);
+        fprintf(stdout, "  Output KML: %s\n", options.kml_file);
+        fprintf(stdout, "       Start: %s", ctime(&options.start));
+        fprintf(stdout, "         End: %s", ctime(&options.end));
+        fprintf(stdout, "Bounding Box: (%.6lf, %.6lf) <---> (%.6lf, %.6lf)\n",
+                options.region.ll.lat, options.region.ll.lon, options.region.ur.lat,
+                options.region.ur.lon);
+        fprintf(stdout, "\n\n");
     }
 }
 
