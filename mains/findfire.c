@@ -662,7 +662,10 @@ path_filter(void *arg)
         char *path = item;
 
         if (!skip_path(path, present_query)) {
-            printf("Processing: %s\n", path);
+
+            if (options.verbose) {
+                printf("Processing: %s\n", path);
+            }
 
             bool success = courier_send(to_cluster_list_loader, path);
 
@@ -706,7 +709,7 @@ fire_cluster_list_loader(void *arg)
 
             success_sending = courier_send(to_database, clusters);
         } else {
-            printf("    Error processing file.\n");
+            fprintf(stderr, "    Error processing file.\n");
             cluster_list_destroy(&clusters);
         }
 
@@ -773,13 +776,16 @@ database_filler(void *arg)
         cluster_list_destroy(&clusters);
     }
 
-    cluster_stats_print(cluster_stats);
+    if (options.verbose) {
+        cluster_stats_print(cluster_stats);
+        cluster_list_stats_print(clstats);
+    }
+
     save_cluster_kml(cluster_stats.biggest_fire, cluster_stats.biggest_start,
                      cluster_stats.biggest_end, cluster_stats.biggest_sat,
                      cluster_stats.biggest_sector);
     cluster_stats_destroy(&cluster_stats);
 
-    cluster_list_stats_print(clstats);
     cluster_list_stats_destroy(&clstats);
 
 CLEANUP_AND_RETURN:
