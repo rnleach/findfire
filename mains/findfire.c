@@ -297,6 +297,15 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satelli
 /*-------------------------------------------------------------------------------------------------
  *                               Cluster and Image Statistics
  *-----------------------------------------------------------------------------------------------*/
+/* Use this as the maximum value of the scan angle allowed for a cluster to be considered in the
+ * summary statistics. This is a QC tool, there are a lot of outliers on the limb of the Earth as
+ * viewed by the GOES satellites, and the angles / geometry seem to have something to do with it.
+ *
+ * The value of 67.0 degrees is based on visual inspection of a graph of cluster power vs scan
+ * angle of the cluster centroid.
+ */
+#define MAX_SCAN_ANGLE 67.0
+
 struct ClusterStats {
     struct Cluster *biggest_fire;
     enum Satellite biggest_sat;
@@ -337,24 +346,26 @@ cluster_stats_update(struct ClusterStats stats, enum Satellite sat, enum Sector 
 {
     double cluster_power = cluster_total_power(cluster);
 
-    if (cluster_power > cluster_total_power(stats.biggest_fire)) {
-        cluster_destroy(&stats.biggest_fire);
-        stats.biggest_fire = cluster_copy(cluster);
-        stats.biggest_sat = sat;
-        stats.biggest_sector = sector;
-        stats.biggest_start = start;
-        stats.biggest_end = end;
-    }
+    if (cluster_max_scan_angle(cluster) < MAX_SCAN_ANGLE) {
+        if (cluster_power > cluster_total_power(stats.biggest_fire)) {
+            cluster_destroy(&stats.biggest_fire);
+            stats.biggest_fire = cluster_copy(cluster);
+            stats.biggest_sat = sat;
+            stats.biggest_sector = sector;
+            stats.biggest_start = start;
+            stats.biggest_end = end;
+        }
 
-    if (cluster_power < 1.0) {
-        stats.num_power_lt_1mw += 1;
-    }
+        if (cluster_power < 1.0) {
+            stats.num_power_lt_1mw += 1;
+        }
 
-    if (cluster_power < 10.0) {
-        stats.num_power_lt_10mw += 1;
-    }
+        if (cluster_power < 10.0) {
+            stats.num_power_lt_10mw += 1;
+        }
 
-    stats.num_clusters += 1;
+        stats.num_clusters += 1;
+    }
 
     return stats;
 }
@@ -756,6 +767,9 @@ database_filler(void *arg)
 
         int failure = cluster_db_add(cluster_db, add_stmt, clusters);
         Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
+
+        // Filter out clusters on the limb for some QC
+        clusters = cluster_list_filter_scan_angle(clusters, MAX_SCAN_ANGLE);
 
         enum Satellite sat = cluster_list_satellite(clusters);
         enum Sector sector = cluster_list_sector(clusters);
