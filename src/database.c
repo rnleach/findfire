@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <sqlite3.h>
 
@@ -578,3 +579,270 @@ struct ClusterDatabaseQueryRows {
     sqlite3 *db;
     sqlite3_stmt *row_stmt;
 };
+
+struct ClusterRow {
+    time_t start;
+    time_t end;
+    double power;
+    double scan_angle;
+    enum Sector sector;
+    enum Satellite sat;
+    struct PixelList *pixels;
+};
+
+struct ClusterDatabaseQueryRows *
+cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Sector const *sector,
+                      time_t const *start, time_t const *end, struct BoundingBox const *area)
+{
+    assert(path_to_db);
+
+    sqlite3 *db = 0;
+    sqlite3_stmt *row_stmt = 0;
+    struct ClusterDatabaseQueryRows *query = 0;
+
+    db = open_database_readonly(path_to_db);
+    Stopif(!db, goto ERR_CLEANUP, "Unable to open database: %s", path_to_db);
+
+    char query_txt[512] = {0};
+    char query_buffer[512] = {0};
+
+    static_assert(sizeof(query_txt) == sizeof(query_buffer), "These need to be the same size!");
+
+    char *query_start =
+        "SELECT satellite, sector, start_time, end_time, power, max_scan_angle, pixels \n"
+        "FROM clusters ";
+
+    int q_sz = snprintf(query_txt, sizeof(query_txt), "%s", query_start);
+    Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+           __FILE__, __LINE__);
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    bool sat_constraint = sat && (*sat != SATFIRE_SATELLITE_NONE);
+    bool sector_constraint = sector && (*sector != SATFIRE_SECTOR_NONE);
+
+    if (sat_constraint || sector_constraint || start || end || area) {
+        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\nWHERE", query_txt);
+        Stopif(q_sz >= sizeof(query_buffer), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+               __FILE__, __LINE__);
+        memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    }
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    bool multiple_constraints = false;
+    if (sat_constraint) {
+        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s satellite = '%s'", query_txt,
+                        satfire_satellite_name(*sat));
+        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+               __FILE__, __LINE__);
+        multiple_constraints = true;
+        memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    }
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    if (sector_constraint) {
+        if (multiple_constraints) {
+            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
+            Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+                   __FILE__, __LINE__);
+            memcpy(query_txt, query_buffer, sizeof(query_buffer));
+        }
+
+        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s sector = '%s'", query_txt,
+                        satfire_sector_name(*sector));
+        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+               __FILE__, __LINE__);
+        multiple_constraints = true;
+        memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    }
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    if (start) {
+
+        if (multiple_constraints) {
+            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
+            Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+                   __FILE__, __LINE__);
+            memcpy(query_txt, query_buffer, sizeof(query_buffer));
+        }
+
+        q_sz =
+            snprintf(query_buffer, sizeof(query_buffer), "%s start_time >= %ld", query_txt, *start);
+        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+               __FILE__, __LINE__);
+        multiple_constraints = true;
+        memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    }
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    if (end) {
+
+        if (multiple_constraints) {
+            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
+            Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+                   __FILE__, __LINE__);
+            memcpy(query_txt, query_buffer, sizeof(query_buffer));
+        }
+
+        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s end_time <= %ld", query_txt, *end);
+        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+               __FILE__, __LINE__);
+        multiple_constraints = true;
+        memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    }
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    if (area) {
+        if (multiple_constraints) {
+            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
+            Stopif(q_sz >= sizeof(query_buffer), goto ERR_CLEANUP,
+                   "query_txt buffer too small: %s %d", __FILE__, __LINE__);
+            memcpy(query_txt, query_buffer, sizeof(query_buffer));
+        }
+
+        double min_lat = area->ll.lat;
+        double min_lon = area->ll.lon;
+        double max_lat = area->ur.lat;
+        double max_lon = area->ur.lon;
+
+        q_sz = snprintf(query_buffer, sizeof(query_buffer),
+                        "%s lat >= %lf AND lat <= %lf AND lon >= %lf AND lon <= %lf", query_txt,
+                        min_lat, max_lat, min_lon, max_lon);
+        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+               __FILE__, __LINE__);
+        memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    }
+
+    fprintf(stderr, "\n\n%s\n\n", query_txt);
+
+    int rc = sqlite3_prepare_v2(db, query_txt, -1, &row_stmt, 0);
+    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing query:\n%s\n\n%s", query_txt,
+           sqlite3_errstr(rc));
+
+    query = malloc(sizeof(struct ClusterDatabaseQueryRows));
+    Stopif(!query, exit(EXIT_FAILURE), "Out of memory.");
+
+    query->db = db;
+    query->row_stmt = row_stmt;
+
+    return query;
+
+ERR_CLEANUP:
+    free(query);
+    sqlite3_finalize(row_stmt);
+    sqlite3_close(db);
+
+    return 0;
+}
+
+int
+cluster_db_query_rows_finalize(struct ClusterDatabaseQueryRows **query)
+{
+    static_assert(SQLITE_OK == 0, "SQLITE_OK must equal 0 or we'll have problems here.");
+    assert(query);
+
+    int rc = SQLITE_OK;
+
+    rc = sqlite3_finalize((*query)->row_stmt);
+    sqlite3_close((*query)->db);
+    free(*query);
+    *query = 0;
+
+    return rc;
+}
+
+struct ClusterRow *
+cluster_db_query_rows_next(struct ClusterDatabaseQueryRows *query, struct ClusterRow *old_row)
+{
+    assert(query);
+
+    int rc = sqlite3_step(query->row_stmt);
+    assert(rc == SQLITE_ROW || rc == SQLITE_DONE); // Fail fast in debug mode
+    Stopif(rc != SQLITE_ROW && rc != SQLITE_DONE, rc = SQLITE_DONE, "Error stepping query row: %s",
+           sqlite3_errstr(rc));
+
+    struct ClusterRow *row = old_row;
+    if (rc == SQLITE_DONE) {
+        free(row);
+        row = 0;
+        return row;
+    }
+
+    if (!row) {
+        row = calloc(1, sizeof(struct ClusterRow));
+        Stopif(!row, exit(EXIT_FAILURE), "out of memory");
+    }
+
+    row->sat = satfire_satellite_string_contains_satellite(
+        (char const *)sqlite3_column_text(query->row_stmt, 0));
+    row->sector = satfire_sector_string_contains_sector(
+        (char const *)sqlite3_column_text(query->row_stmt, 1));
+    row->start = sqlite3_column_int64(query->row_stmt, 2);
+    row->end = sqlite3_column_int64(query->row_stmt, 3);
+    row->power = sqlite3_column_double(query->row_stmt, 4);
+    row->scan_angle = sqlite3_column_double(query->row_stmt, 5);
+    row->pixels = pixel_list_destroy(row->pixels);
+    row->pixels = pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 6));
+
+    return row;
+}
+
+time_t
+cluster_db_cluster_row_start(struct ClusterRow *row)
+{
+    assert(row);
+    return row->start;
+}
+
+time_t
+cluster_db_cluster_row_end(struct ClusterRow *row)
+{
+    assert(row);
+    return row->end;
+}
+
+double
+cluster_db_cluster_row_power(struct ClusterRow *row)
+{
+    assert(row);
+    return row->power;
+}
+
+double
+cluster_db_cluster_row_scan_angle(struct ClusterRow *row)
+{
+    assert(row);
+    return row->scan_angle;
+}
+
+enum Satellite
+cluster_db_cluster_row_satellite(struct ClusterRow *row)
+{
+    assert(row);
+    return row->sat;
+}
+
+enum Sector
+cluster_db_cluster_row_sector(struct ClusterRow *row)
+{
+    assert(row);
+    return row->sector;
+}
+
+const struct PixelList *
+cluster_db_cluster_row_pixels(struct ClusterRow *row)
+{
+    assert(row);
+    return row->pixels;
+}
+
+void
+cluster_db_cluster_row_finalize(struct ClusterRow *row)
+{
+    free(row);
+}

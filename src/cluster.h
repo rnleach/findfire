@@ -144,5 +144,3 @@ unsigned int cluster_list_length(struct ClusterList *list);
  * \brief Get the total fire power of all the clusters in this list.
  */
 double cluster_list_total_power(struct ClusterList *list);
-
-// TODO: Output a ClusterList as a folder in a KML file.

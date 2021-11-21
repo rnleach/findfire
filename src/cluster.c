@@ -17,10 +17,10 @@ char const *out_of_memory = "memory allocation error";
 struct Cluster {
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     double power;
-    /// Pixels making up the cluster.
-    struct PixelList *pixels;
     /// The maximum scan angle of any point in this cluster
     double max_scan_angle;
+    /// Pixels making up the cluster.
+    struct PixelList *pixels;
 };
 
 struct Cluster *

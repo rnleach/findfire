@@ -107,3 +107,83 @@ int cluster_db_present(ClusterDatabaseQueryPresentH query, enum Satellite satell
  *-----------------------------------------------------------------------------------------------*/
 /** A handle to a query to get rows from the database. */
 typedef struct ClusterDatabaseQueryRows *ClusterDatabaseQueryRowsH;
+
+/** Query rows from the database.
+ *
+ * \param path_to_db is the location of the database file and may not be \c NULL.
+ * \param sat - limit results to this satellite only. If this is \c NULL or equal to
+ *        SATFIRE_SATELLITE_NONE, then don't limit by satellite.
+ * \param sector - limit results to this sector only. If this is \c NULL or equal to
+ *        SATFIRE_SECTOR_NONE, then don't limit by sector.
+ * \param start - limit results to ones with a scan start time AFTER this time. If this is \c NULL,
+ *        then don't place a minimum start time limit on the results.
+ * \param end - limit results to ones with a scan start time BEFORE this time. If this is \c NULL,
+ *        then don't place a maximum start time limit on the results.
+ * \param area - limit results to clusters that have their centroid within the BoundingBox area. If
+ *        this is \c NULL, then don't place a geographic limit on the results.
+ *
+ * \returns a handle to the query object. If there is an error such as a non-existent database, it
+ * returns \c NULL.
+ */
+ClusterDatabaseQueryRowsH cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat,
+                                                enum Sector const *sector, time_t const *start,
+                                                time_t const *end, struct BoundingBox const *area);
+
+/** \brief Close out and clean up from the query.
+ *
+ * This will also zero out the handle.
+ *
+ * \returns 0 if there is no error.
+ */
+int cluster_db_query_rows_finalize(ClusterDatabaseQueryRowsH *query);
+
+/** A result row from a ClusterDatabaseQueryRowsH. */
+struct ClusterRow;
+
+/** Get the next row.
+ *
+ * \param query is the handle for the query you want to get the next row on.
+ * \param row may be \c NULL, and if so a new row will be allocated. If a non \c NULL pointer is
+ *        passed in, then the space it points to will be reused for the next row. If you pass a
+ *        pointer in for row, always reassign the result of this function to that variable, as it
+ *        may call \c realloc() and move the location of the row in memory.
+ *
+ * \returns a pointer to the next row, or \c NULL if there is nothing left.
+ */
+struct ClusterRow *cluster_db_query_rows_next(ClusterDatabaseQueryRowsH query,
+                                              struct ClusterRow *row);
+
+/** Get the start time of the scan that produced this Cluster. */
+time_t cluster_db_cluster_row_start(struct ClusterRow *row);
+
+/** Get the end time of the scan that produced this Cluster. */
+time_t cluster_db_cluster_row_end(struct ClusterRow *row);
+
+/** Get the fire power in megawatts of this Cluster. */
+double cluster_db_cluster_row_power(struct ClusterRow *row);
+
+/** Get the scan angle of this Cluster. */
+double cluster_db_cluster_row_scan_angle(struct ClusterRow *row);
+
+/** Get the satellite that detected this Cluster. */
+enum Satellite cluster_db_cluster_row_satellite(struct ClusterRow *row);
+
+/** Get the scan sector the satellite was using when it detected this Cluster. */
+enum Sector cluster_db_cluster_row_sector(struct ClusterRow *row);
+
+/** Get view of the SatPixels that make up this Cluster. */
+const struct PixelList *cluster_db_cluster_row_pixels(struct ClusterRow *row);
+
+/** Call this on a ClusterRow if you're done using it.
+ *
+ * It's not necessary to call this if you will reuse this ClusterRow in another call to
+ * cluster_db_query_rows_next(). If \a row is \c NULL, that's also fine.
+ *
+ * The cluster_db_query_rows_next() function will deallocate the ClusterRow object and return
+ * \c NULL if there are no more rows, in which case a call to this function is a harmless no-op, but
+ * also unnecessary. If you are done using a ClusterRow object before cluster_db_query_rows_next()
+ * returns \c NULL, then you will need to use this function to clean up the associated allocated
+ * memory.
+ *
+ */
+void cluster_db_cluster_row_finalize(struct ClusterRow *row);

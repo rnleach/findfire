@@ -201,7 +201,7 @@ size_t pixel_list_binary_serialize(struct PixelList const plist[static 1], size_
  * \return an allocated PixelList that should be cleaned up with pixel_list_destroy(). In the
  * event of an error, it returns NULL.
  */
-struct PixelList *pixel_list_binary_deserialize(unsigned char buffer[static sizeof(size_t)]);
+struct PixelList *pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         KML Export

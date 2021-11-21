@@ -564,7 +564,7 @@ pixel_list_binary_serialize(struct PixelList const plist[static 1], size_t buf_s
 }
 
 struct PixelList *
-pixel_list_binary_deserialize(unsigned char buffer[static sizeof(size_t)])
+pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)])
 {
     // member len needs to be first for the current binary serialization scheme.
     size_t len = 0;

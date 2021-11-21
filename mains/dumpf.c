@@ -237,6 +237,7 @@ program_initialization(int argc[static 1], char ***argv)
 static void
 program_finalization()
 {
+    // Free the memory allocated by the options.
     free(options.database_file);
     free(options.kml_file);
 }
@@ -297,7 +298,28 @@ main(int argc, char *argv[argc + 1])
     int rc = EXIT_FAILURE;
     program_initialization(&argc, &argv);
 
-    printf("Hello world.\n");
+    enum Satellite default_sat = SATFIRE_SATELLITE_NONE;
+    enum Sector default_sector = SATFIRE_SECTOR_NONE;
+
+    ClusterDatabaseQueryRowsH rows =
+        cluster_db_query_rows(options.database_file, &default_sat, &default_sector, &options.start,
+                              &options.end, &options.region);
+
+    // Open the output KML file
+
+    struct ClusterRow *row = 0;
+    while ((row = cluster_db_query_rows_next(rows, row))) {
+        fprintf(stdout, "%s %s, %ld -> %ld %.0lf MW, %.0lf degrees\n",
+                satfire_satellite_name(cluster_db_cluster_row_satellite(row)),
+                satfire_sector_name(cluster_db_cluster_row_sector(row)),
+                cluster_db_cluster_row_start(row), cluster_db_cluster_row_end(row),
+                cluster_db_cluster_row_power(row), cluster_db_cluster_row_scan_angle(row));
+    }
+
+    // Close the KML file
+
+    cluster_db_cluster_row_finalize(row);
+    cluster_db_query_rows_finalize(&rows);
 
     rc = EXIT_SUCCESS;
 
