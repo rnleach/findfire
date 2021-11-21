@@ -126,6 +126,8 @@ program_initialization(int argc[static 1], char ***argv)
         fprintf(stdout, "   Archive: %s\n", options.data_dir);
         fprintf(stdout, "  Only New: %s\n", options.only_new ? "yes" : "no");
     }
+
+    cluster_db_initialize(options.database_file);
 }
 
 static void
@@ -692,12 +694,8 @@ path_filter(void *arg)
     Courier *from_dir_walker = links->from;
     Courier *to_cluster_list_loader = links->to;
 
-    ClusterDatabaseH cluster_db = 0;
-    cluster_db = cluster_db_connect(options.database_file);
-    Stopif(!cluster_db, exit(EXIT_FAILURE), "Error opening database. (%s %u)", __FILE__, __LINE__);
-
     ClusterDatabaseQueryPresentH present_query = 0;
-    present_query = cluster_database_prepare_to_query_present(cluster_db);
+    present_query = cluster_database_prepare_to_query_present(options.database_file);
     Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query. (%s %u)", __FILE__,
            __LINE__);
 
@@ -725,8 +723,7 @@ path_filter(void *arg)
 
     courier_done_receiving(from_dir_walker);
     courier_done_sending(to_cluster_list_loader);
-    cluster_db_finalize_query_present(cluster_db, &present_query);
-    cluster_db_close(&cluster_db);
+    cluster_db_finalize_query_present(&present_query);
 
     return 0;
 }
@@ -785,13 +782,9 @@ database_filler(void *arg)
     courier_register_receiver(from_cluster_list_loader);
     courier_wait_until_ready_to_receive(from_cluster_list_loader);
 
-    ClusterDatabaseH cluster_db = 0;
     ClusterDatabaseAddH add_stmt = 0;
 
-    cluster_db = cluster_db_connect(options.database_file);
-    Stopif(!cluster_db, goto CLEANUP_AND_RETURN, "Error opening database. (%s %u)", __FILE__,
-           __LINE__);
-    add_stmt = cluster_db_prepare_to_add(cluster_db);
+    add_stmt = cluster_db_prepare_to_add(options.database_file);
     Stopif(!add_stmt, goto CLEANUP_AND_RETURN, "Error preparing add statement.");
 
     // Stats on individual clusters.
@@ -804,7 +797,7 @@ database_filler(void *arg)
     while ((item = courier_receive(from_cluster_list_loader))) {
         struct ClusterList *clusters = item;
 
-        int failure = cluster_db_add(cluster_db, add_stmt, clusters);
+        int failure = cluster_db_add(add_stmt, clusters);
         Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
         // Filter out clusters on the limb for some QC
@@ -843,8 +836,7 @@ database_filler(void *arg)
 
 CLEANUP_AND_RETURN:
     courier_done_receiving(from_cluster_list_loader);
-    cluster_db_finalize_add(cluster_db, &add_stmt);
-    cluster_db_close(&cluster_db);
+    cluster_db_finalize_add(&add_stmt);
     return 0;
 }
 
