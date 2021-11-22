@@ -44,6 +44,10 @@ time series database.
 
 Once this program is complete, the data it creates can be queried to produce a time series of fire
 power for a given fire.
+
+## Libraries
+
+### GLIB
 So far I'm only using the following from GLIB:
  - The test module.
  - Command line option parser.
