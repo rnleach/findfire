@@ -199,13 +199,13 @@ standard_dir_filter(char const *path, void *user_data)
     } else if (doy == -1) {
         // Not deep enough to parse day of year, keep going.
         return true;
-    } else if (doy < mr_doy) {
+    } else if (doy < mr_doy && year <= mr_year) {
         // Same year, but sooner in the year for most recent, recurse no more deeply!
         return false;
     } else if (hour == -1) {
         // Not deep enough to parse hour of day, keep going.
         return true;
-    } else if (hour < mr_hour) {
+    } else if (hour < mr_hour && doy <= mr_doy && year <= mr_year) {
         // Same year, same day of year, but too early in the day, recurse no more deeply!
         return false;
     }
