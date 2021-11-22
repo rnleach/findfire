@@ -295,7 +295,6 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satelli
 int
 main(int argc, char *argv[argc + 1])
 {
-    int rc = EXIT_FAILURE;
     program_initialization(&argc, &argv);
 
     enum Satellite default_sat = SATFIRE_SATELLITE_NONE;
@@ -305,25 +304,32 @@ main(int argc, char *argv[argc + 1])
         cluster_db_query_rows(options.database_file, &default_sat, &default_sector, &options.start,
                               &options.end, &options.region);
 
-    // Open the output KML file
+    FILE *out = fopen(options.kml_file, "w");
+    Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", options.kml_file);
+
+    kamel_start_document(out);
 
     struct ClusterRow *row = 0;
     while ((row = cluster_db_query_rows_next(rows, row))) {
-        fprintf(stdout, "%s %s, %ld -> %ld %.0lf MW, %.0lf degrees\n",
-                satfire_satellite_name(cluster_db_cluster_row_satellite(row)),
-                satfire_sector_name(cluster_db_cluster_row_sector(row)),
-                cluster_db_cluster_row_start(row), cluster_db_cluster_row_end(row),
-                cluster_db_cluster_row_power(row), cluster_db_cluster_row_scan_angle(row));
+        time_t start = cluster_db_cluster_row_start(row);
+        time_t end = cluster_db_cluster_row_end(row);
+
+        kamel_start_folder(out, "Folder", 0, false);
+        kamel_timespan(out, start, end);
+
+        struct PixelList const *pixels = cluster_db_cluster_row_pixels(row);
+        pixel_list_kml_write(out, pixels);
+        
+        kamel_end_folder(out);
     }
 
-    // Close the KML file
+    kamel_end_document(out);
 
+    fclose(out);
     cluster_db_cluster_row_finalize(row);
     cluster_db_query_rows_finalize(&rows);
 
-    rc = EXIT_SUCCESS;
-
     program_finalization();
 
-    return rc;
+    return EXIT_SUCCESS;
 }

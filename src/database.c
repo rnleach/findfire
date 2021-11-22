@@ -718,7 +718,10 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
         memcpy(query_txt, query_buffer, sizeof(query_buffer));
     }
 
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
+    q_sz = snprintf(query_buffer, sizeof(query_buffer), "\n%s ORDER BY start_time ASC", query_txt);
+    Stopif(q_sz >= sizeof(query_buffer), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+           __FILE__, __LINE__);
+    memcpy(query_txt, query_buffer, sizeof(query_buffer));
 
     int rc = sqlite3_prepare_v2(db, query_txt, -1, &row_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing query:\n%s\n\n%s", query_txt,
