@@ -26,8 +26,8 @@ The findfire program relies on the file naming convention used by the NOAA Big D
 detect satellite name, sector, scan start, and scan end times. Later versions may use attributes in
 the NetCDF4 to detect these properties internally.
 
-## dumpf
-Select clusters from the database and output them in a KML format. (In progress).
+## showfire
+Select clusters from the database and output them in a KML format.
 
 This is a command line application that will select clusters based on a given start time, end time,
 and geographic bounding box and then output them in KML. The KML elements include a time stamp for

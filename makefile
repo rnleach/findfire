@@ -12,7 +12,7 @@ DEBUGDIR := $(PROJDIR)/debug
 # Target executable
 PROG1 = findfire
 PROG2 = connectfire
-PROG3 = dumpf
+PROG3 = showfire
 TEST  = test
 TARGET1 = $(BUILDDIR)/$(PROG1)
 TARGET2 = $(BUILDDIR)/$(PROG2)

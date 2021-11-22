@@ -297,28 +297,41 @@ main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
-    enum Satellite default_sat = SATFIRE_SATELLITE_NONE;
-    enum Sector default_sector = SATFIRE_SECTOR_NONE;
-
-    ClusterDatabaseQueryRowsH rows =
-        cluster_db_query_rows(options.database_file, default_sat, default_sector, options.start,
-                              options.end, options.region);
-
     FILE *out = fopen(options.kml_file, "w");
     Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", options.kml_file);
 
     kamel_start_document(out);
 
-    struct ClusterRow *row = 0;
-    while ((row = cluster_db_query_rows_next(rows, row))) {
-        time_t start = cluster_db_cluster_row_start(row);
-        time_t end = cluster_db_cluster_row_end(row);
+    for (enum Satellite sat = 0; sat < SATFIRE_SATELLITE_NUM; ++sat) {
 
-        kamel_start_folder(out, "Folder", 0, false);
-        kamel_timespan(out, start, end);
+        kamel_start_folder(out, satfire_satellite_name(sat), 0, false);
 
-        struct PixelList const *pixels = cluster_db_cluster_row_pixels(row);
-        pixel_list_kml_write(out, pixels);
+        for (enum Sector sector = 0; sector < SATFIRE_SECTOR_NUM; ++sector) {
+
+            kamel_start_folder(out, satfire_sector_name(sector), 0, false);
+
+            ClusterDatabaseQueryRowsH rows = cluster_db_query_rows(
+                options.database_file, sat, sector, options.start, options.end, options.region);
+            struct ClusterRow *row = 0;
+
+            while ((row = cluster_db_query_rows_next(rows, row))) {
+                time_t start = cluster_db_cluster_row_start(row);
+                time_t end = cluster_db_cluster_row_end(row);
+
+                kamel_start_folder(out, "Folder", 0, false);
+                kamel_timespan(out, start, end);
+
+                struct PixelList const *pixels = cluster_db_cluster_row_pixels(row);
+                pixel_list_kml_write(out, pixels);
+
+                kamel_end_folder(out);
+            }
+
+            kamel_end_folder(out);
+
+            cluster_db_cluster_row_finalize(row);
+            cluster_db_query_rows_finalize(&rows);
+        }
 
         kamel_end_folder(out);
     }
@@ -326,8 +339,6 @@ main(int argc, char *argv[argc + 1])
     kamel_end_document(out);
 
     fclose(out);
-    cluster_db_cluster_row_finalize(row);
-    cluster_db_query_rows_finalize(&rows);
 
     program_finalization();
 
