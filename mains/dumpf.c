@@ -319,7 +319,7 @@ main(int argc, char *argv[argc + 1])
 
         struct PixelList const *pixels = cluster_db_cluster_row_pixels(row);
         pixel_list_kml_write(out, pixels);
-        
+
         kamel_end_folder(out);
     }
 
