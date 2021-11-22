@@ -301,8 +301,8 @@ main(int argc, char *argv[argc + 1])
     enum Sector default_sector = SATFIRE_SECTOR_NONE;
 
     ClusterDatabaseQueryRowsH rows =
-        cluster_db_query_rows(options.database_file, &default_sat, &default_sector, &options.start,
-                              &options.end, &options.region);
+        cluster_db_query_rows(options.database_file, default_sat, default_sector, options.start,
+                              options.end, options.region);
 
     FILE *out = fopen(options.kml_file, "w");
     Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", options.kml_file);

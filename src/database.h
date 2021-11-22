@@ -111,23 +111,20 @@ typedef struct ClusterDatabaseQueryRows *ClusterDatabaseQueryRowsH;
 /** Query rows from the database.
  *
  * \param path_to_db is the location of the database file and may not be \c NULL.
- * \param sat - limit results to this satellite only. If this is \c NULL or equal to
- *        SATFIRE_SATELLITE_NONE, then don't limit by satellite.
- * \param sector - limit results to this sector only. If this is \c NULL or equal to
- *        SATFIRE_SECTOR_NONE, then don't limit by sector.
- * \param start - limit results to ones with a scan start time AFTER this time. If this is \c NULL,
- *        then don't place a minimum start time limit on the results.
- * \param end - limit results to ones with a scan start time BEFORE this time. If this is \c NULL,
- *        then don't place a maximum start time limit on the results.
- * \param area - limit results to clusters that have their centroid within the BoundingBox area. If
- *        this is \c NULL, then don't place a geographic limit on the results.
+ * \param sat - limit results to this satellite only. If this is equal to SATFIRE_SATELLITE_NONE,
+ *              then don't limit by satellite.
+ * \param sector - limit results to this sector only. If this is equal to SATFIRE_SECTOR_NONE, then
+ *                 don't limit by sector.
+ * \param start - limit results to ones with a scan start time AFTER this time.
+ * \param end - limit results to ones with a scan start time BEFORE this time.
+ * \param area - limit results to clusters that have their centroid within the BoundingBox area.
  *
  * \returns a handle to the query object. If there is an error such as a non-existent database, it
  * returns \c NULL.
  */
-ClusterDatabaseQueryRowsH cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat,
-                                                enum Sector const *sector, time_t const *start,
-                                                time_t const *end, struct BoundingBox const *area);
+ClusterDatabaseQueryRowsH cluster_db_query_rows(char const *path_to_db, enum Satellite const sat,
+                                                enum Sector const sector, time_t const start,
+                                                time_t const end, struct BoundingBox const area);
 
 /** \brief Close out and clean up from the query.
  *

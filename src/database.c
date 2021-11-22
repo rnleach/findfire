@@ -601,8 +601,8 @@ struct ClusterRow {
 };
 
 struct ClusterDatabaseQueryRows *
-cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Sector const *sector,
-                      time_t const *start, time_t const *end, struct BoundingBox const *area)
+cluster_db_query_rows(char const *path_to_db, enum Satellite const sat, enum Sector const sector,
+                      time_t const start, time_t const end, struct BoundingBox const area)
 {
     assert(path_to_db);
 
@@ -613,113 +613,42 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
     db = open_database_readonly(path_to_db);
     Stopif(!db, goto ERR_CLEANUP, "Unable to open database: %s", path_to_db);
 
-    char query_txt[512] = {0};
-    char query_buffer[512] = {0};
-
-    static_assert(sizeof(query_txt) == sizeof(query_buffer), "These need to be the same size!");
-
-    char *query_start =
+    char *query_format =
         "SELECT satellite, sector, start_time, end_time, power, max_scan_angle, pixels \n"
-        "FROM clusters ";
+        "FROM clusters                                                                 \n"
+        "WHERE start_time >= %ld AND end_time <= %ld AND lat >= %lf AND lat <= %lf AND \n"
+        "      lon >= %lf AND lon <= %lf %s %s                                         \n"
+        "ORDER BY start_time ASC";
 
-    int q_sz = snprintf(query_txt, sizeof(query_txt), "%s", query_start);
-    Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
+    int num_chars = 0;
+    char satellite_select[32] = {0};
+    if (sat != SATFIRE_SATELLITE_NONE) {
+        num_chars = snprintf(satellite_select, sizeof(satellite_select), "AND satellite = '%s'",
+                             satfire_satellite_name(sat));
+        Stopif(num_chars >= sizeof(satellite_select), goto ERR_CLEANUP,
+               "satellite select buffer too small.");
+    }
+
+    char sector_select[32] = {0};
+    if (sector != SATFIRE_SECTOR_NONE) {
+        num_chars = snprintf(sector_select, sizeof(sector_select), "AND sector = '%s'",
+                             satfire_sector_name(sector));
+        Stopif(num_chars >= sizeof(sector_select), goto ERR_CLEANUP,
+               "sector select buffer too small.");
+    }
+
+    char query_txt[512] = {0};
+    double min_lat = area.ll.lat;
+    double min_lon = area.ll.lon;
+    double max_lat = area.ur.lat;
+    double max_lon = area.ur.lon;
+    
+    num_chars = snprintf(query_txt, sizeof(query_txt), query_format, start, end, min_lat, max_lat,
+            min_lon, max_lon, satellite_select, sector_select);
+    Stopif(num_chars >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
            __FILE__, __LINE__);
 
-    bool sat_constraint = sat && (*sat != SATFIRE_SATELLITE_NONE);
-    bool sector_constraint = sector && (*sector != SATFIRE_SECTOR_NONE);
-
-    if (sat_constraint || sector_constraint || start || end || area) {
-        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\nWHERE", query_txt);
-        Stopif(q_sz >= sizeof(query_buffer), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-               __FILE__, __LINE__);
-        memcpy(query_txt, query_buffer, sizeof(query_buffer));
-    }
-
-    bool multiple_constraints = false;
-    if (sat_constraint) {
-        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s satellite = '%s'", query_txt,
-                        satfire_satellite_name(*sat));
-        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-               __FILE__, __LINE__);
-        multiple_constraints = true;
-        memcpy(query_txt, query_buffer, sizeof(query_buffer));
-    }
-
-    if (sector_constraint) {
-        if (multiple_constraints) {
-            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
-            Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-                   __FILE__, __LINE__);
-            memcpy(query_txt, query_buffer, sizeof(query_buffer));
-        }
-
-        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s sector = '%s'", query_txt,
-                        satfire_sector_name(*sector));
-        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-               __FILE__, __LINE__);
-        multiple_constraints = true;
-        memcpy(query_txt, query_buffer, sizeof(query_buffer));
-    }
-
-    if (start) {
-
-        if (multiple_constraints) {
-            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
-            Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-                   __FILE__, __LINE__);
-            memcpy(query_txt, query_buffer, sizeof(query_buffer));
-        }
-
-        q_sz =
-            snprintf(query_buffer, sizeof(query_buffer), "%s start_time >= %ld", query_txt, *start);
-        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-               __FILE__, __LINE__);
-        multiple_constraints = true;
-        memcpy(query_txt, query_buffer, sizeof(query_buffer));
-    }
-
-    if (end) {
-
-        if (multiple_constraints) {
-            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
-            Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-                   __FILE__, __LINE__);
-            memcpy(query_txt, query_buffer, sizeof(query_buffer));
-        }
-
-        q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s end_time <= %ld", query_txt, *end);
-        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-               __FILE__, __LINE__);
-        multiple_constraints = true;
-        memcpy(query_txt, query_buffer, sizeof(query_buffer));
-    }
-
-    if (area) {
-        if (multiple_constraints) {
-            q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s\n  AND", query_txt);
-            Stopif(q_sz >= sizeof(query_buffer), goto ERR_CLEANUP,
-                   "query_txt buffer too small: %s %d", __FILE__, __LINE__);
-            memcpy(query_txt, query_buffer, sizeof(query_buffer));
-        }
-
-        double min_lat = area->ll.lat;
-        double min_lon = area->ll.lon;
-        double max_lat = area->ur.lat;
-        double max_lon = area->ur.lon;
-
-        q_sz = snprintf(query_buffer, sizeof(query_buffer),
-                        "%s lat >= %lf AND lat <= %lf AND lon >= %lf AND lon <= %lf", query_txt,
-                        min_lat, max_lat, min_lon, max_lon);
-        Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-               __FILE__, __LINE__);
-        memcpy(query_txt, query_buffer, sizeof(query_buffer));
-    }
-
-    q_sz = snprintf(query_buffer, sizeof(query_buffer), "\n%s ORDER BY start_time ASC", query_txt);
-    Stopif(q_sz >= sizeof(query_buffer), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-           __FILE__, __LINE__);
-    memcpy(query_txt, query_buffer, sizeof(query_buffer));
+    fprintf(stderr, "%s\n", query_txt);
 
     int rc = sqlite3_prepare_v2(db, query_txt, -1, &row_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing query:\n%s\n\n%s", query_txt,
