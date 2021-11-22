@@ -1,10 +1,12 @@
-# Editor configuration files.
+# Editor configuration files, temp files for dev tools
 *.vim
 tags
+vgdump
+useful_commands.txt
+.vscode
 
-# Rust
-Cargo.lock
-target
-
-# Editors
-*.vim
+# Project layout
+release
+debug
+obj
+doc

@@ -1,31 +1,63 @@
-# satfire
+# SatFire
+A collection of programs for working with GOES-16/17 Fire Detection Characterstics files to analyze
+wildfire detections.
+
+## findfire
 Analysis of GOES-R/S NetCDF4 Fire Detection Characteristics files.
 
-(Goal - we're not there yet)
-
 Given a directory containing *-FDCC-*, *-FDCF-*, or *-FDCM-* files (Fire Detection Characteristics)
-from GOES-R (GOES-16) and GOES-S (GOES-17) satellites, this program will analyze all of them. 
-The analysis finds clusters of pixels that are connected and analyzes their mean latitude, mean
-longitude, and total fire power in megawatts.
+from GOES-16/17 satellites, this program will analyze them. The analysis finds clusters of pixels
+that are connected. The clusters are then stored in a database with the name of the satellite, the
+scan sector, the scan angle (see below), cluster centroid latitude and longitude, the total fire 
+power of the cluster in megawatts, and a binary representation of the image pixels that make up the 
+cluster. 
 
-We rely on the file naming convention used by the NOAA Big Data initiative to detect satellite, 
-sector, scan start, and scan end times. 
+The scan angle is the distance of the centroid of a pixel or cluster from the respective satellites
+nadir position on the earth. The distance is in degrees latitude and longitude, so it represents the
+angle between the line from the center of the Earth to nadir and the line from the center of the
+Earth to the centroid. This is a good proxy for measuring how close a pixel or cluster is to the
+limb of the Earth as viewed by the satellite, which is useful for some quality control.
 
-Currently all directories and "options" are hard coded in the executable files. In the future there
-may be configuration files and/or command line arguments.
+The binary representation stored in the database includes the 4 corner coordinates, the scan angle 
+and the fire power in megawatts of each pixel in the cluster. This basically represents all of the
+original data that was used to construct the cluster.
 
-## Programs
+The findfire program relies on the file naming convention used by the NOAA Big Data initiative to
+detect satellite name, sector, scan start, and scan end times. Later versions may use attributes in
+the NetCDF4 to detect these properties internally.
 
-### findfire
- Find fire analyzes the netCDF files for clusters and stores the data about the clusters in an
- intermediary database. This program looks at 1 satellite file at a time.
+## dumpf
+Select clusters from the database and output them in a KML format. (In progress).
 
-### connectfire
- Takes the intermediary database created by findfire and connects the clusters in time, and stores 
- the results in another database. Each cluster in the final database will have an index code 
- assigned to it. That index code will relate to another table with summary information about that
- fire.
+This is a command line application that will select clusters based on a given start time, end time,
+and geographic bounding box and then output them in KML. The KML elements include a time stamp for
+the scan start and end times so the KML can be animated in Google Earth.
 
-### export_kml
- Exports the results of connect fire as a kml file for viewing. Currently only exports the final
- fire perimeters, but there's a lot that could be done here.
+
+## connectfire
+Create a database with the necessary information to create time series of fires. (Not Implemented)
+
+This program will scan the cluster database and connect clusters from different scan times together
+based on their geographic location and nearness in time. The connections are stored in a database
+that will relate the row numbers in the cluster database to a fire number or some similar key in the
+time series database.
+
+Once this program is complete, the data it creates can be queried to produce a time series of fire
+power for a given fire.
+So far I'm only using the following from GLIB:
+ - The test module.
+ - Command line option parser.
+ - GArray
+
+
+### GDAL (3.2.2 or later used in development)
+ This is critical for accessing and geo-referencing the data. Whatever version of GDAL you're using,
+ it must have support for NetCDF4 installed as well. This shouldn't be a problem since that is the
+ default anyway. Future versions may use the PROJ and NetCDF4 libraries directly.
+
+
+### SQLITE3
+ sqlite3 is used for the database backend. In the future a different backend could be used for a
+ more central storage that is accessable by multiple programs at a time, but for the time being 
+ keeping the data on the same computer as the program will probably perform quicker and just be
+ simpler.
