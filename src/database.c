@@ -73,8 +73,14 @@ ERR_CLEANUP:
 static sqlite3 *
 open_database_readonly(char const *path)
 {
+    //
+    // The mode flag should be SQLITE_OPEN_READONLY instead of SQLITE_OPEN_READWRITE, however,
+    // when accessing a database from my mac this with multiple threads (some read, some write)
+    // this causes an SQLITE disk I/O error. It works fine on Ubuntu/PoP!_OS. But I'll leave it
+    // this way for now so it works on both machines!
+    //
     sqlite3 *handle = 0;
-    int rc = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, 0);
+    int rc = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error connecting to %s", path);
 
     // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
@@ -361,7 +367,11 @@ cluster_db_add_cluster(struct ClusterDatabaseAdd *stmt, struct ClusterList *clis
 
 ERR_CLEANUP:
 
-    // FIXME: Probably also need to do a rollback on the database!
+    rc = sqlite3_exec(stmt->db, "ROLLBACK TRANSACTION", 0, 0, &err_message);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error rolling back failed transaction: %s\n", sqlite3_errstr(rc));
+    }
+
     sqlite3_reset(stmt->add_ptr);
     sqlite3_free(err_message);
     return 1;
