@@ -626,8 +626,6 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
     Stopif(q_sz >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
            __FILE__, __LINE__);
 
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
-
     bool sat_constraint = sat && (*sat != SATFIRE_SATELLITE_NONE);
     bool sector_constraint = sector && (*sector != SATFIRE_SECTOR_NONE);
 
@@ -638,8 +636,6 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
         memcpy(query_txt, query_buffer, sizeof(query_buffer));
     }
 
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
-
     bool multiple_constraints = false;
     if (sat_constraint) {
         q_sz = snprintf(query_buffer, sizeof(query_buffer), "%s satellite = '%s'", query_txt,
@@ -649,8 +645,6 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
         multiple_constraints = true;
         memcpy(query_txt, query_buffer, sizeof(query_buffer));
     }
-
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
 
     if (sector_constraint) {
         if (multiple_constraints) {
@@ -667,8 +661,6 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
         multiple_constraints = true;
         memcpy(query_txt, query_buffer, sizeof(query_buffer));
     }
-
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
 
     if (start) {
 
@@ -687,8 +679,6 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
         memcpy(query_txt, query_buffer, sizeof(query_buffer));
     }
 
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
-
     if (end) {
 
         if (multiple_constraints) {
@@ -704,8 +694,6 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const *sat, enum Se
         multiple_constraints = true;
         memcpy(query_txt, query_buffer, sizeof(query_buffer));
     }
-
-    fprintf(stderr, "\n\n%s\n\n", query_txt);
 
     if (area) {
         if (multiple_constraints) {
