@@ -25,7 +25,7 @@
 /*-------------------------------------------------------------------------------------------------
  *                                     Command Line Options
  *-----------------------------------------------------------------------------------------------*/
-static struct DumpFOptions {
+static struct ShowFireOptions {
     char *database_file;
     char *kml_file;
     time_t start;
