@@ -184,6 +184,7 @@ program_initialization(int argc[static 1], char ***argv)
     g_option_context_add_main_entries(context, option_entries, 0);
     g_option_context_parse(context, argc, argv, &error);
     Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
+    g_option_context_free(context);
 
     // If options weren't set, back fill with default values.
     if (!options.database_file && getenv("CLUSTER_DB")) {

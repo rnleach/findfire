@@ -113,6 +113,7 @@ program_initialization(int argc[static 1], char ***argv)
     g_option_context_add_main_entries(context, option_entries, 0);
     g_option_context_parse(context, argc, argv, &error);
     Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
+    g_option_context_free(context);
 
     Stopif(!options.database_file, exit(EXIT_FAILURE), "Invalid, database_file is NULL");
     Stopif(!options.data_dir, exit(EXIT_FAILURE), "Invalid, data_dir is NULL");
@@ -718,6 +719,8 @@ path_filter(void *arg)
             bool success = courier_send(to_cluster_list_loader, path);
 
             Stopif(!success, break, "Failed to send to loader.");
+        } else {
+            free(path);
         }
     }
 

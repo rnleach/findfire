@@ -642,9 +642,9 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const sat, enum Sec
     double min_lon = area.ll.lon;
     double max_lat = area.ur.lat;
     double max_lon = area.ur.lon;
-    
+
     num_chars = snprintf(query_txt, sizeof(query_txt), query_format, start, end, min_lat, max_lat,
-            min_lon, max_lon, satellite_select, sector_select);
+                         min_lon, max_lon, satellite_select, sector_select);
     Stopif(num_chars >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
            __FILE__, __LINE__);
 
@@ -696,7 +696,7 @@ cluster_db_query_rows_next(struct ClusterDatabaseQueryRows *query, struct Cluste
 
     struct ClusterRow *row = old_row;
     if (rc == SQLITE_DONE) {
-        free(row);
+        cluster_db_cluster_row_finalize(row);
         row = 0;
         return row;
     }
@@ -772,5 +772,8 @@ cluster_db_cluster_row_pixels(struct ClusterRow *row)
 void
 cluster_db_cluster_row_finalize(struct ClusterRow *row)
 {
-    free(row);
+    if (row) {
+        row->pixels = pixel_list_destroy(row->pixels);
+        free(row);
+    }
 }
