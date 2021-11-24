@@ -33,6 +33,11 @@ This is a command line application that will select clusters based on a given st
 and geographic bounding box and then output them in KML. The KML elements include a time stamp for
 the scan start and end times so the KML can be animated in Google Earth.
 
+## currentfire
+Select the clusters from the most recent satellite image given a satellite name and sector name.
+
+This command line application will query the database for the most recent image given the satelltie
+and sector and produce a KML file with all the clusters.
 
 ## connectfire
 Create a database with the necessary information to create time series of fires. (Not Implemented)

@@ -13,10 +13,12 @@ DEBUGDIR := $(PROJDIR)/debug
 PROG1 = findfire
 PROG2 = connectfire
 PROG3 = showfire
+PROG4 = currentfire
 TEST  = test
 TARGET1 = $(BUILDDIR)/$(PROG1)
 TARGET2 = $(BUILDDIR)/$(PROG2)
 TARGET3 = $(BUILDDIR)/$(PROG3)
+TARGET4 = $(BUILDDIR)/$(PROG4)
 TEST_TARGET = $(BUILDDIR)/$(TEST)
 
 CFLAGS = -Wall -Werror -std=c11 -I$(SOURCEDIR)
@@ -74,7 +76,7 @@ endif
 
 .PHONY: all clean directories test doc
 
-all: makefile directories $(TARGET1) $(TARGET2) $(TARGET3) $(TEST_TARGET)
+all: makefile directories $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4) $(TEST_TARGET)
 
 $(TARGET1): directories makefile $(OBJS) $(BUILDDIR)/$(PROG1).o
 	@echo Linking $@
@@ -97,6 +99,14 @@ $(TARGET3): directories makefile $(OBJS) $(BUILDDIR)/$(PROG3).o
 	$(HIDE)$(CC) $(BUILDDIR)/$(PROG3).o $(OBJS) $(LDLIBS) -o $@
 
 $(BUILDDIR)/$(PROG3).o: $(MAINSDIR)/$(PROG3).c
+	@echo Building $@
+	$(HIDE)$(CC) -c $(CFLAGS) -o $@ $< -MMD
+
+$(TARGET4): directories makefile $(OBJS) $(BUILDDIR)/$(PROG4).o
+	@echo Linking $@
+	$(HIDE)$(CC) $(BUILDDIR)/$(PROG4).o $(OBJS) $(LDLIBS) -o $@
+
+$(BUILDDIR)/$(PROG4).o: $(MAINSDIR)/$(PROG4).c
 	@echo Building $@
 	$(HIDE)$(CC) -c $(CFLAGS) -o $@ $< -MMD
 
