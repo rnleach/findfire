@@ -1,5 +1,4 @@
-
-/** \file dumpf.c
+/** \file showfire.c
  * \brief Export clusters into a KML file.
  *
  * This program will export all the clusters in a requested region and time range into a KML file.
