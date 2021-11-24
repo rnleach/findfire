@@ -179,7 +179,7 @@ program_initialization(int argc[static 1], char ***argv)
 
     // Parse command line options.
     GError *error = 0;
-    GOptionContext *context = g_option_context_new("- Find clusters and add them to a database.");
+    GOptionContext *context = g_option_context_new("- Create a KML file with clusters.");
     g_option_context_add_main_entries(context, option_entries, 0);
     g_option_context_parse(context, argc, argv, &error);
     Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
@@ -240,53 +240,6 @@ program_finalization()
     // Free the memory allocated by the options.
     free(options.database_file);
     free(options.kml_file);
-}
-
-/*-------------------------------------------------------------------------------------------------
- *                             Save a Cluster in a KML File
- *-----------------------------------------------------------------------------------------------*/
-void
-save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satellite sat,
-                 enum Sector sector)
-{
-    // Return early if no output file is configured.
-    if (!options.kml_file) {
-        return;
-    }
-
-    FILE *out = fopen(options.kml_file, "wb");
-    Stopif(!out, return, "Unable to open file for writing: %s", options.kml_file);
-
-    kamel_start_document(out);
-
-    kamel_start_style(out, "fire");
-    kamel_poly_style(out, "880000FF", true, false);
-    kamel_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
-    kamel_end_style(out);
-
-    kamel_start_folder(out, "BiggestFire", 0, true);
-    kamel_timespan(out, start, end);
-
-    char *description = 0;
-    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf MW",
-             satfire_satellite_name(sat), satfire_sector_name(sector),
-             cluster_total_power(biggest));
-
-    kamel_start_placemark(out, "Biggest Fire", description, "#fire");
-    struct Coord centroid = pixel_list_centroid(cluster_pixels(biggest));
-    kamel_point(out, centroid.lat, centroid.lon, 0.0);
-    kamel_end_placemark(out);
-    free(description);
-
-    pixel_list_kml_write(out, cluster_pixels(biggest));
-
-    kamel_end_folder(out);
-
-    kamel_end_document(out);
-
-    fclose(out);
-
-    return;
 }
 
 /*-------------------------------------------------------------------------------------------------
