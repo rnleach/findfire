@@ -585,35 +585,24 @@ pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)])
 /*-------------------------------------------------------------------------------------------------
  *                                         KML Export
  *-----------------------------------------------------------------------------------------------*/
-static double
-power_as_height_meters(double power_mw)
-{
-    double power_as_height = power_mw;
-
-    return power_as_height;
-}
-
 static void
-pixel_list_kml_write_pixel_style(FILE *strm, double power_as_height)
+pixel_list_kml_write_pixel_style(FILE *strm, double power)
 {
-    double const max_power_height = 3000.0;
+    double const max_power = 3000.0;
     double const max_green_for_orange = 0.647;
-    double const full_red_power_as_height = max_power_height / 2.0;
+    double const full_red_power = max_power / 2.0;
 
     double rd = 1.0;
     double gd = 0.0;
     double bd = 0.0;
     double ad = 0.6;
 
-    power_as_height = fmin(power_as_height, max_power_height);
+    power = fmin(power, max_power);
 
-    if (power_as_height <= full_red_power_as_height) {
-        gd = (full_red_power_as_height - power_as_height) / full_red_power_as_height *
-             max_green_for_orange;
-
+    if (power <= full_red_power) {
+        gd = (full_red_power - power) / full_red_power * max_green_for_orange;
     } else {
-        gd = (power_as_height - full_red_power_as_height) /
-             (max_power_height - full_red_power_as_height);
+        gd = (power - full_red_power) / (max_power - full_red_power);
         bd = gd;
     }
 
@@ -643,27 +632,24 @@ pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
     for (unsigned int i = 0; i < plist->len; ++i) {
         struct SatPixel pixel = plist->pixels[i];
 
-        // Google earth uses z-coordinates as meters.
-        double power_as_height = power_as_height_meters(pixel.power);
-
         sprintf(desc, "<h3>Power: %.0lfMW</h3><h3>From nadir: %.0lf&deg;</h3>", pixel.power,
                 pixel.scan_angle);
 
         kamel_start_placemark(strm, 0, desc, 0);
 
-        pixel_list_kml_write_pixel_style(strm, power_as_height);
+        pixel_list_kml_write_pixel_style(strm, pixel.power);
 
-        kamel_start_polygon(strm, true, true, "relativeToGround");
+        kamel_start_polygon(strm, true, true, "clampToGround");
         kamel_polygon_start_outer_ring(strm);
         kamel_start_linear_ring(strm);
 
         for (unsigned int j = 0; j < sizeof(pixel.coords) / sizeof(pixel.coords[0]); ++j) {
             struct Coord coord = pixel.coords[j];
-            kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
+            kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, 0.0);
         }
         // Close the loop.
         struct Coord coord = pixel.coords[0];
-        kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, power_as_height);
+        kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, 0.0);
 
         kamel_end_linear_ring(strm);
         kamel_polygon_end_outer_ring(strm);
