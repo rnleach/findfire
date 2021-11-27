@@ -721,49 +721,49 @@ cluster_db_query_rows_next(struct ClusterDatabaseQueryRows *query, struct Cluste
 }
 
 time_t
-cluster_db_cluster_row_start(struct ClusterRow *row)
+cluster_db_cluster_row_start(struct ClusterRow const *row)
 {
     assert(row);
     return row->start;
 }
 
 time_t
-cluster_db_cluster_row_end(struct ClusterRow *row)
+cluster_db_cluster_row_end(struct ClusterRow const *row)
 {
     assert(row);
     return row->end;
 }
 
 double
-cluster_db_cluster_row_power(struct ClusterRow *row)
+cluster_db_cluster_row_power(struct ClusterRow const *row)
 {
     assert(row);
     return row->power;
 }
 
 double
-cluster_db_cluster_row_scan_angle(struct ClusterRow *row)
+cluster_db_cluster_row_scan_angle(struct ClusterRow const *row)
 {
     assert(row);
     return row->scan_angle;
 }
 
 enum Satellite
-cluster_db_cluster_row_satellite(struct ClusterRow *row)
+cluster_db_cluster_row_satellite(struct ClusterRow const *row)
 {
     assert(row);
     return row->sat;
 }
 
 enum Sector
-cluster_db_cluster_row_sector(struct ClusterRow *row)
+cluster_db_cluster_row_sector(struct ClusterRow const *row)
 {
     assert(row);
     return row->sector;
 }
 
 const struct PixelList *
-cluster_db_cluster_row_pixels(struct ClusterRow *row)
+cluster_db_cluster_row_pixels(struct ClusterRow const *row)
 {
     assert(row);
     return row->pixels;

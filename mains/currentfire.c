@@ -178,13 +178,42 @@ program_finalization()
 }
 
 /*-------------------------------------------------------------------------------------------------
+ *                                      Comparing Clusters
+ *-----------------------------------------------------------------------------------------------*/
+static int
+cluster_row_descending_power_sort_order_compare(void const *a, void const *b)
+{
+    struct ClusterRow const *rowa = a;
+    struct ClusterRow const *rowb = b;
+
+    if (cluster_db_cluster_row_power(rowa) > cluster_db_cluster_row_power(rowb)) {
+        return -1;
+    } else if (cluster_db_cluster_row_power(rowa) < cluster_db_cluster_row_power(rowb)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*-------------------------------------------------------------------------------------------------
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
+
+static void
+cluster_row_destructor_for_glib(void *p)
+{
+    struct ClusterRow *row = p;
+    cluster_db_cluster_row_finalize(row);
+}
+
 int
 main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
+    //
+    // Get the time of the most recent scan matching the options
+    //
     ClusterDatabaseH db = cluster_db_connect(options.database_file);
     Stopif(!db, exit(EXIT_FAILURE), "Unable to connect to database %s.", options.database_file);
     time_t latest = cluster_db_newest_scan_start(db, options.sat, options.sector);
@@ -193,26 +222,70 @@ main(int argc, char *argv[argc + 1])
            "No data in the database for satellite %s and sector %s.",
            satfire_satellite_name(options.sat), satfire_sector_name(options.sector));
 
-    FILE *out = fopen(options.kml_file, "w");
-    Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", options.kml_file);
+    //
+    // Query the database to get an iterator over the data and fill a sorted list.
+    //
 
     // Default to cover the globe
     struct Coord ll = {.lat = -90.0, .lon = -180.0};
     struct Coord ur = {.lat = 90.0, .lon = 180.0};
     struct BoundingBox region = {.ll = ll, .ur = ur};
 
-    kamel_start_document(out);
-    kamel_start_folder(out, satfire_satellite_name(options.sat), 0, false);
-
     ClusterDatabaseQueryRowsH rows = cluster_db_query_rows(
         options.database_file, options.sat, options.sector, latest, latest + 3600, region);
     struct ClusterRow *row = 0;
+    GList *sorted_rows = 0;
+    while ((row = cluster_db_query_rows_next(rows, 0))) {
+        sorted_rows =
+            g_list_insert_sorted(sorted_rows, row, cluster_row_descending_power_sort_order_compare);
+    }
 
-    while ((row = cluster_db_query_rows_next(rows, row))) {
+    cluster_db_query_rows_finalize(&rows);
 
-        kamel_start_folder(out, "Folder", 0, false);
+    //
+    // Output the list
+    //
+    FILE *out = fopen(options.kml_file, "w");
+    Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", options.kml_file);
 
-        struct PixelList const *pixels = cluster_db_cluster_row_pixels(row);
+    kamel_start_document(out);
+
+    kamel_start_style(out, "fire");
+    kamel_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
+    kamel_end_style(out);
+
+    kamel_start_folder(out, satfire_satellite_name(options.sat), 0, false);
+
+    unsigned int row_num = 0;
+    for (GList *item = sorted_rows; item != 0; item = item->next, ++row_num) {
+
+        struct ClusterRow *clust = item->data;
+
+        char name_buf[16] = {0};
+        char description_buf[128] = {0};
+
+        int num_printed = snprintf(name_buf, sizeof(name_buf), "%u", row_num);
+        if (num_printed >= sizeof(name_buf)) {
+            name_buf[sizeof(name_buf) - 1] = '\0';
+        }
+
+        num_printed =
+            snprintf(description_buf, sizeof(description_buf),
+                     "<h3>Cluster Power: %.0lfMW</h3><h3>Max Scan Angle: %.0lf&deg;</h3>",
+                     cluster_db_cluster_row_power(clust), cluster_db_cluster_row_scan_angle(clust));
+        if (num_printed >= sizeof(description_buf)) {
+            description_buf[sizeof(description_buf) - 1] = '\0';
+        }
+
+        kamel_start_folder(out, name_buf, 0, false);
+
+        struct PixelList const *pixels = cluster_db_cluster_row_pixels(clust);
+        struct Coord centroid = pixel_list_centroid(pixels);
+
+        kamel_start_placemark(out, name_buf, description_buf, "#fire");
+        kamel_point(out, centroid.lat, centroid.lon, 0.0);
+        kamel_end_placemark(out);
+
         pixel_list_kml_write(out, pixels);
 
         kamel_end_folder(out);
@@ -221,10 +294,9 @@ main(int argc, char *argv[argc + 1])
     kamel_end_folder(out);
     kamel_end_document(out);
 
-    cluster_db_cluster_row_finalize(row);
-    cluster_db_query_rows_finalize(&rows);
-
     fclose(out);
+
+    g_list_free_full(g_steal_pointer(&sorted_rows), cluster_row_destructor_for_glib);
 
     program_finalization();
 

@@ -151,25 +151,25 @@ struct ClusterRow *cluster_db_query_rows_next(ClusterDatabaseQueryRowsH query,
                                               struct ClusterRow *row);
 
 /** Get the start time of the scan that produced this Cluster. */
-time_t cluster_db_cluster_row_start(struct ClusterRow *row);
+time_t cluster_db_cluster_row_start(struct ClusterRow const *row);
 
 /** Get the end time of the scan that produced this Cluster. */
-time_t cluster_db_cluster_row_end(struct ClusterRow *row);
+time_t cluster_db_cluster_row_end(struct ClusterRow const *row);
 
 /** Get the fire power in megawatts of this Cluster. */
-double cluster_db_cluster_row_power(struct ClusterRow *row);
+double cluster_db_cluster_row_power(struct ClusterRow const *row);
 
 /** Get the scan angle of this Cluster. */
-double cluster_db_cluster_row_scan_angle(struct ClusterRow *row);
+double cluster_db_cluster_row_scan_angle(struct ClusterRow const *row);
 
 /** Get the satellite that detected this Cluster. */
-enum Satellite cluster_db_cluster_row_satellite(struct ClusterRow *row);
+enum Satellite cluster_db_cluster_row_satellite(struct ClusterRow const *row);
 
 /** Get the scan sector the satellite was using when it detected this Cluster. */
-enum Sector cluster_db_cluster_row_sector(struct ClusterRow *row);
+enum Sector cluster_db_cluster_row_sector(struct ClusterRow const *row);
 
 /** Get view of the SatPixels that make up this Cluster. */
-const struct PixelList *cluster_db_cluster_row_pixels(struct ClusterRow *row);
+const struct PixelList *cluster_db_cluster_row_pixels(struct ClusterRow const *row);
 
 /** Call this on a ClusterRow if you're done using it.
  *
