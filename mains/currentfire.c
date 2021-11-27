@@ -256,15 +256,15 @@ main(int argc, char *argv[argc + 1])
 
     kamel_start_folder(out, satfire_satellite_name(options.sat), 0, false);
 
-    unsigned int row_num = 0;
-    for (GList *item = sorted_rows; item != 0; item = item->next, ++row_num) {
+    for (GList *item = sorted_rows; item != 0; item = item->next) {
 
         struct ClusterRow *clust = item->data;
 
         char name_buf[16] = {0};
         char description_buf[128] = {0};
 
-        int num_printed = snprintf(name_buf, sizeof(name_buf), "%u", row_num);
+        int num_printed =
+            snprintf(name_buf, sizeof(name_buf), "%.0lfMW", cluster_db_cluster_row_power(clust));
         if (num_printed >= sizeof(name_buf)) {
             name_buf[sizeof(name_buf) - 1] = '\0';
         }
@@ -282,7 +282,7 @@ main(int argc, char *argv[argc + 1])
         struct PixelList const *pixels = cluster_db_cluster_row_pixels(clust);
         struct Coord centroid = pixel_list_centroid(pixels);
 
-        kamel_start_placemark(out, name_buf, description_buf, "#fire");
+        kamel_start_placemark(out, 0, description_buf, "#fire");
         kamel_point(out, centroid.lat, centroid.lon, 0.0);
         kamel_end_placemark(out);
 
