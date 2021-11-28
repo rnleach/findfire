@@ -1,12 +1,10 @@
-#include "cluster.h"
+#include "satfire.h"
 
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
 
-#include "firepoint.h"
-#include "firesatimage.h"
-#include "geo.h"
+#include "sf_private.h"
 #include "util.h"
 
 char const *out_of_memory = "memory allocation error";
@@ -14,103 +12,104 @@ char const *out_of_memory = "memory allocation error";
 /*-------------------------------------------------------------------------------------------------
                                                  Cluster
 -------------------------------------------------------------------------------------------------*/
-struct Cluster {
+struct SFCluster {
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     double power;
     /// The maximum scan angle of any point in this cluster
     double max_scan_angle;
     /// Pixels making up the cluster.
-    struct PixelList *pixels;
+    struct SFPixelList *pixels;
 };
 
-struct Cluster *
-cluster_new(void)
+struct SFCluster *
+satfire_cluster_new(void)
 {
-    struct Cluster *new = malloc(sizeof(struct Cluster));
+    struct SFCluster *new = malloc(sizeof(struct SFCluster));
     Stopif(!new, exit(EXIT_FAILURE), "%s", out_of_memory);
 
-    *new = (struct Cluster){.power = 0.0, .pixels = pixel_list_new(), .max_scan_angle = 0.0};
+    *new =
+        (struct SFCluster){.power = 0.0, .pixels = satfire_pixel_list_new(), .max_scan_angle = 0.0};
 
     return new;
 }
 
 void
-cluster_destroy(struct Cluster **cluster)
+satfire_cluster_destroy(struct SFCluster **cluster)
 {
     assert(cluster);
     assert(*cluster);
-    (*cluster)->pixels = pixel_list_destroy((*cluster)->pixels);
+    (*cluster)->pixels = satfire_pixel_list_destroy((*cluster)->pixels);
     free(*cluster);
     *cluster = 0;
 }
 
 void
-cluster_add_fire_point(struct Cluster *cluster, struct FirePoint *fire_point)
+satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire_point)
 {
     assert(cluster);
     assert(fire_point);
 
-    cluster->pixels = pixel_list_append(cluster->pixels, &fire_point->pixel);
+    cluster->pixels = satfire_pixel_list_append(cluster->pixels, &fire_point->pixel);
     cluster->power += fire_point->pixel.power;
     cluster->max_scan_angle = fmax(cluster->max_scan_angle, fire_point->pixel.scan_angle);
 }
 
-struct Cluster *
-cluster_copy(struct Cluster const *cluster)
+struct SFCluster *
+satfire_cluster_copy(struct SFCluster const *cluster)
 {
     assert(cluster);
 
-    struct Cluster *copy = malloc(sizeof(struct Cluster));
+    struct SFCluster *copy = malloc(sizeof(struct SFCluster));
     Stopif(!copy, exit(EXIT_FAILURE), "%s", out_of_memory);
 
-    *copy = (struct Cluster){.power = cluster->power,
-                             .pixels = pixel_list_copy(cluster->pixels),
-                             .max_scan_angle = cluster->max_scan_angle};
+    *copy = (struct SFCluster){.power = cluster->power,
+                               .pixels = satfire_pixel_list_copy(cluster->pixels),
+                               .max_scan_angle = cluster->max_scan_angle};
 
     return copy;
 }
 
 double
-cluster_total_power(struct Cluster const *cluster)
+satfire_cluster_total_power(struct SFCluster const *cluster)
 {
     assert(cluster);
     return cluster->power;
 }
 
 double
-cluster_max_scan_angle(struct Cluster const *cluster)
+satfire_cluster_max_scan_angle(struct SFCluster const *cluster)
 {
     assert(cluster);
     return cluster->max_scan_angle;
 }
 
 unsigned int
-cluster_pixel_count(struct Cluster const *cluster)
+satfire_cluster_pixel_count(struct SFCluster const *cluster)
 {
     assert(cluster);
 
     return cluster->pixels->len;
 }
 
-const struct PixelList *
-cluster_pixels(struct Cluster const *cluster)
+const struct SFPixelList *
+satfire_cluster_pixels(struct SFCluster const *cluster)
 {
     assert(cluster);
     return cluster->pixels;
 }
 
-struct Coord
-cluster_centroid(struct Cluster const *cluster)
+struct SFCoord
+satfire_cluster_centroid(struct SFCluster const *cluster)
 {
     assert(cluster);
-    return pixel_list_centroid(cluster->pixels);
+    return satfire_pixel_list_centroid(cluster->pixels);
 }
 
 int
-cluster_descending_power_compare(const void *ap, const void *bp)
+satfire_cluster_descending_power_compare(const void *ap, const void *bp)
 {
-    struct Cluster const *a = ap;
-    struct Cluster const *b = bp;
+    struct SFCluster const *a = ap;
+    struct SFCluster const *b = bp;
 
     if (a->power > b->power)
         return -1;
@@ -121,18 +120,18 @@ cluster_descending_power_compare(const void *ap, const void *bp)
 /*-------------------------------------------------------------------------------------------------
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/
-struct ClusterList {
-    enum Sector sector;
-    enum Satellite satellite;
+struct SFClusterList {
+    enum SFSector sector;
+    enum SFSatellite satellite;
     time_t start;     /**< Start time of the scan. */
     time_t end;       /**< End time of the scan*/
-    GArray *clusters; /**< List of struct Cluster objects associated with the above metadata. */
+    GArray *clusters; /**< List of struct SFCluster objects associated with the above metadata. */
     char *err_msg;    /**< Error message. */
     bool error;       /**< Error flag. False indicates no error. */
 };
 
 void
-cluster_list_destroy(struct ClusterList **list)
+satfire_cluster_list_destroy(struct SFClusterList **list)
 {
     assert(list);
     assert(*list);
@@ -150,50 +149,50 @@ cluster_list_destroy(struct ClusterList **list)
     *list = 0;
 }
 
-enum Sector
-cluster_list_sector(struct ClusterList *list)
+enum SFSector
+satfire_cluster_list_sector(struct SFClusterList *list)
 {
     assert(list);
     return list->sector;
 }
 
-enum Satellite
-cluster_list_satellite(struct ClusterList *list)
+enum SFSatellite
+satfire_cluster_list_satellite(struct SFClusterList *list)
 {
     assert(list);
     return list->satellite;
 }
 
 time_t
-cluster_list_scan_start(struct ClusterList *list)
+satfire_cluster_list_scan_start(struct SFClusterList *list)
 {
     assert(list);
     return list->start;
 }
 
 time_t
-cluster_list_scan_end(struct ClusterList *list)
+satfire_cluster_list_scan_end(struct SFClusterList *list)
 {
     assert(list);
     return list->end;
 }
 
 bool
-cluster_list_error(struct ClusterList *list)
+satfire_cluster_list_error(struct SFClusterList *list)
 {
     assert(list);
     return list->error;
 }
 
 const char *
-cluster_list_error_msg(struct ClusterList *list)
+satfire_cluster_list_error_msg(struct SFClusterList *list)
 {
     assert(list);
     return list->err_msg;
 }
 
 GArray *
-cluster_list_clusters(struct ClusterList *list)
+satfire_cluster_list_clusters(struct SFClusterList *list)
 {
     assert(list);
 
@@ -204,19 +203,19 @@ cluster_list_clusters(struct ClusterList *list)
     return list->clusters;
 }
 
-struct ClusterList *
-cluster_list_filter_box(struct ClusterList *list, struct BoundingBox box)
+struct SFClusterList *
+satfire_cluster_list_filter_box(struct SFClusterList *list, struct SFBoundingBox box)
 {
     assert(list);
 
     GArray *clusters = list->clusters;
 
     for (unsigned int i = 0; i < clusters->len; ++i) {
-        struct Cluster *clust = g_array_index(clusters, struct Cluster *, i);
+        struct SFCluster *clust = g_array_index(clusters, struct SFCluster *, i);
 
-        struct Coord centroid = cluster_centroid(clust);
+        struct SFCoord centroid = satfire_cluster_centroid(clust);
 
-        if (!bounding_box_contains_coord(box, centroid, 0.0)) {
+        if (!satfire_bounding_box_contains_coord(box, centroid, 0.0)) {
             clusters = g_array_remove_index_fast(clusters, i);
             --i; // Decrement this so we inspect this index again since a new value is there.
         }
@@ -227,17 +226,17 @@ cluster_list_filter_box(struct ClusterList *list, struct BoundingBox box)
     return list;
 }
 
-struct ClusterList *
-cluster_list_filter_scan_angle(struct ClusterList *list, double max_scan_angle)
+struct SFClusterList *
+satfire_cluster_list_filter_scan_angle(struct SFClusterList *list, double max_scan_angle)
 {
     assert(list);
 
     GArray *clusters = list->clusters;
 
     for (unsigned int i = 0; i < clusters->len; ++i) {
-        struct Cluster *clust = g_array_index(clusters, struct Cluster *, i);
+        struct SFCluster *clust = g_array_index(clusters, struct SFCluster *, i);
 
-        double clust_max_scan_angle = cluster_max_scan_angle(clust);
+        double clust_max_scan_angle = satfire_cluster_max_scan_angle(clust);
 
         if (clust_max_scan_angle >= max_scan_angle) {
             clusters = g_array_remove_index_fast(clusters, i);
@@ -251,7 +250,7 @@ cluster_list_filter_scan_angle(struct ClusterList *list, double max_scan_angle)
 }
 
 char const *
-cluster_find_start_time(char const *fname)
+satfire_cluster_find_start_time(char const *fname)
 {
     char const *start = strstr(fname, "_s");
     if (start)
@@ -260,7 +259,7 @@ cluster_find_start_time(char const *fname)
 }
 
 char const *
-cluster_find_end_time(char const *fname)
+satfire_cluster_find_end_time(char const *fname)
 {
     char const *end = strstr(fname, "_e");
     if (end)
@@ -269,19 +268,19 @@ cluster_find_end_time(char const *fname)
 }
 
 static void
-local_cluster_destroy(void *cluster)
+local_satfire_cluster_destroy(void *cluster)
 {
-    struct Cluster **clst = cluster;
-    cluster_destroy(clst);
+    struct SFCluster **clst = cluster;
+    satfire_cluster_destroy(clst);
 }
 
 static GArray *
 clusters_from_fire_points(GArray const *points)
 {
-    GArray *clusters = g_array_sized_new(false, true, sizeof(struct Cluster *), 100);
-    g_array_set_clear_func(clusters, local_cluster_destroy);
+    GArray *clusters = g_array_sized_new(false, true, sizeof(struct SFCluster *), 100);
+    g_array_set_clear_func(clusters, local_satfire_cluster_destroy);
 
-    GArray *cluster_points = g_array_sized_new(false, true, sizeof(struct FirePoint), 20);
+    GArray *satfire_cluster_points = g_array_sized_new(false, true, sizeof(struct FirePoint), 20);
 
     for (unsigned int i = 0; i < points->len; i++) {
 
@@ -290,7 +289,7 @@ clusters_from_fire_points(GArray const *points)
         if (fp->x == 0 && fp->y == 0)
             continue;
 
-        cluster_points = g_array_append_val(cluster_points, *fp);
+        satfire_cluster_points = g_array_append_val(satfire_cluster_points, *fp);
         fp->x = 0;
         fp->y = 0;
 
@@ -299,44 +298,45 @@ clusters_from_fire_points(GArray const *points)
 
             if (candidate->x == 0 && candidate->y == 0)
                 continue;
-            for (unsigned int k = 0; k < cluster_points->len; ++k) {
+            for (unsigned int k = 0; k < satfire_cluster_points->len; ++k) {
                 struct FirePoint *a_point_in_cluster =
-                    &g_array_index(cluster_points, struct FirePoint, k);
+                    &g_array_index(satfire_cluster_points, struct FirePoint, k);
 
                 int dx = abs(a_point_in_cluster->x - candidate->x);
                 int dy = abs(a_point_in_cluster->y - candidate->y);
 
                 if (dx <= 1 && dy <= 1) {
-                    cluster_points = g_array_append_val(cluster_points, *candidate);
+                    satfire_cluster_points = g_array_append_val(satfire_cluster_points, *candidate);
                     candidate->x = 0;
                     candidate->y = 0;
                 }
             }
         }
 
-        struct Cluster *curr_clust = cluster_new();
-        struct FirePoint *curr_fire_point = &g_array_index(cluster_points, struct FirePoint, 0);
-        cluster_add_fire_point(curr_clust, curr_fire_point);
+        struct SFCluster *curr_clust = satfire_cluster_new();
+        struct FirePoint *curr_fire_point =
+            &g_array_index(satfire_cluster_points, struct FirePoint, 0);
+        satfire_cluster_add_fire_point(curr_clust, curr_fire_point);
 
-        for (unsigned int j = 1; j < cluster_points->len; ++j) {
+        for (unsigned int j = 1; j < satfire_cluster_points->len; ++j) {
 
-            curr_fire_point = &g_array_index(cluster_points, struct FirePoint, j);
-            cluster_add_fire_point(curr_clust, curr_fire_point);
+            curr_fire_point = &g_array_index(satfire_cluster_points, struct FirePoint, j);
+            satfire_cluster_add_fire_point(curr_clust, curr_fire_point);
         }
 
         clusters = g_array_append_val(clusters, curr_clust);
-        cluster_points = g_array_set_size(cluster_points, 0);
+        satfire_cluster_points = g_array_set_size(satfire_cluster_points, 0);
     }
 
-    g_array_unref(cluster_points);
+    g_array_unref(satfire_cluster_points);
 
     return clusters;
 }
 
-struct ClusterList *
-cluster_list_from_file(char const *full_path)
+struct SFClusterList *
+satfire_cluster_list_from_file(char const *full_path)
 {
-    struct ClusterList *clist = calloc(1, sizeof(struct ClusterList));
+    struct SFClusterList *clist = calloc(1, sizeof(struct SFClusterList));
     char *err_msg = 0;
     GArray *points = 0;
     GArray *clusters = 0;
@@ -344,20 +344,20 @@ cluster_list_from_file(char const *full_path)
     char const *fname = get_file_name(full_path);
 
     // Get the satellite
-    enum Satellite satellite = satfire_satellite_string_contains_satellite(fname);
+    enum SFSatellite satellite = satfire_satellite_string_contains_satellite(fname);
     err_msg = "Error parsing satellite name";
     Stopif(satellite == SATFIRE_SATELLITE_NONE, goto ERR_RETURN, "Error parsing satellite name");
     clist->satellite = satellite;
 
     // Get the sector name
-    enum Sector sector = satfire_sector_string_contains_sector(fname);
+    enum SFSector sector = satfire_sector_string_contains_sector(fname);
     err_msg = "Error parsing sector name";
     Stopif(sector == SATFIRE_SECTOR_NONE, goto ERR_RETURN, "Error parsing sector name");
     clist->sector = sector;
 
     // Get the start and end times
-    clist->start = parse_time_string(cluster_find_start_time(fname));
-    clist->end = parse_time_string(cluster_find_end_time(fname));
+    clist->start = parse_time_string(satfire_cluster_find_start_time(fname));
+    clist->end = parse_time_string(satfire_cluster_find_end_time(fname));
 
     // Get the clusters member.
     struct SatFireImage fdata = {0};
@@ -395,20 +395,20 @@ ERR_RETURN:
 }
 
 unsigned int
-cluster_list_length(struct ClusterList *list)
+satfire_cluster_list_length(struct SFClusterList *list)
 {
     assert(list);
     return list->clusters->len;
 }
 
 double
-cluster_list_total_power(struct ClusterList *list)
+satfire_cluster_list_total_power(struct SFClusterList *list)
 {
     assert(list);
 
     double sum = 0.0;
     for (unsigned int i = 0; i < list->clusters->len; i++) {
-        sum += g_array_index(list->clusters, struct Cluster *, i)->power;
+        sum += g_array_index(list->clusters, struct SFCluster *, i)->power;
     }
 
     return sum;

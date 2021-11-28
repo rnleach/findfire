@@ -2,9 +2,7 @@
 #include <libgen.h>
 #include <tgmath.h>
 
-#include "firesatimage.h"
-
-#include "firepoint.h"
+#include "sf_private.h"
 #include "util.h"
 
 #include "ogr_srs_api.h"
@@ -123,17 +121,17 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
                     scan_angle = hypot(dlat, dlon - 360.0);
                 }
 
-                struct Coord ul = {.lat = xps[0], .lon = yps[0]};
-                struct Coord ll = {.lat = xps[1], .lon = yps[1]};
-                struct Coord lr = {.lat = xps[2], .lon = yps[2]};
-                struct Coord ur = {.lat = xps[3], .lon = yps[3]};
+                struct SFCoord ul = {.lat = xps[0], .lon = yps[0]};
+                struct SFCoord ll = {.lat = xps[1], .lon = yps[1]};
+                struct SFCoord lr = {.lat = xps[2], .lon = yps[2]};
+                struct SFCoord ur = {.lat = xps[3], .lon = yps[3]};
 
-                struct SatPixel pixel = {.ul = ul,
-                                         .ll = ll,
-                                         .lr = lr,
-                                         .ur = ur,
-                                         .power = power_mw,
-                                         .scan_angle = scan_angle};
+                struct SFPixel pixel = {.ul = ul,
+                                        .ll = ll,
+                                        .lr = lr,
+                                        .ur = ur,
+                                        .power = power_mw,
+                                        .scan_angle = scan_angle};
 
                 struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel};
                 points = g_array_append_val(points, pnt);

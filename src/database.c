@@ -1,4 +1,4 @@
-#include "database.h"
+#include "satfire.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -7,7 +7,6 @@
 
 #include <sqlite3.h>
 
-#include "satellite.h"
 #include "util.h"
 
 /*-------------------------------------------------------------------------------------------------
@@ -113,7 +112,7 @@ close_database(sqlite3 **db)
  *                            Query general info about the database
  *-----------------------------------------------------------------------------------------------*/
 int
-cluster_db_initialize(char const *path)
+satfire_cluster_db_initialize(char const *path)
 {
     sqlite3 *db = 0;
 
@@ -126,16 +125,16 @@ cluster_db_initialize(char const *path)
     return rc;
 }
 
-struct ClusterDatabase {
+struct SFClusterDatabase {
     sqlite3 *ptr;
 };
 
-struct ClusterDatabase *
-cluster_db_connect(char const *path)
+struct SFClusterDatabase *
+satfire_cluster_db_connect(char const *path)
 {
     sqlite3 *handle = open_database_readonly(path);
 
-    struct ClusterDatabase *cdbh = malloc(sizeof(struct ClusterDatabase));
+    struct SFClusterDatabase *cdbh = malloc(sizeof(struct SFClusterDatabase));
     Stopif(!cdbh, goto ERR_CLEANUP, "out of memory");
     cdbh->ptr = handle;
 
@@ -148,7 +147,7 @@ ERR_CLEANUP:
 }
 
 int
-cluster_db_close(struct ClusterDatabase **db)
+satfire_cluster_db_close(struct SFClusterDatabase **db)
 {
     assert(db);
 
@@ -163,8 +162,8 @@ cluster_db_close(struct ClusterDatabase **db)
 }
 
 time_t
-cluster_db_newest_scan_start(struct ClusterDatabase *db, enum Satellite satellite,
-                             enum Sector sector)
+satfire_cluster_db_newest_scan_start(struct SFClusterDatabase *db, enum SFSatellite satellite,
+                                     enum SFSector sector)
 {
     int rc = SQLITE_OK;
     time_t newest_scan_time = 0;
@@ -202,18 +201,18 @@ CLEAN_UP:
 /*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Cluster Database
  *-----------------------------------------------------------------------------------------------*/
-struct ClusterDatabaseAdd {
+struct SFClusterDatabaseAdd {
     sqlite3 *db;
     sqlite3_stmt *add_ptr;
     sqlite3_stmt *no_fire_ptr;
 };
 
-struct ClusterDatabaseAdd *
-cluster_db_prepare_to_add(char const *path_to_db)
+struct SFClusterDatabaseAdd *
+satfire_cluster_db_prepare_to_add(char const *path_to_db)
 {
     assert(path_to_db);
 
-    struct ClusterDatabaseAdd *add = 0;
+    struct SFClusterDatabaseAdd *add = 0;
     sqlite3 *db = 0;
     sqlite3_stmt *add_stmt = 0;
     sqlite3_stmt *no_fire_stmt = 0;
@@ -237,7 +236,7 @@ cluster_db_prepare_to_add(char const *path_to_db)
     rc = sqlite3_prepare_v2(db, no_fire_query, -1, &no_fire_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing statement: %s", sqlite3_errstr(rc));
 
-    add = malloc(sizeof(struct ClusterDatabaseAdd));
+    add = malloc(sizeof(struct SFClusterDatabaseAdd));
     Stopif(!add, goto ERR_CLEANUP, "out of memory");
 
     add->db = db;
@@ -256,7 +255,7 @@ ERR_CLEANUP:
 }
 
 int
-cluster_db_finalize_add(struct ClusterDatabaseAdd **stmt)
+satfire_cluster_db_finalize_add(struct SFClusterDatabaseAdd **stmt)
 {
     static_assert(SQLITE_OK == 0, "SQLITE_OK must equal 0 or we'll have problems here.");
 
@@ -282,7 +281,7 @@ cluster_db_finalize_add(struct ClusterDatabaseAdd **stmt)
 }
 
 static int
-cluster_db_add_cluster(struct ClusterDatabaseAdd *stmt, struct ClusterList *clist)
+satfire_cluster_db_add_cluster(struct SFClusterDatabaseAdd *stmt, struct SFClusterList *clist)
 {
     assert(stmt && stmt->add_ptr && stmt->db && clist);
 
@@ -293,18 +292,18 @@ cluster_db_add_cluster(struct ClusterDatabaseAdd *stmt, struct ClusterList *clis
     rc = sqlite3_exec(stmt->db, begin_trans, 0, 0, &err_message);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error starting transaction: %s", err_message);
 
-    enum Satellite satellite = cluster_list_satellite(clist);
-    enum Sector sector = cluster_list_sector(clist);
-    time_t scan_start = cluster_list_scan_start(clist);
-    time_t scan_end = cluster_list_scan_end(clist);
+    enum SFSatellite satellite = satfire_cluster_list_satellite(clist);
+    enum SFSector sector = satfire_cluster_list_sector(clist);
+    time_t scan_start = satfire_cluster_list_scan_start(clist);
+    time_t scan_end = satfire_cluster_list_scan_end(clist);
 
-    GArray *clusters = cluster_list_clusters(clist);
+    GArray *clusters = satfire_cluster_list_clusters(clist);
 
     unsigned char buffer[1024] = {0};
 
     for (unsigned int i = 0; i < clusters->len; ++i) {
 
-        struct Cluster *cluster = g_array_index(clusters, struct Cluster *, i);
+        struct SFCluster *cluster = g_array_index(clusters, struct SFCluster *, i);
 
         rc = sqlite3_bind_text(stmt->add_ptr, 1, satfire_satellite_name(satellite), -1, 0);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s",
@@ -321,7 +320,7 @@ cluster_db_add_cluster(struct ClusterDatabaseAdd *stmt, struct ClusterList *clis
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding start time: %s",
                sqlite3_errstr(rc));
 
-        struct Coord centroid = cluster_centroid(cluster);
+        struct SFCoord centroid = satfire_cluster_centroid(cluster);
 
         rc = sqlite3_bind_double(stmt->add_ptr, 5, centroid.lat);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding lat: %s", sqlite3_errstr(rc));
@@ -329,24 +328,25 @@ cluster_db_add_cluster(struct ClusterDatabaseAdd *stmt, struct ClusterList *clis
         rc = sqlite3_bind_double(stmt->add_ptr, 6, centroid.lon);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding lon: %s", sqlite3_errstr(rc));
 
-        rc = sqlite3_bind_double(stmt->add_ptr, 7, cluster_total_power(cluster));
+        rc = sqlite3_bind_double(stmt->add_ptr, 7, satfire_cluster_total_power(cluster));
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding power: %s", sqlite3_errstr(rc));
 
-        rc = sqlite3_bind_double(stmt->add_ptr, 8, cluster_max_scan_angle(cluster));
+        rc = sqlite3_bind_double(stmt->add_ptr, 8, satfire_cluster_max_scan_angle(cluster));
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding max scan angle: %s",
                sqlite3_errstr(rc));
 
         unsigned char *buf_ptr = buffer;
         void (*transient_free)(void *) = SQLITE_TRANSIENT;
-        size_t buff_size = pixel_list_binary_serialize_buffer_size(cluster_pixels(cluster));
+        size_t buff_size =
+            satfire_pixel_list_binary_serialize_buffer_size(satfire_cluster_pixels(cluster));
         if (buff_size > sizeof(buffer)) {
             transient_free = free; // free function from stdlib.h
             buf_ptr = calloc(buff_size, sizeof(unsigned char));
             Stopif(!buf_ptr, exit(EXIT_FAILURE), "calloc failure: out of memory");
         }
 
-        size_t num_bytes_serialized =
-            pixel_list_binary_serialize(cluster_pixels(cluster), buff_size, buf_ptr);
+        size_t num_bytes_serialized = satfire_pixel_list_binary_serialize(
+            satfire_cluster_pixels(cluster), buff_size, buf_ptr);
         Stopif(num_bytes_serialized != buff_size, exit(EXIT_FAILURE),
                "Buffer size error serializing PixelList");
         rc = sqlite3_bind_blob(stmt->add_ptr, 9, buf_ptr, buff_size, transient_free);
@@ -378,17 +378,17 @@ ERR_CLEANUP:
 }
 
 static int
-cluster_db_add_no_fire(struct ClusterDatabaseAdd *stmt, struct ClusterList *clist)
+satfire_cluster_db_add_no_fire(struct SFClusterDatabaseAdd *stmt, struct SFClusterList *clist)
 {
     assert(stmt && stmt->no_fire_ptr && clist);
 
     int rc = SQLITE_OK;
     char *err_message = 0;
 
-    enum Satellite satellite = cluster_list_satellite(clist);
-    enum Sector sector = cluster_list_sector(clist);
-    time_t scan_start = cluster_list_scan_start(clist);
-    time_t scan_end = cluster_list_scan_end(clist);
+    enum SFSatellite satellite = satfire_cluster_list_satellite(clist);
+    enum SFSector sector = satfire_cluster_list_sector(clist);
+    time_t scan_start = satfire_cluster_list_scan_start(clist);
+    time_t scan_end = satfire_cluster_list_scan_end(clist);
 
     rc = sqlite3_bind_text(stmt->no_fire_ptr, 1, satfire_satellite_name(satellite), -1, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding satellite: %s", sqlite3_errstr(rc));
@@ -419,30 +419,30 @@ ERR_CLEANUP:
 }
 
 int
-cluster_db_add(struct ClusterDatabaseAdd *stmt, struct ClusterList *clist)
+satfire_cluster_db_add(struct SFClusterDatabaseAdd *stmt, struct SFClusterList *clist)
 {
-    GArray *clusters = cluster_list_clusters(clist);
+    GArray *clusters = satfire_cluster_list_clusters(clist);
     if (clusters->len > 0) {
-        return cluster_db_add_cluster(stmt, clist);
+        return satfire_cluster_db_add_cluster(stmt, clist);
     } else {
-        return cluster_db_add_no_fire(stmt, clist);
+        return satfire_cluster_db_add_no_fire(stmt, clist);
     }
 }
 
 /*-------------------------------------------------------------------------------------------------
  *                 Query if data from a file is already in the Cluster Database
  *-----------------------------------------------------------------------------------------------*/
-struct ClusterDatabaseQueryPresent {
+struct SFClusterDatabaseQueryPresent {
     sqlite3 *db;
     sqlite3_stmt *count_stmt;
     sqlite3_stmt *no_fire_stmt;
 };
 
-struct ClusterDatabaseQueryPresent *
-cluster_database_prepare_to_query_present(char const *path_to_db)
+struct SFClusterDatabaseQueryPresent *
+satfire_cluster_db_prepare_to_query_present(char const *path_to_db)
 {
     int rc = SQLITE_OK;
-    struct ClusterDatabaseQueryPresent *query = 0;
+    struct SFClusterDatabaseQueryPresent *query = 0;
     sqlite3 *db = 0;
     sqlite3_stmt *stmt_clusters = 0;
     sqlite3_stmt *stmt_no_fire = 0;
@@ -466,7 +466,7 @@ cluster_database_prepare_to_query_present(char const *path_to_db)
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing count rows statement: %s",
                sqlite3_errstr(rc));
 
-        query = malloc(sizeof(struct ClusterDatabaseQueryPresent));
+        query = malloc(sizeof(struct SFClusterDatabaseQueryPresent));
         Stopif(!query, goto ERR_CLEANUP, "out of memory");
 
         query->db = db;
@@ -487,7 +487,7 @@ ERR_CLEANUP:
 }
 
 int
-cluster_db_finalize_query_present(struct ClusterDatabaseQueryPresent **stmt)
+satfire_cluster_db_finalize_query_present(struct SFClusterDatabaseQueryPresent **stmt)
 {
     static_assert(SQLITE_OK == 0, "SQLITE_OK must equal 0 or we'll have problems here.");
 
@@ -514,8 +514,8 @@ cluster_db_finalize_query_present(struct ClusterDatabaseQueryPresent **stmt)
 }
 
 int
-cluster_db_present(struct ClusterDatabaseQueryPresent *stmt, enum Satellite satellite,
-                   enum Sector sector, time_t start, time_t end)
+satfire_cluster_db_present(struct SFClusterDatabaseQueryPresent *stmt, enum SFSatellite satellite,
+                           enum SFSector sector, time_t start, time_t end)
 {
     int rc = SQLITE_OK;
     int num_rows = -2; // indicates an error return value.
@@ -585,30 +585,31 @@ ERR_CLEANUP:
 /*-------------------------------------------------------------------------------------------------
  *                            Query rows from the Cluster Database
  *-----------------------------------------------------------------------------------------------*/
-struct ClusterDatabaseQueryRows {
+struct SFClusterDatabaseQueryRows {
     sqlite3 *db;
     sqlite3_stmt *row_stmt;
 };
 
-struct ClusterRow {
+struct SFClusterRow {
     time_t start;
     time_t end;
     double power;
     double scan_angle;
-    enum Sector sector;
-    enum Satellite sat;
-    struct PixelList *pixels;
+    enum SFSector sector;
+    enum SFSatellite sat;
+    struct SFPixelList *pixels;
 };
 
-struct ClusterDatabaseQueryRows *
-cluster_db_query_rows(char const *path_to_db, enum Satellite const sat, enum Sector const sector,
-                      time_t const start, time_t const end, struct BoundingBox const area)
+struct SFClusterDatabaseQueryRows *
+satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat,
+                              enum SFSector const sector, time_t const start, time_t const end,
+                              struct SFBoundingBox const area)
 {
     assert(path_to_db);
 
     sqlite3 *db = 0;
     sqlite3_stmt *row_stmt = 0;
-    struct ClusterDatabaseQueryRows *query = 0;
+    struct SFClusterDatabaseQueryRows *query = 0;
 
     db = open_database_readonly(path_to_db);
     Stopif(!db, goto ERR_CLEANUP, "Unable to open database: %s", path_to_db);
@@ -652,7 +653,7 @@ cluster_db_query_rows(char const *path_to_db, enum Satellite const sat, enum Sec
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing query:\n%s\n\n%s", query_txt,
            sqlite3_errstr(rc));
 
-    query = malloc(sizeof(struct ClusterDatabaseQueryRows));
+    query = malloc(sizeof(struct SFClusterDatabaseQueryRows));
     Stopif(!query, exit(EXIT_FAILURE), "Out of memory.");
 
     query->db = db;
@@ -669,7 +670,7 @@ ERR_CLEANUP:
 }
 
 int
-cluster_db_query_rows_finalize(struct ClusterDatabaseQueryRows **query)
+satfire_cluster_db_query_rows_finalize(struct SFClusterDatabaseQueryRows **query)
 {
     static_assert(SQLITE_OK == 0, "SQLITE_OK must equal 0 or we'll have problems here.");
     assert(query);
@@ -684,8 +685,9 @@ cluster_db_query_rows_finalize(struct ClusterDatabaseQueryRows **query)
     return rc;
 }
 
-struct ClusterRow *
-cluster_db_query_rows_next(struct ClusterDatabaseQueryRows *query, struct ClusterRow *old_row)
+struct SFClusterRow *
+satfire_cluster_db_query_rows_next(struct SFClusterDatabaseQueryRows *query,
+                                   struct SFClusterRow *old_row)
 {
     assert(query);
 
@@ -694,15 +696,15 @@ cluster_db_query_rows_next(struct ClusterDatabaseQueryRows *query, struct Cluste
     Stopif(rc != SQLITE_ROW && rc != SQLITE_DONE, rc = SQLITE_DONE, "Error stepping query row: %s",
            sqlite3_errstr(rc));
 
-    struct ClusterRow *row = old_row;
+    struct SFClusterRow *row = old_row;
     if (rc == SQLITE_DONE) {
-        cluster_db_cluster_row_finalize(row);
+        satfire_cluster_db_satfire_cluster_row_finalize(row);
         row = 0;
         return row;
     }
 
     if (!row) {
-        row = calloc(1, sizeof(struct ClusterRow));
+        row = calloc(1, sizeof(struct SFClusterRow));
         Stopif(!row, exit(EXIT_FAILURE), "out of memory");
     }
 
@@ -714,66 +716,66 @@ cluster_db_query_rows_next(struct ClusterDatabaseQueryRows *query, struct Cluste
     row->end = sqlite3_column_int64(query->row_stmt, 3);
     row->power = sqlite3_column_double(query->row_stmt, 4);
     row->scan_angle = sqlite3_column_double(query->row_stmt, 5);
-    row->pixels = pixel_list_destroy(row->pixels);
-    row->pixels = pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 6));
+    row->pixels = satfire_pixel_list_destroy(row->pixels);
+    row->pixels = satfire_pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 6));
 
     return row;
 }
 
 time_t
-cluster_db_cluster_row_start(struct ClusterRow const *row)
+satfire_cluster_db_satfire_cluster_row_start(struct SFClusterRow const *row)
 {
     assert(row);
     return row->start;
 }
 
 time_t
-cluster_db_cluster_row_end(struct ClusterRow const *row)
+satfire_cluster_db_satfire_cluster_row_end(struct SFClusterRow const *row)
 {
     assert(row);
     return row->end;
 }
 
 double
-cluster_db_cluster_row_power(struct ClusterRow const *row)
+satfire_cluster_db_satfire_cluster_row_power(struct SFClusterRow const *row)
 {
     assert(row);
     return row->power;
 }
 
 double
-cluster_db_cluster_row_scan_angle(struct ClusterRow const *row)
+satfire_cluster_db_satfire_cluster_row_scan_angle(struct SFClusterRow const *row)
 {
     assert(row);
     return row->scan_angle;
 }
 
-enum Satellite
-cluster_db_cluster_row_satellite(struct ClusterRow const *row)
+enum SFSatellite
+satfire_cluster_db_satfire_cluster_row_satellite(struct SFClusterRow const *row)
 {
     assert(row);
     return row->sat;
 }
 
-enum Sector
-cluster_db_cluster_row_sector(struct ClusterRow const *row)
+enum SFSector
+satfire_cluster_db_satfire_cluster_row_sector(struct SFClusterRow const *row)
 {
     assert(row);
     return row->sector;
 }
 
-const struct PixelList *
-cluster_db_cluster_row_pixels(struct ClusterRow const *row)
+const struct SFPixelList *
+satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row)
 {
     assert(row);
     return row->pixels;
 }
 
 void
-cluster_db_cluster_row_finalize(struct ClusterRow *row)
+satfire_cluster_db_satfire_cluster_row_finalize(struct SFClusterRow *row)
 {
     if (row) {
-        row->pixels = pixel_list_destroy(row->pixels);
+        row->pixels = satfire_pixel_list_destroy(row->pixels);
         free(row);
     }
 }

@@ -1,4 +1,4 @@
-#include "satellite.h"
+#include "satfire.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -6,7 +6,7 @@
 #include <time.h>
 
 char const *
-satfire_satellite_name(enum Satellite const sat)
+satfire_satellite_name(enum SFSatellite const sat)
 {
     assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17 ||
            sat == SATFIRE_SATELLITE_NONE);
@@ -23,7 +23,7 @@ satfire_satellite_name(enum Satellite const sat)
     }
 }
 
-enum Satellite
+enum SFSatellite
 satfire_satellite_string_contains_satellite(char const *str)
 {
     assert(str);
@@ -40,7 +40,7 @@ satfire_satellite_string_contains_satellite(char const *str)
 }
 
 time_t
-satfire_satellite_operational(enum Satellite const sat)
+satfire_satellite_operational(enum SFSatellite const sat)
 {
     assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17);
 
@@ -73,7 +73,7 @@ satfire_satellite_operational(enum Satellite const sat)
 }
 
 char const *
-satfire_sector_name(enum Sector const sector)
+satfire_sector_name(enum SFSector const sector)
 {
     assert(sector == SATFIRE_SECTOR_FULL || sector == SATFIRE_SECTOR_CONUS ||
            sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2 ||
@@ -95,7 +95,7 @@ satfire_sector_name(enum Sector const sector)
     }
 }
 
-enum Sector
+enum SFSector
 satfire_sector_string_contains_sector(char const *str)
 {
     assert(str);

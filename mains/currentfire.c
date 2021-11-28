@@ -14,10 +14,7 @@
 #include <glib.h>
 
 // My headers
-#include "cluster.h"
-#include "database.h"
-#include "geo.h"
-#include "satellite.h"
+#include "satfire.h"
 #include "util.h"
 
 // Source Libraries
@@ -29,8 +26,8 @@
 static struct CurrentFireOptions {
     char *database_file;
     char *kml_file;
-    enum Satellite sat;
-    enum Sector sector;
+    enum SFSatellite sat;
+    enum SFSector sector;
     bool verbose;
 
 } options = {.sat = SATFIRE_SATELLITE_G17,
@@ -44,7 +41,7 @@ parse_satellite(const char *arg_name, const char *arg_val, void *user_data, GErr
 {
     assert(!user_data);
 
-    enum Satellite sat = satfire_satellite_string_contains_satellite(arg_val);
+    enum SFSatellite sat = satfire_satellite_string_contains_satellite(arg_val);
     Stopif(sat == SATFIRE_SATELLITE_NONE, goto ERR_RETURN, "Invalid satellite");
 
     options.sat = sat;
@@ -65,7 +62,7 @@ parse_sector(const char *arg_name, const char *arg_val, void *user_data, GError 
 {
     assert(!user_data);
 
-    enum Sector sector = satfire_sector_string_contains_sector(arg_val);
+    enum SFSector sector = satfire_sector_string_contains_sector(arg_val);
     Stopif(sector == SATFIRE_SECTOR_NONE, goto ERR_RETURN, "Invalid sector");
 
     options.sector = sector;
@@ -181,14 +178,16 @@ program_finalization()
  *                                      Comparing Clusters
  *-----------------------------------------------------------------------------------------------*/
 static int
-cluster_row_descending_power_sort_order_compare(void const *a, void const *b)
+satfire_cluster_row_descending_power_sort_order_compare(void const *a, void const *b)
 {
-    struct ClusterRow const *rowa = a;
-    struct ClusterRow const *rowb = b;
+    struct SFClusterRow const *rowa = a;
+    struct SFClusterRow const *rowb = b;
 
-    if (cluster_db_cluster_row_power(rowa) > cluster_db_cluster_row_power(rowb)) {
+    if (satfire_cluster_db_satfire_cluster_row_power(rowa) >
+        satfire_cluster_db_satfire_cluster_row_power(rowb)) {
         return -1;
-    } else if (cluster_db_cluster_row_power(rowa) < cluster_db_cluster_row_power(rowb)) {
+    } else if (satfire_cluster_db_satfire_cluster_row_power(rowa) <
+               satfire_cluster_db_satfire_cluster_row_power(rowb)) {
         return 1;
     } else {
         return 0;
@@ -200,10 +199,10 @@ cluster_row_descending_power_sort_order_compare(void const *a, void const *b)
  *-----------------------------------------------------------------------------------------------*/
 
 static void
-cluster_row_destructor_for_glib(void *p)
+satfire_cluster_row_destructor_for_glib(void *p)
 {
-    struct ClusterRow *row = p;
-    cluster_db_cluster_row_finalize(row);
+    struct SFClusterRow *row = p;
+    satfire_cluster_db_satfire_cluster_row_finalize(row);
 }
 
 int
@@ -214,10 +213,10 @@ main(int argc, char *argv[argc + 1])
     //
     // Get the time of the most recent scan matching the options
     //
-    ClusterDatabaseH db = cluster_db_connect(options.database_file);
+    SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
     Stopif(!db, exit(EXIT_FAILURE), "Unable to connect to database %s.", options.database_file);
-    time_t latest = cluster_db_newest_scan_start(db, options.sat, options.sector);
-    cluster_db_close(&db);
+    time_t latest = satfire_cluster_db_newest_scan_start(db, options.sat, options.sector);
+    satfire_cluster_db_close(&db);
     Stopif(latest == 0, exit(EXIT_FAILURE),
            "No data in the database for satellite %s and sector %s.",
            satfire_satellite_name(options.sat), satfire_sector_name(options.sector));
@@ -227,20 +226,20 @@ main(int argc, char *argv[argc + 1])
     //
 
     // Default to cover the globe
-    struct Coord ll = {.lat = -90.0, .lon = -180.0};
-    struct Coord ur = {.lat = 90.0, .lon = 180.0};
-    struct BoundingBox region = {.ll = ll, .ur = ur};
+    struct SFCoord ll = {.lat = -90.0, .lon = -180.0};
+    struct SFCoord ur = {.lat = 90.0, .lon = 180.0};
+    struct SFBoundingBox region = {.ll = ll, .ur = ur};
 
-    ClusterDatabaseQueryRowsH rows = cluster_db_query_rows(
+    SFClusterDatabaseQueryRowsH rows = satfire_cluster_db_query_rows(
         options.database_file, options.sat, options.sector, latest, latest + 3600, region);
-    struct ClusterRow *row = 0;
+    struct SFClusterRow *row = 0;
     GList *sorted_rows = 0;
-    while ((row = cluster_db_query_rows_next(rows, 0))) {
-        sorted_rows =
-            g_list_insert_sorted(sorted_rows, row, cluster_row_descending_power_sort_order_compare);
+    while ((row = satfire_cluster_db_query_rows_next(rows, 0))) {
+        sorted_rows = g_list_insert_sorted(sorted_rows, row,
+                                           satfire_cluster_row_descending_power_sort_order_compare);
     }
 
-    cluster_db_query_rows_finalize(&rows);
+    satfire_cluster_db_query_rows_finalize(&rows);
 
     //
     // Output the list
@@ -258,35 +257,35 @@ main(int argc, char *argv[argc + 1])
 
     for (GList *item = sorted_rows; item != 0; item = item->next) {
 
-        struct ClusterRow *clust = item->data;
+        struct SFClusterRow *clust = item->data;
 
         char name_buf[16] = {0};
         char description_buf[128] = {0};
 
-        int num_printed =
-            snprintf(name_buf, sizeof(name_buf), "%.0lfMW", cluster_db_cluster_row_power(clust));
+        int num_printed = snprintf(name_buf, sizeof(name_buf), "%.0lfMW",
+                                   satfire_cluster_db_satfire_cluster_row_power(clust));
         if (num_printed >= sizeof(name_buf)) {
             name_buf[sizeof(name_buf) - 1] = '\0';
         }
 
-        num_printed =
-            snprintf(description_buf, sizeof(description_buf),
-                     "<h3>Cluster Power: %.0lfMW</h3><h3>Max Scan Angle: %.0lf&deg;</h3>",
-                     cluster_db_cluster_row_power(clust), cluster_db_cluster_row_scan_angle(clust));
+        num_printed = snprintf(description_buf, sizeof(description_buf),
+                               "<h3>Cluster Power: %.0lfMW</h3><h3>Max Scan Angle: %.0lf&deg;</h3>",
+                               satfire_cluster_db_satfire_cluster_row_power(clust),
+                               satfire_cluster_db_satfire_cluster_row_scan_angle(clust));
         if (num_printed >= sizeof(description_buf)) {
             description_buf[sizeof(description_buf) - 1] = '\0';
         }
 
         kamel_start_folder(out, name_buf, 0, false);
 
-        struct PixelList const *pixels = cluster_db_cluster_row_pixels(clust);
-        struct Coord centroid = pixel_list_centroid(pixels);
+        struct SFPixelList const *pixels = satfire_cluster_db_satfire_cluster_row_pixels(clust);
+        struct SFCoord centroid = satfire_pixel_list_centroid(pixels);
 
         kamel_start_placemark(out, 0, description_buf, "#fire");
         kamel_point(out, centroid.lat, centroid.lon, 0.0);
         kamel_end_placemark(out);
 
-        pixel_list_kml_write(out, pixels);
+        satfire_pixel_list_kml_write(out, pixels);
 
         kamel_end_folder(out);
     }
@@ -296,7 +295,7 @@ main(int argc, char *argv[argc + 1])
 
     fclose(out);
 
-    g_list_free_full(g_steal_pointer(&sorted_rows), cluster_row_destructor_for_glib);
+    g_list_free_full(g_steal_pointer(&sorted_rows), satfire_cluster_row_destructor_for_glib);
 
     program_finalization();
 

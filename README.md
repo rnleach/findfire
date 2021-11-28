@@ -57,6 +57,7 @@ So far I'm only using the following from GLIB:
  - The test module.
  - Command line option parser.
  - GArray
+ - GList
 
 
 ### GDAL (3.2.2 or later used in development)
@@ -70,3 +71,9 @@ So far I'm only using the following from GLIB:
  more central storage that is accessable by multiple programs at a time, but for the time being 
  keeping the data on the same computer as the program will probably perform quicker and just be
  simpler.
+
+### courier
+ My own personal source library for a threadsafe queue for sending data between threads.
+
+### kamel
+ My own personal source library for writing KML files.

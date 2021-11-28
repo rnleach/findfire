@@ -1,4 +1,3 @@
-#include "geo.h"
 #include "util.h"
 
 #include <assert.h>
@@ -8,29 +7,31 @@
 #include <string.h>
 #include <tgmath.h>
 
+#include "satfire.h"
+
 #include "kamel.h"
 
 /*-------------------------------------------------------------------------------------------------
  *                                    Helper types and functions
  *-----------------------------------------------------------------------------------------------*/
 struct Line {
-    struct Coord start;
-    struct Coord end;
+    struct SFCoord start;
+    struct SFCoord end;
 };
 
 struct IntersectResult {
-    struct Coord intersection;
+    struct SFCoord intersection;
     char const *msg;
     bool does_intersect;
     bool intersect_is_endpoints;
 };
 
 static bool
-line_coord_is_close(struct Line const line, struct Coord const coord, double eps)
+line_coord_is_close(struct Line const line, struct SFCoord const coord, double eps)
 {
-    struct Coord p0 = coord;
-    struct Coord p1 = line.start;
-    struct Coord p2 = line.end;
+    struct SFCoord p0 = coord;
+    struct SFCoord p1 = line.start;
+    struct SFCoord p2 = line.end;
     double eps2 = eps * eps;
 
     double num = (p2.lon - p1.lon) * (p1.lat - p0.lat) - (p1.lon - p0.lon) * (p2.lat - p1.lat);
@@ -42,7 +43,7 @@ line_coord_is_close(struct Line const line, struct Coord const coord, double eps
 static struct IntersectResult
 lines_intersection(struct Line l1, struct Line l2, double eps)
 {
-    struct IntersectResult result = {.intersection = (struct Coord){.lat = NAN, .lon = NAN},
+    struct IntersectResult result = {.intersection = (struct SFCoord){.lat = NAN, .lon = NAN},
                                      .does_intersect = false,
                                      .intersect_is_endpoints = false,
                                      .msg = "nothing to report"};
@@ -97,8 +98,8 @@ lines_intersection(struct Line l1, struct Line l2, double eps)
         y0 = m1 * (x0 - x1) + y1;
     }
 
-    result.intersection = (struct Coord){.lat = y0, .lon = x0};
-    struct Coord intersect = result.intersection; // short-hand
+    result.intersection = (struct SFCoord){.lat = y0, .lon = x0};
+    struct SFCoord intersect = result.intersection; // short-hand
 
     if (y0 - fmax(l1.start.lat, l1.end.lat) > eps || fmin(l1.start.lat, l1.end.lat) - y0 > eps ||
         x0 - fmax(l1.start.lon, l1.end.lon) > eps || fmin(l1.start.lon, l1.end.lon) - x0 > eps) {
@@ -117,11 +118,11 @@ lines_intersection(struct Line l1, struct Line l2, double eps)
     } else {
         result.does_intersect = true;
 
-        bool is_l1_endpoint =
-            coord_are_close(intersect, l1.start, eps) || coord_are_close(intersect, l1.end, eps);
+        bool is_l1_endpoint = satfire_coord_are_close(intersect, l1.start, eps) ||
+                              satfire_coord_are_close(intersect, l1.end, eps);
 
-        bool is_l2_endpoint =
-            coord_are_close(intersect, l2.start, eps) || coord_are_close(intersect, l2.end, eps);
+        bool is_l2_endpoint = satfire_coord_are_close(intersect, l2.start, eps) ||
+                              satfire_coord_are_close(intersect, l2.end, eps);
 
         if (is_l1_endpoint && is_l2_endpoint) {
             result.intersect_is_endpoints = true;
@@ -131,20 +132,21 @@ lines_intersection(struct Line l1, struct Line l2, double eps)
     return result;
 }
 
-static struct Coord
-triangle_centroid(struct Coord v1, struct Coord v2, struct Coord v3)
+static struct SFCoord
+triangle_centroid(struct SFCoord v1, struct SFCoord v2, struct SFCoord v3)
 {
     double avg_lat = (v1.lat + v2.lat + v3.lat) / 3.0;
     double avg_lon = (v1.lon + v2.lon + v3.lon) / 3.0;
 
-    return (struct Coord){.lat = avg_lat, .lon = avg_lon};
+    return (struct SFCoord){.lat = avg_lat, .lon = avg_lon};
 }
 
 /*-------------------------------------------------------------------------------------------------
  *                                       BoundingBox
  *-----------------------------------------------------------------------------------------------*/
 bool
-bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coord, double eps)
+satfire_bounding_box_contains_coord(struct SFBoundingBox const box, struct SFCoord const coord,
+                                    double eps)
 {
     bool lon_in_range = (coord.lon - box.ur.lon) < eps && (coord.lon - box.ll.lon) > -eps;
     bool lat_in_range = (coord.lat - box.ur.lat) < eps && (coord.lat - box.ll.lat) > -eps;
@@ -153,22 +155,23 @@ bounding_box_contains_coord(struct BoundingBox const box, struct Coord const coo
 }
 
 static bool
-bounding_boxes_overlap(struct BoundingBox const left, struct BoundingBox const right, double eps)
+bounding_boxes_overlap(struct SFBoundingBox const left, struct SFBoundingBox const right,
+                       double eps)
 {
-    struct Coord right_coords[4] = {right.ll, right.ur,
-                                    (struct Coord){.lat = right.ll.lat, .lon = right.ur.lon},
-                                    (struct Coord){.lat = right.ur.lat, .lon = right.ll.lon}};
+    struct SFCoord right_coords[4] = {right.ll, right.ur,
+                                      (struct SFCoord){.lat = right.ll.lat, .lon = right.ur.lon},
+                                      (struct SFCoord){.lat = right.ur.lat, .lon = right.ll.lon}};
 
-    struct Coord left_coords[4] = {left.ll, left.ur,
-                                   (struct Coord){.lat = left.ll.lat, .lon = left.ur.lon},
-                                   (struct Coord){.lat = left.ur.lat, .lon = left.ll.lon}};
+    struct SFCoord left_coords[4] = {left.ll, left.ur,
+                                     (struct SFCoord){.lat = left.ll.lat, .lon = left.ur.lon},
+                                     (struct SFCoord){.lat = left.ur.lat, .lon = left.ll.lon}};
 
     for (unsigned int i = 0; i < 4; ++i) {
-        if (bounding_box_contains_coord(left, right_coords[i], eps)) {
+        if (satfire_bounding_box_contains_coord(left, right_coords[i], eps)) {
             return true;
         }
 
-        if (bounding_box_contains_coord(right, left_coords[i], eps)) {
+        if (satfire_bounding_box_contains_coord(right, left_coords[i], eps)) {
             return true;
         }
     }
@@ -179,7 +182,7 @@ bounding_boxes_overlap(struct BoundingBox const left, struct BoundingBox const r
  *                                         Coordinates
  *-----------------------------------------------------------------------------------------------*/
 bool
-coord_are_close(struct Coord left, struct Coord right, double eps)
+satfire_coord_are_close(struct SFCoord left, struct SFCoord right, double eps)
 {
     double lat_diff = left.lat - right.lat;
     double lon_diff = left.lon - right.lon;
@@ -192,32 +195,32 @@ coord_are_close(struct Coord left, struct Coord right, double eps)
  *                                         SatPixels
  *-----------------------------------------------------------------------------------------------*/
 
-static struct BoundingBox
-sat_pixel_bounding_box(struct SatPixel const pxl[static 1])
+static struct SFBoundingBox
+satfire_pixel_bounding_box(struct SFPixel const pxl[static 1])
 {
     double xmax = fmax(pxl->ur.lon, pxl->lr.lon);
     double xmin = fmin(pxl->ul.lon, pxl->ll.lon);
     double ymax = fmax(pxl->ur.lat, pxl->ul.lat);
     double ymin = fmin(pxl->lr.lat, pxl->ll.lat);
 
-    struct Coord ll = {.lat = ymin, .lon = xmin};
-    struct Coord ur = {.lat = ymax, .lon = xmax};
+    struct SFCoord ll = {.lat = ymin, .lon = xmin};
+    struct SFCoord ur = {.lat = ymax, .lon = xmax};
 
-    return (struct BoundingBox){.ll = ll, .ur = ur};
+    return (struct SFBoundingBox){.ll = ll, .ur = ur};
 }
 
 static bool
-sat_pixels_bounding_boxes_overlap(struct SatPixel const left[static 1],
-                                  struct SatPixel const right[static 1], double eps)
+satfire_pixels_bounding_boxes_overlap(struct SFPixel const left[static 1],
+                                      struct SFPixel const right[static 1], double eps)
 {
-    struct BoundingBox bb_left = sat_pixel_bounding_box(left);
-    struct BoundingBox bb_right = sat_pixel_bounding_box(right);
+    struct SFBoundingBox bb_left = satfire_pixel_bounding_box(left);
+    struct SFBoundingBox bb_right = satfire_pixel_bounding_box(right);
 
     return bounding_boxes_overlap(bb_left, bb_right, eps);
 }
 
-struct Coord
-sat_pixel_centroid(struct SatPixel const pxl[static 1])
+struct SFCoord
+satfire_pixel_centroid(struct SFPixel const pxl[static 1])
 {
     /* Steps to calculatule the centroid of a quadrilateral.
      *
@@ -229,12 +232,12 @@ sat_pixel_centroid(struct SatPixel const pxl[static 1])
      *     quadrilateral.
      */
 
-    struct Coord t1_c = triangle_centroid(pxl->ul, pxl->ll, pxl->lr);
-    struct Coord t2_c = triangle_centroid(pxl->ul, pxl->ur, pxl->lr);
+    struct SFCoord t1_c = triangle_centroid(pxl->ul, pxl->ll, pxl->lr);
+    struct SFCoord t2_c = triangle_centroid(pxl->ul, pxl->ur, pxl->lr);
     struct Line diag1_centroids = {.start = t1_c, .end = t2_c};
 
-    struct Coord t3_c = triangle_centroid(pxl->ul, pxl->ll, pxl->ur);
-    struct Coord t4_c = triangle_centroid(pxl->lr, pxl->ur, pxl->ll);
+    struct SFCoord t3_c = triangle_centroid(pxl->ul, pxl->ll, pxl->ur);
+    struct SFCoord t4_c = triangle_centroid(pxl->lr, pxl->ur, pxl->ll);
     struct Line diag2_centroids = {.start = t3_c, .end = t4_c};
 
     struct IntersectResult res = lines_intersection(diag1_centroids, diag2_centroids, 1.0e-30);
@@ -245,20 +248,23 @@ sat_pixel_centroid(struct SatPixel const pxl[static 1])
 }
 
 bool
-sat_pixels_approx_equal(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
+satfire_pixels_approx_equal(struct SFPixel left[static 1], struct SFPixel right[static 1],
+                            double eps)
 {
-    return coord_are_close(left->ul, right->ul, eps) && coord_are_close(left->ur, right->ur, eps) &&
-           coord_are_close(left->lr, right->lr, eps) && coord_are_close(left->ll, right->ll, eps);
+    return satfire_coord_are_close(left->ul, right->ul, eps) &&
+           satfire_coord_are_close(left->ur, right->ur, eps) &&
+           satfire_coord_are_close(left->lr, right->lr, eps) &&
+           satfire_coord_are_close(left->ll, right->ll, eps);
 }
 
 bool
-sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord, double eps)
+satfire_pixel_contains_coord(struct SFPixel const pxl[static 1], struct SFCoord coord, double eps)
 {
     // Check if it's outside the bounding box first. This is easy, and if it is,
     // then we already know the answer.
-    struct BoundingBox const box = sat_pixel_bounding_box(pxl);
+    struct SFBoundingBox const box = satfire_pixel_bounding_box(pxl);
 
-    if (!bounding_box_contains_coord(box, coord, eps)) {
+    if (!satfire_bounding_box_contains_coord(box, coord, eps)) {
         return false;
     }
 
@@ -297,15 +303,15 @@ sat_pixel_contains_coord(struct SatPixel const pxl[static 1], struct Coord coord
 }
 
 bool
-sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
+satfire_pixels_overlap(struct SFPixel left[static 1], struct SFPixel right[static 1], double eps)
 {
     // Check if they are equal first, then of course they overlap!
-    if (sat_pixels_approx_equal(left, right, eps)) {
+    if (satfire_pixels_approx_equal(left, right, eps)) {
         return true;
     }
 
     // Check the bounding boxes.
-    if (!sat_pixels_bounding_boxes_overlap(left, right, eps)) {
+    if (!satfire_pixels_bounding_boxes_overlap(left, right, eps)) {
         return false;
     }
 
@@ -349,16 +355,16 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
 
     // Checking for intersecting lines didn't find anything. Now try seeing if one pixel is
     // contained in the other pixel.
-    struct Coord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
+    struct SFCoord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
     for (unsigned i = 0; i < 4; ++i) {
-        if (sat_pixel_contains_coord(right, left_coords[i], eps)) {
+        if (satfire_pixel_contains_coord(right, left_coords[i], eps)) {
             return true;
         }
     }
 
-    struct Coord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
+    struct SFCoord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
     for (unsigned i = 0; i < 4; ++i) {
-        if (sat_pixel_contains_coord(left, right_coords[i], eps)) {
+        if (satfire_pixel_contains_coord(left, right_coords[i], eps)) {
             return true;
         }
     }
@@ -369,18 +375,19 @@ sat_pixels_overlap(struct SatPixel left[static 1], struct SatPixel right[static 
 }
 
 bool
-sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[static 1], double eps)
+satfire_pixels_are_adjacent(struct SFPixel left[static 1], struct SFPixel right[static 1],
+                            double eps)
 {
-    if (sat_pixels_approx_equal(left, right, eps)) {
+    if (satfire_pixels_approx_equal(left, right, eps)) {
         return false;
     }
 
-    if (!sat_pixels_bounding_boxes_overlap(left, right, eps)) {
+    if (!satfire_pixels_bounding_boxes_overlap(left, right, eps)) {
         return false;
     }
 
-    struct Coord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
-    struct Coord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
+    struct SFCoord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
+    struct SFCoord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
 
     // Count the number of close coords and mark which ones are close.
     bool left_close[4] = {false, false, false, false};
@@ -388,7 +395,7 @@ sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[st
     unsigned int num_close_coords = 0;
     for (unsigned int i = 0; i < 4; ++i) {
         for (unsigned int j = 0; j < 4; ++j) {
-            if (coord_are_close(left_coords[i], right_coords[j], eps)) {
+            if (satfire_coord_are_close(left_coords[i], right_coords[j], eps)) {
                 ++num_close_coords;
                 left_close[i] = true;
                 right_close[j] = true;
@@ -404,13 +411,13 @@ sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[st
     // Check if any not close points are contained in the other pixel
     for (unsigned int i = 0; i < 4; ++i) {
         if (!left_close[i]) {
-            if (sat_pixel_contains_coord(right, left_coords[i], eps)) {
+            if (satfire_pixel_contains_coord(right, left_coords[i], eps)) {
                 return false;
             }
         }
 
         if (!right_close[i]) {
-            if (sat_pixel_contains_coord(left, right_coords[i], eps)) {
+            if (satfire_pixel_contains_coord(left, right_coords[i], eps)) {
                 return false;
             }
         }
@@ -421,12 +428,12 @@ sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[st
     // enough.
 
     // If they are adjacent, the centroid of neither should be interior to the other.
-    struct Coord left_centroid = sat_pixel_centroid(left);
-    if (sat_pixel_contains_coord(right, left_centroid, eps)) {
+    struct SFCoord left_centroid = satfire_pixel_centroid(left);
+    if (satfire_pixel_contains_coord(right, left_centroid, eps)) {
         return false;
     }
-    struct Coord right_centroid = sat_pixel_centroid(right);
-    if (sat_pixel_contains_coord(left, right_centroid, eps)) {
+    struct SFCoord right_centroid = satfire_pixel_centroid(right);
+    if (satfire_pixel_contains_coord(left, right_centroid, eps)) {
         return false;
     }
 
@@ -436,28 +443,28 @@ sat_pixels_are_adjacent(struct SatPixel left[static 1], struct SatPixel right[st
 /*-------------------------------------------------------------------------------------------------
  *                                         PixelList
  *-----------------------------------------------------------------------------------------------*/
-static struct PixelList *
-pixel_list_expand(struct PixelList plist[static 1])
+static struct SFPixelList *
+satfire_pixel_list_expand(struct SFPixelList plist[static 1])
 {
     size_t new_capacity = (plist->capacity * 3) / 2;
 
-    plist = realloc(plist, sizeof(struct PixelList) + new_capacity * sizeof(struct SatPixel));
+    plist = realloc(plist, sizeof(struct SFPixelList) + new_capacity * sizeof(struct SFPixel));
     Stopif(!plist, exit(EXIT_FAILURE), "unable to realloc, aborting");
     plist->capacity = new_capacity;
 
     return plist;
 }
 
-struct PixelList *
-pixel_list_new()
+struct SFPixelList *
+satfire_pixel_list_new()
 {
     size_t const initial_capacity = 4;
 
-    return pixel_list_new_with_capacity(initial_capacity);
+    return satfire_pixel_list_new_with_capacity(initial_capacity);
 }
 
-struct PixelList *
-pixel_list_new_with_capacity(size_t capacity)
+struct SFPixelList *
+satfire_pixel_list_new_with_capacity(size_t capacity)
 {
     // We have to start at a minimal size of 2 for the 3/2 expansion factor to work (integer
     // aritmetic).
@@ -465,8 +472,8 @@ pixel_list_new_with_capacity(size_t capacity)
         capacity = 2;
     }
 
-    struct PixelList *ptr =
-        calloc(sizeof(struct PixelList) + capacity * sizeof(struct SatPixel), sizeof(char));
+    struct SFPixelList *ptr =
+        calloc(sizeof(struct SFPixelList) + capacity * sizeof(struct SFPixel), sizeof(char));
 
     Stopif(!ptr, exit(EXIT_FAILURE), "unable to calloc, aborting");
 
@@ -476,30 +483,30 @@ pixel_list_new_with_capacity(size_t capacity)
     return ptr;
 }
 
-struct PixelList *
-pixel_list_destroy(struct PixelList plist[static 1])
+struct SFPixelList *
+satfire_pixel_list_destroy(struct SFPixelList plist[static 1])
 {
     free(plist);
     return 0;
 }
 
-struct PixelList *
-pixel_list_copy(struct PixelList plist[static 1])
+struct SFPixelList *
+satfire_pixel_list_copy(struct SFPixelList plist[static 1])
 {
     assert(plist);
 
     size_t copy_size = plist->len >= 4 ? plist->len : 4;
-    struct PixelList *copy = pixel_list_new_with_capacity(copy_size);
-    memcpy(copy, plist, sizeof(struct PixelList) + copy_size * sizeof(struct SatPixel));
+    struct SFPixelList *copy = satfire_pixel_list_new_with_capacity(copy_size);
+    memcpy(copy, plist, sizeof(struct SFPixelList) + copy_size * sizeof(struct SFPixel));
 
     return copy;
 }
 
-struct PixelList *
-pixel_list_append(struct PixelList list[static 1], struct SatPixel apix[static 1])
+struct SFPixelList *
+satfire_pixel_list_append(struct SFPixelList list[static 1], struct SFPixel apix[static 1])
 {
     if (list->len == list->capacity) {
-        list = pixel_list_expand(list);
+        list = satfire_pixel_list_expand(list);
     }
 
     list->pixels[list->len] = *apix;
@@ -507,21 +514,21 @@ pixel_list_append(struct PixelList list[static 1], struct SatPixel apix[static 1
     return list;
 }
 
-struct PixelList *
-pixel_list_clear(struct PixelList list[static 1])
+struct SFPixelList *
+satfire_pixel_list_clear(struct SFPixelList list[static 1])
 {
     list->len = 0;
     return list;
 }
 
-struct Coord
-pixel_list_centroid(struct PixelList const list[static 1])
+struct SFCoord
+satfire_pixel_list_centroid(struct SFPixelList const list[static 1])
 {
     assert(list);
 
-    struct Coord centroid = {.lat = 0.0, .lon = 0.0};
+    struct SFCoord centroid = {.lat = 0.0, .lon = 0.0};
     for (unsigned int i = 0; i < list->len; ++i) {
-        struct Coord coord = sat_pixel_centroid(&list->pixels[i]);
+        struct SFCoord coord = satfire_pixel_centroid(&list->pixels[i]);
         centroid.lat += coord.lat;
         centroid.lon += coord.lon;
     }
@@ -533,7 +540,7 @@ pixel_list_centroid(struct PixelList const list[static 1])
 }
 
 double
-pixel_list_total_power(struct PixelList const list[static 1])
+satfire_pixel_list_total_power(struct SFPixelList const list[static 1])
 {
     assert(list);
 
@@ -549,30 +556,30 @@ pixel_list_total_power(struct PixelList const list[static 1])
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
 size_t
-pixel_list_binary_serialize_buffer_size(struct PixelList const plist[static 1])
+satfire_pixel_list_binary_serialize_buffer_size(struct SFPixelList const plist[static 1])
 {
-    return sizeof(struct PixelList) + sizeof(struct SatPixel) * plist->len;
+    return sizeof(struct SFPixelList) + sizeof(struct SFPixel) * plist->len;
 }
 
 size_t
-pixel_list_binary_serialize(struct PixelList const plist[static 1], size_t buf_size,
-                            unsigned char buffer[buf_size])
+satfire_pixel_list_binary_serialize(struct SFPixelList const plist[static 1], size_t buf_size,
+                                    unsigned char buffer[buf_size])
 {
     memcpy(buffer, plist, buf_size);
 
     return buf_size;
 }
 
-struct PixelList *
-pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)])
+struct SFPixelList *
+satfire_pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)])
 {
     // member len needs to be first for the current binary serialization scheme.
     size_t len = 0;
     memcpy(&len, buffer, sizeof(len));
 
-    size_t buf_len = sizeof(struct PixelList) + sizeof(struct SatPixel) * len;
+    size_t buf_len = sizeof(struct SFPixelList) + sizeof(struct SFPixel) * len;
 
-    struct PixelList *list = calloc(buf_len, sizeof(unsigned char));
+    struct SFPixelList *list = calloc(buf_len, sizeof(unsigned char));
 
     Stopif(!list, exit(EXIT_FAILURE), "out of memory, aborting");
 
@@ -586,7 +593,7 @@ pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)])
  *                                         KML Export
  *-----------------------------------------------------------------------------------------------*/
 static void
-pixel_list_kml_write_pixel_style(FILE *strm, double power)
+satfire_pixel_list_kml_write_pixel_style(FILE *strm, double power)
 {
     double const max_power = 3000.0;
     double const max_green_for_orange = 0.647;
@@ -624,31 +631,31 @@ pixel_list_kml_write_pixel_style(FILE *strm, double power)
 }
 
 void
-pixel_list_kml_write(FILE *strm, struct PixelList const plist[static 1])
+satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1])
 {
     assert(plist);
 
     char desc[128] = {0};
     for (unsigned int i = 0; i < plist->len; ++i) {
-        struct SatPixel pixel = plist->pixels[i];
+        struct SFPixel pixel = plist->pixels[i];
 
         sprintf(desc, "<h3>Power: %.0lfMW</h3><h3>From nadir: %.0lf&deg;</h3>", pixel.power,
                 pixel.scan_angle);
 
         kamel_start_placemark(strm, 0, desc, 0);
 
-        pixel_list_kml_write_pixel_style(strm, pixel.power);
+        satfire_pixel_list_kml_write_pixel_style(strm, pixel.power);
 
         kamel_start_polygon(strm, true, true, "clampToGround");
         kamel_polygon_start_outer_ring(strm);
         kamel_start_linear_ring(strm);
 
         for (unsigned int j = 0; j < sizeof(pixel.coords) / sizeof(pixel.coords[0]); ++j) {
-            struct Coord coord = pixel.coords[j];
+            struct SFCoord coord = pixel.coords[j];
             kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, 0.0);
         }
         // Close the loop.
-        struct Coord coord = pixel.coords[0];
+        struct SFCoord coord = pixel.coords[0];
         kamel_linear_ring_add_vertex(strm, coord.lat, coord.lon, 0.0);
 
         kamel_end_linear_ring(strm);

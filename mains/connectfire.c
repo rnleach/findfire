@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "geo.h"
+#include "satfire.h"
 
 /**
  * \brief A wildfire.
@@ -31,7 +31,7 @@ struct Wildfire {
     time_t first_observed;
     time_t last_observed;
     unsigned int next_subfire;
-    struct PixelList *area;
+    struct SFPixelList *area;
     char id[16];
 };
 

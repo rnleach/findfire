@@ -31,15 +31,12 @@
 #include <glib.h>
 
 // My headers
-#include "cluster.h"
-#include "database.h"
-#include "firesatimage.h"
-#include "satellite.h"
-#include "util.h"
+#include "satfire.h"
 
 // Source Libraries
 #include "courier.h"
 #include "kamel.h"
+#include "util.h"
 
 #if defined(__APPLE__) && defined(__MACH__)
 #    define pthread_setname(a)
@@ -93,7 +90,7 @@ program_initialization(int argc[static 1], char ***argv)
     setenv("TZ", "UTC", 1);
     tzset();
 
-    GDALAllRegister();
+    satfire_initialize();
 
     // Initialize with with environment variables and default values.
     if (getenv("CLUSTER_DB")) {
@@ -128,7 +125,7 @@ program_initialization(int argc[static 1], char ***argv)
         fprintf(stdout, "  Only New: %s\n", options.only_new ? "yes" : "no");
     }
 
-    cluster_db_initialize(options.database_file);
+    satfire_cluster_db_initialize(options.database_file);
 }
 
 static void
@@ -137,6 +134,8 @@ program_finalization()
     free(options.database_file);
     free(options.kml_file);
     free(options.data_dir);
+
+    satfire_finalize();
 }
 
 /*-------------------------------------------------------------------------------------------------
@@ -156,8 +155,8 @@ standard_dir_filter(char const *path, void *user_data)
      */
     struct tm *most_recent_data = user_data;
 
-    enum Satellite sat = satfire_satellite_string_contains_satellite(path);
-    enum Sector sector = satfire_sector_string_contains_sector(path);
+    enum SFSatellite sat = satfire_satellite_string_contains_satellite(path);
+    enum SFSector sector = satfire_sector_string_contains_sector(path);
     if (sat == SATFIRE_SATELLITE_NONE || sector == SATFIRE_SECTOR_NONE) {
         // Maybe we need to recurse deeper to be sure...
         return true;
@@ -216,15 +215,15 @@ standard_dir_filter(char const *path, void *user_data)
 }
 
 static bool
-skip_path(char const *path, ClusterDatabaseQueryPresentH query)
+skip_path(char const *path, SFClusterDatabaseQueryPresentH query)
 {
     if (strcmp("nc", file_ext(path)) != 0) {
         // Only process files with the '.nc' extension.
         return true;
     }
 
-    enum Satellite satellite = satfire_satellite_string_contains_satellite(path);
-    enum Sector sector = satfire_sector_string_contains_sector(path);
+    enum SFSatellite satellite = satfire_satellite_string_contains_satellite(path);
+    enum SFSector sector = satfire_sector_string_contains_sector(path);
 
     if (satellite == SATFIRE_SATELLITE_NONE || sector == SATFIRE_SECTOR_NONE) {
         return true;
@@ -237,10 +236,10 @@ skip_path(char const *path, ClusterDatabaseQueryPresentH query)
 
     // TODO: Need to add error checking to here. On error, parse_time_string should return the
     // time 0 since that is way out of bounds for the GOES R/S/T/.... era.
-    time_t scan_start = parse_time_string(cluster_find_start_time(path));
-    time_t scan_end = parse_time_string(cluster_find_end_time(path));
+    time_t scan_start = parse_time_string(satfire_cluster_find_start_time(path));
+    time_t scan_end = parse_time_string(satfire_cluster_find_end_time(path));
 
-    int num_rows = cluster_db_present(query, satellite, sector, scan_start, scan_end);
+    int num_rows = satfire_cluster_db_present(query, satellite, sector, scan_start, scan_end);
     Stopif(num_rows < -1, return false, "Error querying num_rows, proceeding anyway.");
 
     if (num_rows >= 0) {
@@ -254,8 +253,8 @@ skip_path(char const *path, ClusterDatabaseQueryPresentH query)
  *                             Save a Cluster in a KML File
  *-----------------------------------------------------------------------------------------------*/
 static void
-save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satellite sat,
-                 enum Sector sector)
+save_satfire_cluster_kml(struct SFCluster *biggest, time_t start, time_t end, enum SFSatellite sat,
+                         enum SFSector sector)
 {
     // Return early if no output file is configured.
     if (!options.kml_file) {
@@ -278,15 +277,15 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satelli
     char *description = 0;
     asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf MW",
              satfire_satellite_name(sat), satfire_sector_name(sector),
-             cluster_total_power(biggest));
+             satfire_cluster_total_power(biggest));
 
     kamel_start_placemark(out, "Biggest Fire", description, "#fire");
-    struct Coord centroid = pixel_list_centroid(cluster_pixels(biggest));
+    struct SFCoord centroid = satfire_pixel_list_centroid(satfire_cluster_pixels(biggest));
     kamel_point(out, centroid.lat, centroid.lon, 0.0);
     kamel_end_placemark(out);
     free(description);
 
-    pixel_list_kml_write(out, cluster_pixels(biggest));
+    satfire_pixel_list_kml_write(out, satfire_cluster_pixels(biggest));
 
     kamel_end_folder(out);
 
@@ -310,9 +309,9 @@ save_cluster_kml(struct Cluster *biggest, time_t start, time_t end, enum Satelli
 #define MAX_SCAN_ANGLE 67.0
 
 struct ClusterStats {
-    struct Cluster *biggest_fire;
-    enum Satellite biggest_sat;
-    enum Sector biggest_sector;
+    struct SFCluster *biggest_fire;
+    enum SFSatellite biggest_sat;
+    enum SFSector biggest_sector;
     time_t biggest_start;
     time_t biggest_end;
 
@@ -326,10 +325,10 @@ struct ClusterStats {
 };
 
 static struct ClusterStats
-cluster_stats_new(void)
+satfire_cluster_stats_new(void)
 {
     return (struct ClusterStats){
-        .biggest_fire = cluster_new(),
+        .biggest_fire = satfire_cluster_new(),
         .biggest_sat = SATFIRE_SATELLITE_NONE,
         .biggest_sector = SATFIRE_SECTOR_NONE,
         .biggest_start = 0,
@@ -345,49 +344,49 @@ cluster_stats_new(void)
 }
 
 static void
-cluster_stats_destroy(struct ClusterStats *tgt)
+satfire_cluster_stats_destroy(struct ClusterStats *tgt)
 {
-    cluster_destroy(&tgt->biggest_fire);
+    satfire_cluster_destroy(&tgt->biggest_fire);
     memset(tgt, 0, sizeof(struct ClusterStats));
 }
 
 static struct ClusterStats
-cluster_stats_update(struct ClusterStats stats, enum Satellite sat, enum Sector sector,
-                     time_t start, time_t end, struct Cluster *cluster)
+satfire_cluster_stats_update(struct ClusterStats stats, enum SFSatellite sat, enum SFSector sector,
+                             time_t start, time_t end, struct SFCluster *cluster)
 {
-    double cluster_power = cluster_total_power(cluster);
+    double satfire_cluster_power = satfire_cluster_total_power(cluster);
 
-    if (cluster_max_scan_angle(cluster) < MAX_SCAN_ANGLE) {
-        if (cluster_power > cluster_total_power(stats.biggest_fire)) {
-            cluster_destroy(&stats.biggest_fire);
-            stats.biggest_fire = cluster_copy(cluster);
+    if (satfire_cluster_max_scan_angle(cluster) < MAX_SCAN_ANGLE) {
+        if (satfire_cluster_power > satfire_cluster_total_power(stats.biggest_fire)) {
+            satfire_cluster_destroy(&stats.biggest_fire);
+            stats.biggest_fire = satfire_cluster_copy(cluster);
             stats.biggest_sat = sat;
             stats.biggest_sector = sector;
             stats.biggest_start = start;
             stats.biggest_end = end;
         }
 
-        if (cluster_power < 1.0) {
+        if (satfire_cluster_power < 1.0) {
             stats.num_power_lt_1mw += 1;
         }
 
-        if (cluster_power < 10.0) {
+        if (satfire_cluster_power < 10.0) {
             stats.num_power_lt_10mw += 1;
         }
 
-        if (cluster_power < 100.0) {
+        if (satfire_cluster_power < 100.0) {
             stats.num_power_lt_100mw += 1;
         }
 
-        if (cluster_power < 1000.0) {
+        if (satfire_cluster_power < 1000.0) {
             stats.num_power_lt_1gw += 1;
         }
 
-        if (cluster_power < 10000.0) {
+        if (satfire_cluster_power < 10000.0) {
             stats.num_power_lt_10gw += 1;
         }
 
-        if (cluster_power < 100000.0) {
+        if (satfire_cluster_power < 100000.0) {
             stats.num_power_lt_100gw += 1;
         }
 
@@ -398,7 +397,7 @@ cluster_stats_update(struct ClusterStats stats, enum Satellite sat, enum Sector 
 }
 
 static void
-cluster_stats_print(struct ClusterStats stats)
+satfire_cluster_stats_print(struct ClusterStats stats)
 {
     if (stats.num_clusters > 0) {
 
@@ -407,7 +406,7 @@ cluster_stats_print(struct ClusterStats stats)
         char end_str[128] = {0};
         ctime_r(&stats.biggest_end, end_str);
 
-        struct Coord biggest_centroid = cluster_centroid(stats.biggest_fire);
+        struct SFCoord biggest_centroid = satfire_cluster_centroid(stats.biggest_fire);
 
         printf("\nIndividual Cluster Stats\n\n"
                "Most Powerfull:\n"
@@ -436,10 +435,11 @@ cluster_stats_print(struct ClusterStats stats)
                "  Pct < 100 GW: %10u%%\n",
                satfire_satellite_name(stats.biggest_sat), satfire_sector_name(stats.biggest_sector),
                start_str, end_str, biggest_centroid.lat, biggest_centroid.lon,
-               cluster_max_scan_angle(stats.biggest_fire), cluster_pixel_count(stats.biggest_fire),
-               cluster_total_power(stats.biggest_fire), stats.num_clusters, stats.num_power_lt_1mw,
-               stats.num_power_lt_10mw, stats.num_power_lt_100mw, stats.num_power_lt_1gw,
-               stats.num_power_lt_10gw, stats.num_power_lt_100gw,
+               satfire_cluster_max_scan_angle(stats.biggest_fire),
+               satfire_cluster_pixel_count(stats.biggest_fire),
+               satfire_cluster_total_power(stats.biggest_fire), stats.num_clusters,
+               stats.num_power_lt_1mw, stats.num_power_lt_10mw, stats.num_power_lt_100mw,
+               stats.num_power_lt_1gw, stats.num_power_lt_10gw, stats.num_power_lt_100gw,
                stats.num_power_lt_1mw * 100 / stats.num_clusters,
                stats.num_power_lt_10mw * 100 / stats.num_clusters,
                stats.num_power_lt_100mw * 100 / stats.num_clusters,
@@ -451,36 +451,36 @@ cluster_stats_print(struct ClusterStats stats)
     }
 }
 
-struct ClusterListStats {
-    enum Satellite min_num_clusters_sat;
-    enum Sector min_num_clusters_sector;
+struct SFClusterListStats {
+    enum SFSatellite min_num_clusters_sat;
+    enum SFSector min_num_clusters_sector;
     unsigned int min_num_clusters;
     time_t min_num_clusters_start;
     time_t min_num_clusters_end;
 
-    enum Satellite max_num_clusters_sat;
-    enum Sector max_num_clusters_sector;
+    enum SFSatellite max_num_clusters_sat;
+    enum SFSector max_num_clusters_sector;
     unsigned int max_num_clusters;
     time_t max_num_clusters_start;
     time_t max_num_clusters_end;
 
-    enum Satellite max_total_power_sat;
-    enum Sector max_total_power_sector;
+    enum SFSatellite max_total_power_sat;
+    enum SFSector max_total_power_sector;
     double max_total_power;
     time_t max_total_power_start;
     time_t max_total_power_end;
 
-    enum Satellite min_total_power_sat;
-    enum Sector min_total_power_sector;
+    enum SFSatellite min_total_power_sat;
+    enum SFSector min_total_power_sector;
     double min_total_power;
     time_t min_total_power_start;
     time_t min_total_power_end;
 };
 
-static struct ClusterListStats
-cluster_list_stats_new(void)
+static struct SFClusterListStats
+satfire_cluster_list_stats_new(void)
 {
-    return (struct ClusterListStats){
+    return (struct SFClusterListStats){
         .min_num_clusters_sat = SATFIRE_SATELLITE_NONE,
         .min_num_clusters_sector = SATFIRE_SECTOR_NONE,
         .min_num_clusters = UINT_MAX,
@@ -508,54 +508,54 @@ cluster_list_stats_new(void)
 }
 
 static void
-cluster_list_stats_destroy(struct ClusterListStats *clstats)
+satfire_cluster_list_stats_destroy(struct SFClusterListStats *clstats)
 {
     // Nothing to do at this time because nothing is heap allocated.
 }
 
-static struct ClusterListStats
-cluster_list_stats_update(struct ClusterListStats clstats, struct ClusterList *clusters)
+static struct SFClusterListStats
+satfire_cluster_list_stats_update(struct SFClusterListStats clstats, struct SFClusterList *clusters)
 {
-    unsigned int num_clust = cluster_list_length(clusters);
+    unsigned int num_clust = satfire_cluster_list_length(clusters);
 
     if (num_clust > clstats.max_num_clusters) {
         clstats.max_num_clusters = num_clust;
-        clstats.max_num_clusters_sat = cluster_list_satellite(clusters);
-        clstats.max_num_clusters_sector = cluster_list_sector(clusters);
-        clstats.max_num_clusters_start = cluster_list_scan_start(clusters);
-        clstats.max_num_clusters_end = cluster_list_scan_end(clusters);
+        clstats.max_num_clusters_sat = satfire_cluster_list_satellite(clusters);
+        clstats.max_num_clusters_sector = satfire_cluster_list_sector(clusters);
+        clstats.max_num_clusters_start = satfire_cluster_list_scan_start(clusters);
+        clstats.max_num_clusters_end = satfire_cluster_list_scan_end(clusters);
     }
 
     if (num_clust < clstats.min_num_clusters) {
         clstats.min_num_clusters = num_clust;
-        clstats.min_num_clusters_sat = cluster_list_satellite(clusters);
-        clstats.min_num_clusters_sector = cluster_list_sector(clusters);
-        clstats.min_num_clusters_start = cluster_list_scan_start(clusters);
-        clstats.min_num_clusters_end = cluster_list_scan_end(clusters);
+        clstats.min_num_clusters_sat = satfire_cluster_list_satellite(clusters);
+        clstats.min_num_clusters_sector = satfire_cluster_list_sector(clusters);
+        clstats.min_num_clusters_start = satfire_cluster_list_scan_start(clusters);
+        clstats.min_num_clusters_end = satfire_cluster_list_scan_end(clusters);
     }
 
-    double total_power = cluster_list_total_power(clusters);
+    double total_power = satfire_cluster_list_total_power(clusters);
     if (total_power > clstats.max_total_power) {
         clstats.max_total_power = total_power;
-        clstats.max_total_power_sat = cluster_list_satellite(clusters);
-        clstats.max_total_power_sector = cluster_list_sector(clusters);
-        clstats.max_total_power_start = cluster_list_scan_start(clusters);
-        clstats.max_total_power_end = cluster_list_scan_end(clusters);
+        clstats.max_total_power_sat = satfire_cluster_list_satellite(clusters);
+        clstats.max_total_power_sector = satfire_cluster_list_sector(clusters);
+        clstats.max_total_power_start = satfire_cluster_list_scan_start(clusters);
+        clstats.max_total_power_end = satfire_cluster_list_scan_end(clusters);
     }
 
     if (total_power < clstats.min_total_power) {
         clstats.min_total_power = total_power;
-        clstats.min_total_power_sat = cluster_list_satellite(clusters);
-        clstats.min_total_power_sector = cluster_list_sector(clusters);
-        clstats.min_total_power_start = cluster_list_scan_start(clusters);
-        clstats.min_total_power_end = cluster_list_scan_end(clusters);
+        clstats.min_total_power_sat = satfire_cluster_list_satellite(clusters);
+        clstats.min_total_power_sector = satfire_cluster_list_sector(clusters);
+        clstats.min_total_power_start = satfire_cluster_list_scan_start(clusters);
+        clstats.min_total_power_end = satfire_cluster_list_scan_end(clusters);
     }
 
     return clstats;
 }
 
 static void
-cluster_list_stats_print(struct ClusterListStats clstats)
+satfire_cluster_list_stats_print(struct SFClusterListStats clstats)
 {
     char start_str[128] = {0};
     ctime_r(&clstats.max_total_power_start, start_str);
@@ -638,12 +638,12 @@ directory_walker(void *arg)
     struct tm most_recent[SATFIRE_SATELLITE_NUM][SATFIRE_SECTOR_NUM] = {0};
     if (options.only_new) {
         int rc = 0;
-        ClusterDatabaseH db = cluster_db_connect(options.database_file);
+        SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
 
         for (unsigned int sat_entry = 0; sat_entry < SATFIRE_SATELLITE_NUM; ++sat_entry) {
             for (unsigned int sector_entry = 0; sector_entry < SATFIRE_SECTOR_NUM; ++sector_entry) {
 
-                time_t ts = cluster_db_newest_scan_start(db, sat_entry, sector_entry);
+                time_t ts = satfire_cluster_db_newest_scan_start(db, sat_entry, sector_entry);
                 struct tm *res = gmtime_r(&ts, &most_recent[sat_entry][sector_entry]);
                 Stopif(!res, break, "Error converting time stamp.");
 
@@ -655,7 +655,7 @@ directory_walker(void *arg)
             }
         }
 
-        rc = cluster_db_close(&db);
+        rc = satfire_cluster_db_close(&db);
         Stopif(rc, goto CLEAN_UP_DIR_WALK_AND_RETURN, "Error querying cluster database.");
 
         dir_walk_set_directory_filter(&dir_walk_state, standard_dir_filter, most_recent);
@@ -693,18 +693,18 @@ path_filter(void *arg)
 
     struct PipelineLink *links = arg;
     Courier *from_dir_walker = links->from;
-    Courier *to_cluster_list_loader = links->to;
+    Courier *to_satfire_cluster_list_loader = links->to;
 
-    ClusterDatabaseQueryPresentH present_query = 0;
-    present_query = cluster_database_prepare_to_query_present(options.database_file);
+    SFClusterDatabaseQueryPresentH present_query = 0;
+    present_query = satfire_cluster_db_prepare_to_query_present(options.database_file);
     Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query. (%s %u)", __FILE__,
            __LINE__);
 
     courier_register_receiver(from_dir_walker);
-    courier_register_sender(to_cluster_list_loader);
+    courier_register_sender(to_satfire_cluster_list_loader);
 
     courier_wait_until_ready_to_receive(from_dir_walker);
-    courier_wait_until_ready_to_send(to_cluster_list_loader);
+    courier_wait_until_ready_to_send(to_satfire_cluster_list_loader);
 
     void *item = 0;
     while ((item = courier_receive(from_dir_walker))) {
@@ -716,7 +716,7 @@ path_filter(void *arg)
                 printf("Processing: %s\n", path);
             }
 
-            bool success = courier_send(to_cluster_list_loader, path);
+            bool success = courier_send(to_satfire_cluster_list_loader, path);
 
             Stopif(!success, break, "Failed to send to loader.");
         } else {
@@ -725,14 +725,14 @@ path_filter(void *arg)
     }
 
     courier_done_receiving(from_dir_walker);
-    courier_done_sending(to_cluster_list_loader);
-    cluster_db_finalize_query_present(&present_query);
+    courier_done_sending(to_satfire_cluster_list_loader);
+    satfire_cluster_db_finalize_query_present(&present_query);
 
     return 0;
 }
 
 static void *
-fire_cluster_list_loader(void *arg)
+fire_satfire_cluster_list_loader(void *arg)
 {
     static char const threadname[] = "findfire-loader";
     static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
@@ -754,13 +754,13 @@ fire_cluster_list_loader(void *arg)
 
         bool success_sending = true;
 
-        struct ClusterList *clusters = cluster_list_from_file(path);
-        if (!cluster_list_error(clusters)) {
+        struct SFClusterList *clusters = satfire_cluster_list_from_file(path);
+        if (!satfire_cluster_list_error(clusters)) {
 
             success_sending = courier_send(to_database, clusters);
         } else {
             fprintf(stderr, "    Error processing file.\n");
-            cluster_list_destroy(&clusters);
+            satfire_cluster_list_destroy(&clusters);
         }
 
         free(path);
@@ -781,65 +781,66 @@ database_filler(void *arg)
     static_assert(sizeof(threadname) <= 16, "threadname too long for OS");
     pthread_setname(threadname);
 
-    Courier *from_cluster_list_loader = arg;
-    courier_register_receiver(from_cluster_list_loader);
-    courier_wait_until_ready_to_receive(from_cluster_list_loader);
+    Courier *from_satfire_cluster_list_loader = arg;
+    courier_register_receiver(from_satfire_cluster_list_loader);
+    courier_wait_until_ready_to_receive(from_satfire_cluster_list_loader);
 
-    ClusterDatabaseAddH add_stmt = 0;
+    SFClusterDatabaseAddH add_stmt = 0;
 
-    add_stmt = cluster_db_prepare_to_add(options.database_file);
+    add_stmt = satfire_cluster_db_prepare_to_add(options.database_file);
     Stopif(!add_stmt, goto CLEANUP_AND_RETURN, "Error preparing add statement.");
 
     // Stats on individual clusters.
-    struct ClusterStats cluster_stats = cluster_stats_new();
+    struct ClusterStats satfire_cluster_stats = satfire_cluster_stats_new();
 
     // Stats about satellite images.
-    struct ClusterListStats clstats = cluster_list_stats_new();
+    struct SFClusterListStats clstats = satfire_cluster_list_stats_new();
 
     void *item;
-    while ((item = courier_receive(from_cluster_list_loader))) {
-        struct ClusterList *clusters = item;
+    while ((item = courier_receive(from_satfire_cluster_list_loader))) {
+        struct SFClusterList *clusters = item;
 
-        int failure = cluster_db_add(add_stmt, clusters);
+        int failure = satfire_cluster_db_add(add_stmt, clusters);
         Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
         // Filter out clusters on the limb for some QC
-        clusters = cluster_list_filter_scan_angle(clusters, MAX_SCAN_ANGLE);
+        clusters = satfire_cluster_list_filter_scan_angle(clusters, MAX_SCAN_ANGLE);
 
-        enum Satellite sat = cluster_list_satellite(clusters);
-        enum Sector sector = cluster_list_sector(clusters);
-        time_t start = cluster_list_scan_start(clusters);
-        time_t end = cluster_list_scan_end(clusters);
-        GArray *clusters_array = cluster_list_clusters(clusters);
+        enum SFSatellite sat = satfire_cluster_list_satellite(clusters);
+        enum SFSector sector = satfire_cluster_list_sector(clusters);
+        time_t start = satfire_cluster_list_scan_start(clusters);
+        time_t end = satfire_cluster_list_scan_end(clusters);
+        GArray *clusters_array = satfire_cluster_list_clusters(clusters);
 
         for (unsigned int i = 0; i < clusters_array->len; ++i) {
 
-            struct Cluster *curr_clust = g_array_index(clusters_array, struct Cluster *, i);
+            struct SFCluster *curr_clust = g_array_index(clusters_array, struct SFCluster *, i);
 
-            cluster_stats =
-                cluster_stats_update(cluster_stats, sat, sector, start, end, curr_clust);
+            satfire_cluster_stats = satfire_cluster_stats_update(satfire_cluster_stats, sat, sector,
+                                                                 start, end, curr_clust);
         }
 
-        clstats = cluster_list_stats_update(clstats, clusters);
+        clstats = satfire_cluster_list_stats_update(clstats, clusters);
 
-        cluster_list_destroy(&clusters);
+        satfire_cluster_list_destroy(&clusters);
     }
 
     if (options.verbose) {
-        cluster_stats_print(cluster_stats);
-        cluster_list_stats_print(clstats);
+        satfire_cluster_stats_print(satfire_cluster_stats);
+        satfire_cluster_list_stats_print(clstats);
     }
 
-    save_cluster_kml(cluster_stats.biggest_fire, cluster_stats.biggest_start,
-                     cluster_stats.biggest_end, cluster_stats.biggest_sat,
-                     cluster_stats.biggest_sector);
-    cluster_stats_destroy(&cluster_stats);
+    save_satfire_cluster_kml(satfire_cluster_stats.biggest_fire,
+                             satfire_cluster_stats.biggest_start, satfire_cluster_stats.biggest_end,
+                             satfire_cluster_stats.biggest_sat,
+                             satfire_cluster_stats.biggest_sector);
+    satfire_cluster_stats_destroy(&satfire_cluster_stats);
 
-    cluster_list_stats_destroy(&clstats);
+    satfire_cluster_list_stats_destroy(&clstats);
 
 CLEANUP_AND_RETURN:
-    courier_done_receiving(from_cluster_list_loader);
-    cluster_db_finalize_add(&add_stmt);
+    courier_done_receiving(from_satfire_cluster_list_loader);
+    satfire_cluster_db_finalize_add(&add_stmt);
     return 0;
 }
 
@@ -847,10 +848,10 @@ CLEANUP_AND_RETURN:
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
 static void
-generic_destroy_cluster_list(void *cl)
+generic_destroy_satfire_cluster_list(void *cl)
 {
-    struct ClusterList *list = cl;
-    cluster_list_destroy(&list);
+    struct SFClusterList *list = cl;
+    satfire_cluster_list_destroy(&list);
 }
 
 int
@@ -861,15 +862,15 @@ main(int argc, char *argv[argc + 1])
 
     Courier dir_walk = courier_new();
     Courier filter = courier_new();
-    Courier cluster_loader = courier_new();
+    Courier satfire_cluster_loader = courier_new();
     struct PipelineLink dir_walk_filter_link = {.from = &dir_walk, .to = &filter};
-    struct PipelineLink filter_to_loader = {.from = &filter, .to = &cluster_loader};
+    struct PipelineLink filter_to_loader = {.from = &filter, .to = &satfire_cluster_loader};
 
     pthread_t threads[10] = {0};
 
     int s = pthread_create(&threads[0], 0, directory_walker, &dir_walk);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "directory_walker");
-    s = pthread_create(&threads[1], 0, database_filler, &cluster_loader);
+    s = pthread_create(&threads[1], 0, database_filler, &satfire_cluster_loader);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "database_filler");
 
     for (unsigned int i = 2; i < 6; ++i) {
@@ -878,9 +879,9 @@ main(int argc, char *argv[argc + 1])
     }
 
     for (unsigned int i = 6; i < sizeof(threads) / sizeof(threads[0]); ++i) {
-        s = pthread_create(&threads[i], 0, fire_cluster_list_loader, &filter_to_loader);
+        s = pthread_create(&threads[i], 0, fire_satfire_cluster_list_loader, &filter_to_loader);
         Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s(%u) thread.",
-               "fire_cluster_list_loader", i);
+               "fire_satfire_cluster_list_loader", i);
     }
 
     rc = EXIT_SUCCESS;
@@ -897,7 +898,7 @@ CLEANUP_AND_EXIT:
         }
     }
 
-    courier_destroy(&cluster_loader, generic_destroy_cluster_list);
+    courier_destroy(&satfire_cluster_loader, generic_destroy_satfire_cluster_list);
     courier_destroy(&filter, free);
     courier_destroy(&dir_walk, free);
 

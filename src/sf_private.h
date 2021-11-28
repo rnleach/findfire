@@ -1,9 +1,25 @@
 #pragma once
-
-#include <stdbool.h>
+/** \file sf_private.h
+ *
+ * Internal API only, not for external use.
+ */
+#include "satfire.h"
 
 #include "gdal.h"
 #include "glib.h"
+
+/**
+ * \brief Represents all the data associated with a single pixel in which the satellite has detected
+ * a fire.
+ */
+struct FirePoint {
+    /// The polygon describing the scanned area.
+    struct SFPixel pixel;
+    /// The x-coordinate (column number, often indexed as 'i') in the grid.
+    int x;
+    /// The y-coordinate (row number, often indexed as 'j') in the grid.
+    int y;
+};
 
 /**
  * \brief Handle to a GDAL dataset for the Fire Detection Characteristics and some metadata.
@@ -46,3 +62,6 @@ void fire_sat_image_close(struct SatFireImage *dataset);
  * \returns GArray * of struct FirePoint objects.
  */
 GArray *fire_sat_image_extract_fire_points(struct SatFireImage const *fdata);
+
+/** Add a FirePoint to this Cluster. */
+void satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire_point);

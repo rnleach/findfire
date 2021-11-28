@@ -13,10 +13,7 @@
 #include <glib.h>
 
 // My headers
-#include "cluster.h"
-#include "database.h"
-#include "geo.h"
-#include "satellite.h"
+#include "satfire.h"
 #include "util.h"
 
 // Source Libraries
@@ -30,7 +27,7 @@ static struct ShowFireOptions {
     char *kml_file;
     time_t start;
     time_t end;
-    struct BoundingBox region;
+    struct SFBoundingBox region;
     bool verbose;
 
 } options = {0};
@@ -101,9 +98,9 @@ parse_bounding_box(const char *arg_name, const char *arg_val, void *user_data, G
     Stopif(max_lon == 0.0L && c == old_c, goto ERR_RETURN,
            "Error parsing maximum longitude from %s", arg_val);
 
-    struct Coord ll = {.lat = min_lat, .lon = min_lon};
-    struct Coord ur = {.lat = max_lat, .lon = max_lon};
-    options.region = (struct BoundingBox){.ll = ll, .ur = ur};
+    struct SFCoord ll = {.lat = min_lat, .lon = min_lon};
+    struct SFCoord ur = {.lat = max_lat, .lon = max_lon};
+    options.region = (struct SFBoundingBox){.ll = ll, .ur = ur};
 
     return true;
 
@@ -209,10 +206,10 @@ program_initialization(int argc[static 1], char ***argv)
         options.region.ur.lat == 0.0 && options.region.ur.lon == 0.0) {
 
         // Default to cover all of Montana cause why not.
-        struct Coord ll = {.lat = 44.0, .lon = -116.5};
-        struct Coord ur = {.lat = 49.5, .lon = -104.0};
+        struct SFCoord ll = {.lat = 44.0, .lon = -116.5};
+        struct SFCoord ur = {.lat = 49.5, .lon = -104.0};
 
-        options.region = (struct BoundingBox){.ll = ll, .ur = ur};
+        options.region = (struct SFBoundingBox){.ll = ll, .ur = ur};
     }
 
     Stopif(!options.database_file, exit(EXIT_FAILURE), "Invalid, database_file is NULL");
@@ -255,35 +252,36 @@ main(int argc, char *argv[argc + 1])
 
     kamel_start_document(out);
 
-    for (enum Satellite sat = 0; sat < SATFIRE_SATELLITE_NUM; ++sat) {
+    for (enum SFSatellite sat = 0; sat < SATFIRE_SATELLITE_NUM; ++sat) {
 
         kamel_start_folder(out, satfire_satellite_name(sat), 0, false);
 
-        for (enum Sector sector = 0; sector < SATFIRE_SECTOR_NUM; ++sector) {
+        for (enum SFSector sector = 0; sector < SATFIRE_SECTOR_NUM; ++sector) {
 
             kamel_start_folder(out, satfire_sector_name(sector), 0, false);
 
-            ClusterDatabaseQueryRowsH rows = cluster_db_query_rows(
+            SFClusterDatabaseQueryRowsH rows = satfire_cluster_db_query_rows(
                 options.database_file, sat, sector, options.start, options.end, options.region);
-            struct ClusterRow *row = 0;
+            struct SFClusterRow *row = 0;
 
-            while ((row = cluster_db_query_rows_next(rows, row))) {
-                time_t start = cluster_db_cluster_row_start(row);
-                time_t end = cluster_db_cluster_row_end(row);
+            while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
+                time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
+                time_t end = satfire_cluster_db_satfire_cluster_row_end(row);
 
                 kamel_start_folder(out, "Folder", 0, false);
                 kamel_timespan(out, start, end);
 
-                struct PixelList const *pixels = cluster_db_cluster_row_pixels(row);
-                pixel_list_kml_write(out, pixels);
+                struct SFPixelList const *pixels =
+                    satfire_cluster_db_satfire_cluster_row_pixels(row);
+                satfire_pixel_list_kml_write(out, pixels);
 
                 kamel_end_folder(out);
             }
 
             kamel_end_folder(out);
 
-            cluster_db_cluster_row_finalize(row);
-            cluster_db_query_rows_finalize(&rows);
+            satfire_cluster_db_satfire_cluster_row_finalize(row);
+            satfire_cluster_db_query_rows_finalize(&rows);
         }
 
         kamel_end_folder(out);
