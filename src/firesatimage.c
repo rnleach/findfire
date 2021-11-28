@@ -10,7 +10,7 @@
 #include "ogr_srs_api.h"
 
 bool
-fire_sat_image_open(char const *fname, struct FireSatImage *tgt)
+fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
 {
     assert(fname);
     assert(tgt);
@@ -47,7 +47,7 @@ fire_sat_image_open(char const *fname, struct FireSatImage *tgt)
 }
 
 void
-fire_sat_image_close(struct FireSatImage *dataset)
+fire_sat_image_close(struct SatFireImage *dataset)
 {
     memset(dataset->fname, 0, sizeof(dataset->fname));
     memset(dataset->geo_transform, 0, sizeof(dataset->geo_transform));
@@ -58,7 +58,7 @@ fire_sat_image_close(struct FireSatImage *dataset)
 }
 
 GArray *
-fire_sat_image_extract_fire_points(struct FireSatImage const *fdata)
+fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
 {
     assert(fdata);
 

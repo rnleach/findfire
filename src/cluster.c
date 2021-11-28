@@ -360,7 +360,7 @@ cluster_list_from_file(char const *full_path)
     clist->end = parse_time_string(cluster_find_end_time(fname));
 
     // Get the clusters member.
-    struct FireSatImage fdata = {0};
+    struct SatFireImage fdata = {0};
     bool ok = fire_sat_image_open(full_path, &fdata);
     Stopif(!ok, err_msg = "Error opening NetCDF file";
            goto ERR_RETURN, "Error opening NetCDF file %s", full_path);

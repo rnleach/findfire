@@ -8,7 +8,7 @@
 /**
  * \brief Handle to a GDAL dataset for the Fire Detection Characteristics and some metadata.
  */
-struct FireSatImage {
+struct SatFireImage {
     /// Orignial file name the dataset was loaded from.
     char fname[512];
     /// Handle to the dataset.
@@ -31,18 +31,18 @@ struct FireSatImage {
  *
  * \returns false if there is an error opening the data.
  */
-bool fire_sat_image_open(char const *fname, struct FireSatImage *tgt);
+bool fire_sat_image_open(char const *fname, struct SatFireImage *tgt);
 
 /**
  * \brief Close the file and clear the pointers associated with  with this dataset.
  *
  * \param dataset is the structure to close/finalize.
  */
-void fire_sat_image_close(struct FireSatImage *dataset);
+void fire_sat_image_close(struct SatFireImage *dataset);
 
 /**
  * \brief Extract pixels/points from the image that have non-zero fire power.
  *
  * \returns GArray * of struct FirePoint objects.
  */
-GArray *fire_sat_image_extract_fire_points(struct FireSatImage const *fdata);
+GArray *fire_sat_image_extract_fire_points(struct SatFireImage const *fdata);
