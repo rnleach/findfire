@@ -14,7 +14,7 @@
 
 // My headers
 #include "satfire.h"
-#include "util.h"
+#include "sf_util.h"
 
 // Source Libraries
 #include "kamel.h"

@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "sf_private.h"
-#include "util.h"
+#include "sf_util.h"
 
 char const *out_of_memory = "memory allocation error";
 

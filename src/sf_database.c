@@ -7,7 +7,7 @@
 
 #include <sqlite3.h>
 
-#include "util.h"
+#include "sf_util.h"
 
 /*-------------------------------------------------------------------------------------------------
  *                               Open & Close the database

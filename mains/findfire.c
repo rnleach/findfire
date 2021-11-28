@@ -36,7 +36,7 @@
 // Source Libraries
 #include "courier.h"
 #include "kamel.h"
-#include "util.h"
+#include "sf_util.h"
 
 #if defined(__APPLE__) && defined(__MACH__)
 #    define pthread_setname(a)

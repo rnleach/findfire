@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "util.h"
+#include "sf_util.h"
 
 /*-------------------------------------------------------------------------------------------------
  *                                     File name handling.

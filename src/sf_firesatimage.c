@@ -3,7 +3,7 @@
 #include <tgmath.h>
 
 #include "sf_private.h"
-#include "util.h"
+#include "sf_util.h"
 
 #include "ogr_srs_api.h"
 
