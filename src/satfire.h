@@ -51,7 +51,7 @@
  * some functions that can be used to filter lists based on cluster properties.
  *
  * <h3>The Cluster Database</h3>
- * \ref SFClusterDtabaseH<br/>
+ * \ref SFClusterDatabaseH<br/>
  * \ref SFClusterDatabaseAddH<br/>
  * \ref SFClusterDatabaseQueryPresentH<br/>
  * \ref SFClusterDatabaseQueryRowsH<br/>
@@ -316,11 +316,13 @@ satfire_pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(s
  * document.
  */
 void satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1]);
+
 /*-------------------------------------------------------------------------------------------------
                                                  Cluster
 -------------------------------------------------------------------------------------------------*/
 /**
- * \brief The aggregate properties of a connected group of FirePoint objects.
+ * \struct SFCluster
+ * \brief The aggregate properties of a connected group of \ref SFPixel objects.
  */
 struct SFCluster;
 
@@ -355,6 +357,7 @@ int satfire_cluster_descending_power_compare(const void *ap, const void *bp);
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/
 /**
+ * \struct SFClusterList
  * \brief Keep a cluster list with metadata about the file it was derived from.
  */
 struct SFClusterList;
@@ -573,7 +576,12 @@ SFClusterDatabaseQueryRowsH satfire_cluster_db_query_rows(char const *path_to_db
  */
 int satfire_cluster_db_query_rows_finalize(SFClusterDatabaseQueryRowsH *query);
 
-/** A result row from a SFClusterDatabaseQueryRowsH. */
+/** \struct SFClusterRow
+ * \brief A row describing a \ref SFCluster that has been retrieved from the database.
+ *
+ * A result row from a SFClusterDatabaseQueryRowsH. This includes more information than the 
+ * \ref SFCluster type does. This also includes valid times and satellite metadata.
+ */
 struct SFClusterRow;
 
 /** Get the next row.
