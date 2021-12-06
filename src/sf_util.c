@@ -30,8 +30,6 @@ get_file_name(char const *full_path)
 /*-------------------------------------------------------------------------------------------------
  *                                     Time parsing.
  *-----------------------------------------------------------------------------------------------*/
-// TODO: make thread safe
-//   check memcpy, memset, atoi, mktime
 time_t
 parse_time_string(char const *tstr)
 {
@@ -53,7 +51,7 @@ parse_time_string(char const *tstr)
     int doy = atoi(buff);
     int month = 0;
     int day = 0;
-    for (int i = 1; i < 12; i++) {
+    for (int i = 1; i <= 12; i++) {
         int days_in_month = 31;
         if (i == 2) {
             if (leap_year) {
