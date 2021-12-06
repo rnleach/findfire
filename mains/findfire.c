@@ -176,7 +176,7 @@ standard_dir_filter(char const *path, void *user_data)
         int maybe = atoi(c);
         if (maybe > 2000) {
             year = maybe;
-        } else if (maybe > 0) {
+        } else if (maybe > 0 || *c == '0') {
             if (doy == -1) {
                 doy = maybe;
             } else {
