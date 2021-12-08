@@ -60,10 +60,8 @@ So far I'm only using the following from GLIB:
  - GList
 
 
-### GDAL (3.2.2 or later used in development)
- This is critical for accessing and geo-referencing the data. Whatever version of GDAL you're using,
- it must have support for NetCDF4 installed as well. This shouldn't be a problem since that is the
- default anyway. Future versions may use the PROJ and NetCDF4 libraries directly.
+### netcdf
+ This is critical for accessing the data. The data files are in NetCDF4 format.
 
 
 ### SQLITE3

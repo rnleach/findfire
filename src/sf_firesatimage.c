@@ -2,10 +2,10 @@
 #include <libgen.h>
 #include <tgmath.h>
 
+#include <netcdf.h>
+
 #include "sf_private.h"
 #include "sf_util.h"
-
-#include "ogr_srs_api.h"
 
 bool
 fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
@@ -21,25 +21,68 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
     num_printed = snprintf(tgt->fname, sizeof(tgt->fname), "%s", bname);
     Stopif(num_printed >= sizeof(tgt->fname), return false, "File name too long: %s", fname);
 
-    char descriptor[1024] = {0};
-    num_printed = snprintf(descriptor, sizeof(descriptor), "NETCDF:\"%s\":Power", fname);
-    Stopif(num_printed >= sizeof(descriptor), return false, "Descriptor buffer too small for %s",
-           fname);
+    int file_id = -1;
+    int status = nc_open(fname, NC_NOWRITE, &file_id);
+    Stopif(status != NC_NOERR, return false, "Error opening NetCDF %s: %s", fname,
+           nc_strerror(status));
+    tgt->nc_file_id = file_id;
 
-    tgt->dataset = GDALOpen(descriptor, GA_ReadOnly);
-    Stopif(!tgt->dataset, return false, "Error opening %s", fname);
+    int xdimid = -1;
+    int ydimid = -1;
+    status = nc_inq_dimid(file_id, "x", &xdimid);
+    Stopif(status != NC_NOERR, return false, "Error retrieving dimension id x: %s",
+           nc_strerror(status));
+    status = nc_inq_dimid(file_id, "y", &ydimid);
+    Stopif(status != NC_NOERR, return false, "Error retrieving dimension id y: %s",
+           nc_strerror(status));
 
-    CPLErr err = GDALGetGeoTransform(tgt->dataset, tgt->geo_transform);
-    Stopif(err != CE_None, return false, "Error (%d) getting geo-transform from %s", err, fname);
+    status = nc_inq_dimlen(file_id, xdimid, &tgt->xlen);
+    Stopif(status != NC_NOERR, return false, "Error retrieving dimension size x: %s",
+           nc_strerror(status));
+    status = nc_inq_dimlen(file_id, ydimid, &tgt->ylen);
+    Stopif(status != NC_NOERR, return false, "Error retrieving dimension size y: %s",
+           nc_strerror(status));
 
-    tgt->band = GDALGetRasterBand(tgt->dataset, 1);
-    Stopif(!tgt->band, return false, "Error retrieving band-1 from the dataset in %s", fname);
+    int xvarid = -1;
+    int yvarid = -1;
+    status = nc_inq_varid(file_id, "x", &xvarid);
+    Stopif(status != NC_NOERR, return false, "Error retrieving x variable id: %s",
+           nc_strerror(status));
+    status = nc_inq_varid(file_id, "y", &yvarid);
+    Stopif(status != NC_NOERR, return false, "Error retrieving y variable id: %s",
+           nc_strerror(status));
 
-    tgt->y_size = GDALGetRasterBandYSize(tgt->band);
-    tgt->x_size = GDALGetRasterBandXSize(tgt->band);
+    status = nc_get_att_double(file_id, xvarid, "scale_factor", &tgt->trans.xscale);
+    Stopif(status != NC_NOERR, return false, "Error retrieving x scale factor: %s",
+           nc_strerror(status));
+    status = nc_get_att_double(file_id, yvarid, "scale_factor", &tgt->trans.yscale);
+    Stopif(status != NC_NOERR, return false, "Error retrieving y scale factor: %s",
+           nc_strerror(status));
+    status = nc_get_att_double(file_id, xvarid, "add_offset", &tgt->trans.xoffset);
+    Stopif(status != NC_NOERR, return false, "Error retrieving x offset: %s", nc_strerror(status));
+    status = nc_get_att_double(file_id, yvarid, "add_offset", &tgt->trans.yoffset);
+    Stopif(status != NC_NOERR, return false, "Error retrieving y offset: %s", nc_strerror(status));
 
-    assert(tgt->x_size > 0);
-    assert(tgt->y_size > 0);
+    int projection_var_id = -1;
+    status = nc_inq_varid(file_id, "goes_imager_projection", &projection_var_id);
+    Stopif(status != NC_NOERR, return false, "Error retrieving projection variable: %s",
+           nc_strerror(status));
+
+    status = nc_get_att_double(file_id, projection_var_id, "semi_major_axis", &tgt->trans.req);
+    Stopif(status != NC_NOERR, return false, "Error retrieving semi_major_axis: %s",
+           nc_strerror(status));
+    status = nc_get_att_double(file_id, projection_var_id, "semi_minor_axis", &tgt->trans.rpol);
+    Stopif(status != NC_NOERR, return false, "Error retrieving semi_minor_axis: %s",
+           nc_strerror(status));
+    status =
+        nc_get_att_double(file_id, projection_var_id, "perspective_point_height", &tgt->trans.H);
+    Stopif(status != NC_NOERR, return false, "Error retrieving perspective_point_height: %s",
+           nc_strerror(status));
+    tgt->trans.H += tgt->trans.req;
+    status = nc_get_att_double(file_id, projection_var_id, "longitude_of_projection_origin",
+                               &tgt->trans.lon0);
+    Stopif(status != NC_NOERR, return false, "Error retrieving longitude_of_projection_origin: %s",
+           nc_strerror(status));
 
     return true;
 }
@@ -47,12 +90,53 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
 void
 fire_sat_image_close(struct SatFireImage *dataset)
 {
-    memset(dataset->fname, 0, sizeof(dataset->fname));
-    memset(dataset->geo_transform, 0, sizeof(dataset->geo_transform));
-    dataset->x_size = 0;
-    dataset->y_size = 0;
-    GDALClose(dataset->dataset);
-    dataset->dataset = 0;
+    int status = nc_close(dataset->nc_file_id);
+    Stopif(status != NC_NOERR, return, "Error closing NetCDF file %s: %s", dataset->fname,
+           nc_strerror(status));
+    memset(dataset, 0, sizeof(*dataset));
+}
+
+struct XYCoord {
+    double x;
+    double y;
+};
+
+static inline struct XYCoord
+satfire_convert_row_col_to_scan_angles(struct CoordTransform const *trans, double row, double col)
+{
+    double x = trans->xscale * col + trans->xoffset;
+    double y = trans->yscale * row + trans->yoffset;
+
+    return (struct XYCoord){.x = x, .y = y};
+}
+
+static inline struct SFCoord
+satfire_convert_xy_to_latlon(struct CoordTransform const *trans, struct XYCoord xy)
+{
+    double sinx = sin(xy.x);
+    double cosx = cos(xy.x);
+    double siny = sin(xy.y);
+    double cosy = cos(xy.y);
+    double req = trans->req;
+    double rpol = trans->rpol;
+    double H = trans->H;
+    double lon0 = trans->lon0;
+
+    double a = sinx * sinx + cosx * cosx * (cosy * cosy + req * req / (rpol * rpol) * siny * siny);
+    double b = -2.0 * H * cosx * cosy;
+    double c = H * H - req * req;
+
+    double rs = (-b - sqrt(b * b - 4.0 * a * c)) / (2.0 * a);
+
+    double sx = rs * cosx * cosy;
+    double sy = -rs * sinx;
+    double sz = rs * cosx * siny;
+
+    double lat =
+        atan2(req * req * sz, rpol * rpol * sqrt((H - sx) * (H - sx) + sy * sy)) * 180.0 / M_PI;
+    double lon = lon0 - atan2(sy, H - sx) * 180.0 / M_PI;
+
+    return (struct SFCoord){.lat = lat, .lon = lon};
 }
 
 GArray *
@@ -60,71 +144,50 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
 {
     assert(fdata);
 
-    GArray *buffer = 0;
     GArray *points = 0;
-    OGRCoordinateTransformationH trans = 0;
-
-    OGRSpatialReferenceH src_srs = GDALGetSpatialRef(fdata->dataset);
-    assert(src_srs);
-
-    OGRSpatialReferenceH dst_srs = OSRNewSpatialReference(0);
-    OSRImportFromEPSG(dst_srs, 4326);
-    assert(dst_srs);
-
-    trans = OCTNewCoordinateTransformation(src_srs, dst_srs);
-    assert(trans);
-    OSRDestroySpatialReference(dst_srs);
-
-    buffer = g_array_sized_new(false, true, sizeof(float), fdata->x_size * fdata->y_size);
-    buffer = g_array_set_size(buffer, fdata->x_size * fdata->y_size);
-
-    CPLErr err = GDALRasterIO(fdata->band, GF_Read, 0, 0, fdata->x_size, fdata->y_size,
-                              buffer->data, fdata->x_size, fdata->y_size, GDT_Float32, 0, 0);
-
-    Stopif(err != CE_None, goto ERR_RETURN, "Error reading raster data from %s", fdata->fname);
-
+    double *powers = 0;
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
-    double lon0 = 0.0, lat0 = 0.0, z0 = 0.0;
-    OCTTransform(trans, 1, &lat0, &lon0, &z0);
+    int power_var_id = -1;
+    int status = nc_inq_varid(fdata->nc_file_id, "Power", &power_var_id);
+    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Power variable id: %s",
+           nc_strerror(status));
 
-    for (int j = 0; j < fdata->y_size; ++j) {
-        for (int i = 0; i < fdata->x_size; ++i) {
+    size_t power_len = fdata->xlen * fdata->ylen;
+    powers = malloc(power_len * sizeof(double));
+    assert(powers);
 
-            float power_mw = g_array_index(buffer, float, j * fdata->x_size + i);
+    size_t start[2] = {0, 0};
+    size_t counts[2] = {fdata->ylen, fdata->xlen};
+    status = nc_get_vara_double(fdata->nc_file_id, power_var_id, start, counts, powers);
+    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Power variable values: %s",
+           nc_strerror(status));
+
+    for (int j = 0; j < fdata->ylen; ++j) {
+        for (int i = 0; i < fdata->xlen; ++i) {
+
+            double power_mw = powers[fdata->xlen * j + i];
+
             if (power_mw > 0.0) {
 
                 double ips[5] = {i - 0.5, i - 0.5, i + 0.5, i + 0.5, i};
                 double jps[5] = {j - 0.5, j + 0.5, j + 0.5, j - 0.5, j};
 
-                double xps[5] = {0};
-                double yps[5] = {0};
-                double zps[5] = {0};
+                struct XYCoord xys[5] = {0};
+                struct SFCoord coords[5] = {0};
 
-                for (size_t k = 0; k < sizeof(xps) / sizeof(xps[0]); ++k) {
-                    xps[k] = fdata->geo_transform[0] + ips[k] * fdata->geo_transform[1] +
-                             jps[k] * fdata->geo_transform[2];
-                    yps[k] = fdata->geo_transform[3] + ips[k] * fdata->geo_transform[4] +
-                             jps[k] * fdata->geo_transform[5];
+                for (size_t k = 0; k < sizeof(xys) / sizeof(xys[0]); ++k) {
+                    xys[k] = satfire_convert_row_col_to_scan_angles(&fdata->trans, jps[k], ips[k]);
+                    coords[k] = satfire_convert_xy_to_latlon(&fdata->trans, xys[k]);
                 }
 
-                // This function transposes the coordinates so xps -> latitudes and
-                // yps -> longitudes.
-                OCTTransform(trans, sizeof(xps) / sizeof(xps[0]), xps, yps, zps);
+                double scan_angle = hypot(xys[4].x, xys[4].y) * 180.0 / M_PI;
 
-                double dlat = xps[4] - lat0;
-                double dlon = yps[4] - lon0;
-                double scan_angle = hypot(dlat, dlon);
-                if (scan_angle > 90.0) {
-                    // International date line got us!
-                    scan_angle = hypot(dlat, dlon - 360.0);
-                }
-
-                struct SFCoord ul = {.lat = xps[0], .lon = yps[0]};
-                struct SFCoord ll = {.lat = xps[1], .lon = yps[1]};
-                struct SFCoord lr = {.lat = xps[2], .lon = yps[2]};
-                struct SFCoord ur = {.lat = xps[3], .lon = yps[3]};
+                struct SFCoord ul = coords[0];
+                struct SFCoord ll = coords[1];
+                struct SFCoord lr = coords[2];
+                struct SFCoord ur = coords[3];
 
                 struct SFPixel pixel = {.ul = ul,
                                         .ll = ll,
@@ -139,18 +202,14 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
         }
     }
 
-    g_array_unref(buffer);
-    OCTDestroyCoordinateTransformation(trans);
-
+    free(powers);
     return points;
 
 ERR_RETURN:
 
-    if (buffer)
-        g_array_unref(buffer);
-    if (trans)
-        OCTDestroyCoordinateTransformation(trans);
     if (points)
         g_array_unref(points);
+    free(powers);
+
     return 0;
 }

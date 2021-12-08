@@ -5,8 +5,7 @@
  */
 #include "satfire.h"
 
-#include "gdal.h"
-#include "glib.h"
+#include <glib.h>
 
 /**
  * \brief Represents all the data associated with a single pixel in which the satellite has detected
@@ -21,22 +20,34 @@ struct FirePoint {
     int y;
 };
 
+/** \brief Projection information required to convert from row/column number to scan angles and
+ * lat-lon.
+ */
+struct CoordTransform {
+    double xscale;  /**< Scale factor for the column for converting indexes to scan angle coords. */
+    double xoffset; /**< Offset for the column for converting indexes to scan angle coords.*/
+    double yscale;  /**< Scale factor for the row for converting indexes to scan angle coords.*/
+    double yoffset; /**< Offset for the  row for converting indexes to scan angle coords.*/
+    double req;     /**< Radius of the Earth at the equator in meters. */
+    double rpol;    /**< Radius of the Earth at the poles in meters. */
+    double H;       /**< Height of the satellite above the equator in meters. */
+    double lon0;    /**< Longitude of the nadir point in degrees. */
+};
+
 /**
  * \brief Handle to a GDAL dataset for the Fire Detection Characteristics and some metadata.
  */
 struct SatFireImage {
     /// Orignial file name the dataset was loaded from.
     char fname[512];
-    /// Handle to the dataset.
-    GDALDatasetH dataset;
-    /// Transform from array indexes to spatial coordinates.
-    double geo_transform[6];
-    /// Handle to the desired band from the dataset
-    GDALRasterBandH band;
-    /// The size of a row (x-dimension) in the band.
-    int x_size;
-    /// The number or rows (y-dimension) in the band.
-    int y_size;
+    /// Handle to the NetCDF file
+    int nc_file_id;
+    /// Image width in pixels
+    size_t xlen;
+    /// Image height in pixels
+    size_t ylen;
+    /// All the information needed for transforming from row and column numbers to coordinates.
+    struct CoordTransform trans;
 };
 
 /**

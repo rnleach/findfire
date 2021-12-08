@@ -41,9 +41,9 @@ CFLAGS += -D_DEFAULT_SOURCE -D_XOPEN_SOURCE -D_GNU_SOURCE
 CFLAGS += `pkg-config --cflags glib-2.0`
 LDLIBS += `pkg-config --libs glib-2.0`
 
-# gdal
-CFLAGS += `pkg-config --cflags gdal`
-LDLIBS += `pkg-config --libs gdal`
+# netcdf
+CFLAGS += `pkg-config --cflags netcdf`
+LDLIBS += `pkg-config --libs netcdf`
 
 # sqlite3 library for download cache
 CFLAGS += `pkg-config --cflags sqlite3`
