@@ -579,7 +579,7 @@ int satfire_cluster_db_query_rows_finalize(SFClusterDatabaseQueryRowsH *query);
 /** \struct SFClusterRow
  * \brief A row describing a \ref SFCluster that has been retrieved from the database.
  *
- * A result row from a SFClusterDatabaseQueryRowsH. This includes more information than the 
+ * A result row from a SFClusterDatabaseQueryRowsH. This includes more information than the
  * \ref SFCluster type does. This also includes valid times and satellite metadata.
  */
 struct SFClusterRow;
