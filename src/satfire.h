@@ -177,14 +177,18 @@ struct SFPixel {
     };
     /// The radiative power in MegaWatts in this pixel.
     double power;
+    /// The estimated area of the pixel covered by the fire in square meters.
+    double area;
+    /// The estimated temperature of the fire in K
+    double temperature;
     /// This is the scan angle as measured in the coordinate system of the satellite. The satellite
     /// measures the x and y positions of a pixel on a grid by the angle each makes with the central
     /// point which looks at nadir on the Earth. There are two values, an x scan angle and a y scan
     /// angle. They are combined via the Euclidian norm sqrt(x^2 + y^2) to form the scan_angle.
     ///
-    /// Constant values of the scan angle form concentric circles around the nadir point on the 
-    /// Earth's surface. All points along that line have a very similar (equal if the Earth was a 
-    /// sphere) angle between the satellites view and the local zenith. This is a good proxy for 
+    /// Constant values of the scan angle form concentric circles around the nadir point on the
+    /// Earth's surface. All points along that line have a very similar (equal if the Earth was a
+    /// sphere) angle between the satellites view and the local zenith. This is a good proxy for
     /// how much of an edge on vs straight down view, which can be useful for quality control.
     double scan_angle;
 };
@@ -279,8 +283,14 @@ struct SFPixelList *satfire_pixel_list_clear(struct SFPixelList list[static 1]);
 /** Calculate the centroid of a SFPixelList. */
 struct SFCoord satfire_pixel_list_centroid(struct SFPixelList const list[static 1]);
 
-/** Calculate the total power in a SFPixelList. */
+/** Calculate the total power in a SFPixelList, megawatts. */
 double satfire_pixel_list_total_power(struct SFPixelList const list[static 1]);
+
+/** Calculate the total area in a SFPixelList, square meters. */
+double satfire_pixel_list_total_area(struct SFPixelList const list[static 1]);
+
+/** Calculate the maximum temperature in a SFPixelList, kelvin. */
+double satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                  Pixel List Binary Format
@@ -337,8 +347,16 @@ void satfire_cluster_destroy(struct SFCluster **cluster);
 /** Create a deep copy of a Cluster. */
 struct SFCluster *satfire_cluster_copy(struct SFCluster const *cluster);
 
-/** Get the total power of all pixels in the Cluster. */
+/** Get the total power of all pixels in the Cluster, megawatts. */
 double satfire_cluster_total_power(struct SFCluster const *cluster);
+
+/** Get the total fire area of all pixels in the Cluster that had an area in the file, square
+ * meters. */
+double satfire_cluster_total_area(struct SFCluster const *cluster);
+
+/** Get the max fire temperature of all pixels in the Cluster that had a temperature in the file,
+ * Kelvin. */
+double satfire_cluster_max_temperature(struct SFCluster const *cluster);
 
 /** Get the max scan angle of any pixel in this cluster. */
 double satfire_cluster_max_scan_angle(struct SFCluster const *cluster);

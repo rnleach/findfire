@@ -15,6 +15,10 @@ char const *out_of_memory = "memory allocation error";
 struct SFCluster {
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     double power;
+    /// Total (sum) of the fire area of the points in the cluster with area in square meters.
+    double area;
+    /// Maximum temperature of all the pixels in the cluster in Kelvin.
+    double max_temp;
     /// The maximum scan angle of any point in this cluster
     double max_scan_angle;
     /// Pixels making up the cluster.
@@ -51,6 +55,15 @@ satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire
 
     cluster->pixels = satfire_pixel_list_append(cluster->pixels, &fire_point->pixel);
     cluster->power += fire_point->pixel.power;
+
+    if (!isinf(fire_point->pixel.temperature)) {
+        cluster->max_temp = fmax(cluster->max_temp, fire_point->pixel.temperature);
+    }
+
+    if (!isinf(fire_point->pixel.area)) {
+        cluster->area += fire_point->pixel.area;
+    }
+
     cluster->max_scan_angle = fmax(cluster->max_scan_angle, fire_point->pixel.scan_angle);
 }
 
@@ -63,6 +76,8 @@ satfire_cluster_copy(struct SFCluster const *cluster)
     Stopif(!copy, exit(EXIT_FAILURE), "%s", out_of_memory);
 
     *copy = (struct SFCluster){.power = cluster->power,
+                               .area = cluster->area,
+                               .max_temp = cluster->max_temp,
                                .pixels = satfire_pixel_list_copy(cluster->pixels),
                                .max_scan_angle = cluster->max_scan_angle};
 
@@ -74,6 +89,20 @@ satfire_cluster_total_power(struct SFCluster const *cluster)
 {
     assert(cluster);
     return cluster->power;
+}
+
+double
+satfire_cluster_total_area(struct SFCluster const *cluster)
+{
+    assert(cluster);
+    return cluster->area;
+}
+
+double
+satfire_cluster_max_temperature(struct SFCluster const *cluster)
+{
+    assert(cluster);
+    return cluster->max_temp;
 }
 
 double

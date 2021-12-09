@@ -275,9 +275,15 @@ save_satfire_cluster_kml(struct SFCluster *biggest, time_t start, time_t end, en
     kamel_timespan(out, start, end);
 
     char *description = 0;
-    asprintf(&description, "Satellite: %s</br>Sector: %s</br>Power: %.0lf MW",
+    asprintf(&description,
+             "Satellite: %s<br/>"
+             "Sector: %s<br/>"
+             "Power: %.0lf MW<br/>"
+             "Area: %.0lf m^2<br/>"
+             "Max Temperature: %.0lf&deg;K",
              satfire_satellite_name(sat), satfire_sector_name(sector),
-             satfire_cluster_total_power(biggest));
+             satfire_cluster_total_power(biggest), satfire_cluster_total_area(biggest),
+             satfire_cluster_max_temperature(biggest));
 
     kamel_start_placemark(out, "Biggest Fire", description, "#fire");
     struct SFCoord centroid = satfire_pixel_list_centroid(satfire_cluster_pixels(biggest));
@@ -317,6 +323,12 @@ struct ClusterStats {
     time_t biggest_start;
     time_t biggest_end;
 
+    struct SFCluster *hottest_fire;
+    enum SFSatellite hottest_sat;
+    enum SFSector hottest_sector;
+    time_t hottest_start;
+    time_t hottest_end;
+
     unsigned num_clusters;
     unsigned num_power_lt_1mw;
     unsigned num_power_lt_10mw;
@@ -335,6 +347,11 @@ satfire_cluster_stats_new(void)
         .biggest_sector = SATFIRE_SECTOR_NONE,
         .biggest_start = 0,
         .biggest_end = 0,
+        .hottest_fire = satfire_cluster_new(),
+        .hottest_sat = SATFIRE_SATELLITE_NONE,
+        .hottest_sector = SATFIRE_SECTOR_NONE,
+        .hottest_start = 0,
+        .hottest_end = 0,
         .num_clusters = 0,
         .num_power_lt_1mw = 0,
         .num_power_lt_10mw = 0,
@@ -349,6 +366,7 @@ static void
 satfire_cluster_stats_destroy(struct ClusterStats *tgt)
 {
     satfire_cluster_destroy(&tgt->biggest_fire);
+    satfire_cluster_destroy(&tgt->hottest_fire);
     memset(tgt, 0, sizeof(struct ClusterStats));
 }
 
@@ -357,6 +375,7 @@ satfire_cluster_stats_update(struct ClusterStats stats, enum SFSatellite sat, en
                              time_t start, time_t end, struct SFCluster *cluster)
 {
     double satfire_cluster_power = satfire_cluster_total_power(cluster);
+    double satfire_cluster_temperature = satfire_cluster_max_temperature(cluster);
 
     if (satfire_cluster_max_scan_angle(cluster) < MAX_SCAN_ANGLE) {
         if (satfire_cluster_power > satfire_cluster_total_power(stats.biggest_fire)) {
@@ -366,6 +385,15 @@ satfire_cluster_stats_update(struct ClusterStats stats, enum SFSatellite sat, en
             stats.biggest_sector = sector;
             stats.biggest_start = start;
             stats.biggest_end = end;
+        }
+
+        if (satfire_cluster_temperature > satfire_cluster_max_temperature(stats.hottest_fire)) {
+            satfire_cluster_destroy(&stats.hottest_fire);
+            stats.hottest_fire = satfire_cluster_copy(cluster);
+            stats.hottest_sat = sat;
+            stats.hottest_sector = sector;
+            stats.hottest_start = start;
+            stats.hottest_end = end;
         }
 
         if (satfire_cluster_power < 1.0) {
@@ -403,24 +431,45 @@ satfire_cluster_stats_print(struct ClusterStats stats)
 {
     if (stats.num_clusters > 0) {
 
-        char start_str[128] = {0};
-        ctime_r(&stats.biggest_start, start_str);
-        char end_str[128] = {0};
-        ctime_r(&stats.biggest_end, end_str);
+        char power_start_str[128] = {0};
+        ctime_r(&stats.biggest_start, power_start_str);
+        char power_end_str[128] = {0};
+        ctime_r(&stats.biggest_end, power_end_str);
 
         struct SFCoord biggest_centroid = satfire_cluster_centroid(stats.biggest_fire);
 
+        char hot_start_str[128] = {0};
+        ctime_r(&stats.hottest_start, hot_start_str);
+        char hot_end_str[128] = {0};
+        ctime_r(&stats.hottest_end, hot_end_str);
+
+        struct SFCoord hot_centroid = satfire_cluster_centroid(stats.hottest_fire);
+
         printf("\nIndividual Cluster Stats\n\n"
-               "Most Powerfull:\n"
-               "     satellite: %s\n"
-               "        sector: %s\n"
-               "         start: %s"
-               "           end: %s"
-               "           Lat: %10.6lf\n"
-               "           Lon: %11.6lf\n"
-               "Max Scan Angle: %3.0lf\n"
-               "         Count: %2d\n"
-               "         Power: %5.0lf MW\n\n"
+               "M ost Powerfull:\n"
+               "      satellite: %s\n"
+               "         sector: %s\n"
+               "          start: %s"
+               "            end: %s"
+               "            Lat: %10.6lf\n"
+               "            Lon: %11.6lf\n"
+               " Max Scan Angle: %3.0lf\n"
+               "          Count: %2d\n"
+               "          Power: %5.0lf MW\n"
+               "           Area: %5.0lf square meters\n"
+               "Max Temperature: %5.0lf Kelvin\n\n"
+               "        Hottest:\n"
+               "      satellite: %s\n"
+               "         sector: %s\n"
+               "          start: %s"
+               "            end: %s"
+               "            Lat: %10.6lf\n"
+               "            Lon: %11.6lf\n"
+               " Max Scan Angle: %3.0lf\n"
+               "          Count: %2d\n"
+               "          Power: %5.0lf MW\n"
+               "           Area: %5.0lf square meters\n"
+               "Max Temperature: %5.0lf Kelvin\n\n"
                "        Counts:\n"
                "         Total: %10u\n"
                "Power <   1 MW: %10u\n"
@@ -436,13 +485,24 @@ satfire_cluster_stats_print(struct ClusterStats stats)
                "  Pct <  10 GW: %10u%%\n"
                "  Pct < 100 GW: %10u%%\n",
                satfire_satellite_name(stats.biggest_sat), satfire_sector_name(stats.biggest_sector),
-               start_str, end_str, biggest_centroid.lat, biggest_centroid.lon,
+               power_start_str, power_end_str, biggest_centroid.lat, biggest_centroid.lon,
                satfire_cluster_max_scan_angle(stats.biggest_fire),
                satfire_cluster_pixel_count(stats.biggest_fire),
-               satfire_cluster_total_power(stats.biggest_fire), stats.num_clusters,
-               stats.num_power_lt_1mw, stats.num_power_lt_10mw, stats.num_power_lt_100mw,
-               stats.num_power_lt_1gw, stats.num_power_lt_10gw, stats.num_power_lt_100gw,
-               stats.num_power_lt_1mw * 100 / stats.num_clusters,
+               satfire_cluster_total_power(stats.biggest_fire),
+               satfire_cluster_total_area(stats.biggest_fire),
+               satfire_cluster_max_temperature(stats.biggest_fire),
+
+               satfire_satellite_name(stats.hottest_sat), satfire_sector_name(stats.hottest_sector),
+               hot_start_str, hot_end_str, hot_centroid.lat, hot_centroid.lon,
+               satfire_cluster_max_scan_angle(stats.hottest_fire),
+               satfire_cluster_pixel_count(stats.hottest_fire),
+               satfire_cluster_total_power(stats.hottest_fire),
+               satfire_cluster_total_area(stats.hottest_fire),
+               satfire_cluster_max_temperature(stats.hottest_fire),
+
+               stats.num_clusters, stats.num_power_lt_1mw, stats.num_power_lt_10mw,
+               stats.num_power_lt_100mw, stats.num_power_lt_1gw, stats.num_power_lt_10gw,
+               stats.num_power_lt_100gw, stats.num_power_lt_1mw * 100 / stats.num_clusters,
                stats.num_power_lt_10mw * 100 / stats.num_clusters,
                stats.num_power_lt_100mw * 100 / stats.num_clusters,
                stats.num_power_lt_1gw * 100 / stats.num_clusters,
@@ -836,6 +896,7 @@ database_filler(void *arg)
                              satfire_cluster_stats.biggest_start, satfire_cluster_stats.biggest_end,
                              satfire_cluster_stats.biggest_sat,
                              satfire_cluster_stats.biggest_sector);
+
     satfire_cluster_stats_destroy(&satfire_cluster_stats);
 
     satfire_cluster_list_stats_destroy(&clstats);

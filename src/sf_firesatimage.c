@@ -139,6 +139,60 @@ satfire_convert_xy_to_latlon(struct CoordTransform const *trans, struct XYCoord 
     return (struct SFCoord){.lat = lat, .lon = lon};
 }
 
+static inline double *
+satfire_extract_variable(struct SatFireImage const *fdata, char const *variable)
+{
+    double *vals = 0;
+
+    int var_id = -1;
+    int status = nc_inq_varid(fdata->nc_file_id, variable, &var_id);
+    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading %s variable id: %s", variable,
+           nc_strerror(status));
+
+    size_t vals_len = fdata->xlen * fdata->ylen;
+    vals = malloc(vals_len * sizeof(double));
+    assert(vals);
+
+    size_t start[2] = {0, 0};
+    size_t counts[2] = {fdata->ylen, fdata->xlen};
+    status = nc_get_vara_double(fdata->nc_file_id, var_id, start, counts, vals);
+    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading %s variable values: %s", variable,
+           nc_strerror(status));
+
+    double scale_factor = 1.0;
+    double add_offset = 0.0;
+    double fill_value = 65535.0;
+
+    status = nc_get_att_double(fdata->nc_file_id, var_id, "scale_factor", &scale_factor);
+    Stopif(status != NC_NOERR && status != NC_ENOTATT, goto ERR_RETURN,
+           "Error reading scale_factor attribute for %s: %s", variable, nc_strerror(status));
+    bool skip_transform = status == NC_ENOTATT;
+    status = nc_get_att_double(fdata->nc_file_id, var_id, "add_offset", &add_offset);
+    Stopif(status != NC_NOERR && status != NC_ENOTATT, goto ERR_RETURN,
+           "Error reading add_offset attribute for %s: %s", variable, nc_strerror(status));
+    skip_transform = skip_transform && (status == NC_ENOTATT);
+
+    status = nc_get_att_double(fdata->nc_file_id, var_id, "_FillValue", &fill_value);
+    Stopif(status != NC_NOERR && status != NC_ENOTATT, goto ERR_RETURN,
+           "Error reading _FillValue attribute for %s: %s", variable, nc_strerror(status));
+
+    if (!skip_transform) {
+        for (size_t i = 0; i < vals_len; ++i) {
+            if (vals[i] != fill_value) {
+                vals[i] = vals[i] * scale_factor + add_offset;
+            } else {
+                vals[i] = -INFINITY;
+            }
+        }
+    }
+
+    return vals;
+
+ERR_RETURN:
+    free(vals);
+    return 0;
+}
+
 GArray *
 fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
 {
@@ -146,28 +200,26 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
 
     GArray *points = 0;
     double *powers = 0;
+    double *areas = 0;
+    double *temperatures = 0;
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
-    int power_var_id = -1;
-    int status = nc_inq_varid(fdata->nc_file_id, "Power", &power_var_id);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Power variable id: %s",
-           nc_strerror(status));
+    powers = satfire_extract_variable(fdata, "Power");
+    Stopif(!powers, goto ERR_RETURN, "Error reading Power");
 
-    size_t power_len = fdata->xlen * fdata->ylen;
-    powers = malloc(power_len * sizeof(double));
-    assert(powers);
+    areas = satfire_extract_variable(fdata, "Area");
+    Stopif(!areas, goto ERR_RETURN, "Error reading Area");
 
-    size_t start[2] = {0, 0};
-    size_t counts[2] = {fdata->ylen, fdata->xlen};
-    status = nc_get_vara_double(fdata->nc_file_id, power_var_id, start, counts, powers);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Power variable values: %s",
-           nc_strerror(status));
+    temperatures = satfire_extract_variable(fdata, "Temp");
+    Stopif(!temperatures, goto ERR_RETURN, "Error reading Temperature");
 
     for (int j = 0; j < fdata->ylen; ++j) {
         for (int i = 0; i < fdata->xlen; ++i) {
 
             double power_mw = powers[fdata->xlen * j + i];
+            double area = areas[fdata->xlen * j + i];
+            double temperature = temperatures[fdata->xlen * j + i];
 
             if (power_mw > 0.0) {
 
@@ -194,6 +246,8 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
                                         .lr = lr,
                                         .ur = ur,
                                         .power = power_mw,
+                                        .area = area,
+                                        .temperature = temperature,
                                         .scan_angle = scan_angle};
 
                 struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel};
@@ -203,6 +257,8 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
     }
 
     free(powers);
+    free(areas);
+    free(temperatures);
     return points;
 
 ERR_RETURN:
@@ -210,6 +266,8 @@ ERR_RETURN:
     if (points)
         g_array_unref(points);
     free(powers);
+    free(areas);
+    free(temperatures);
 
     return 0;
 }

@@ -552,6 +552,35 @@ satfire_pixel_list_total_power(struct SFPixelList const list[static 1])
 
     return total_power;
 }
+
+double
+satfire_pixel_list_total_area(struct SFPixelList const list[static 1])
+{
+    assert(list);
+
+    double total_area = 0.0;
+
+    for (unsigned int i = 0; i < list->len; ++i) {
+        total_area += list->pixels[i].area;
+    }
+
+    return total_area;
+}
+
+double
+satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1])
+{
+    assert(list);
+
+    double max_temperature = -HUGE_VAL;
+
+    for (unsigned int i = 0; i < list->len; ++i) {
+        max_temperature = fmax(list->pixels[i].temperature, max_temperature);
+    }
+
+    return max_temperature;
+}
+
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
@@ -639,8 +668,12 @@ satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1
     for (unsigned int i = 0; i < plist->len; ++i) {
         struct SFPixel pixel = plist->pixels[i];
 
-        sprintf(desc, "<h3>Power: %.0lfMW</h3><h3>From nadir: %.0lf&deg;</h3>", pixel.power,
-                pixel.scan_angle);
+        sprintf(desc,
+                "Power: %.0lfMW<br/>"
+                "Area: %.0lf m^2</br>"
+                "Temperature: %.0lf&deg;K<br/>"
+                "scan angle: %.0lf&deg;<br/>",
+                pixel.power, pixel.area, pixel.temperature, pixel.scan_angle);
 
         kamel_start_placemark(strm, 0, desc, 0);
 
