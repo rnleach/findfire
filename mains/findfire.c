@@ -303,9 +303,11 @@ save_satfire_cluster_kml(struct SFCluster *biggest, time_t start, time_t end, en
  * summary statistics. This is a QC tool, there are a lot of outliers on the limb of the Earth as
  * viewed by the GOES satellites, and the angles / geometry seem to have something to do with it.
  *
+ * TODO: I need to update this based on the new definition of scan angle.
  * The value of 67.0 degrees is based on visual inspection of a graph of cluster power vs scan
  * angle of the cluster centroid.
  */
+// TODO: Update this based on the new definition of scan angle.
 #define MAX_SCAN_ANGLE 67.0
 
 struct ClusterStats {

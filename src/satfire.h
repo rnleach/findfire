@@ -177,13 +177,15 @@ struct SFPixel {
     };
     /// The radiative power in MegaWatts in this pixel.
     double power;
-    /// This is the angle in degrees from nadir. For instance, a point on the equator at -150
-    /// longitude has a scan angle of 13 degrees if nadir has longitude -137 degrees. And a point
-    /// at 45 degrees latitude and -137 degrees longitude for the same satellite would have a
-    /// scan_anlge of 45 degrees. If the distance in latitude from nadir is dlat and the distance
-    /// in longitude from nadir is dlon, then the scan angle is sqrt(dlat^2 + dlon^2). Lines of
-    /// constant scan angle represent concentric circles spreading out from nadir, and the angle
-    /// between the zenith and the satellites viewing angle are constant along this line.
+    /// This is the scan angle as measured in the coordinate system of the satellite. The satellite
+    /// measures the x and y positions of a pixel on a grid by the angle each makes with the central
+    /// point which looks at nadir on the Earth. There are two values, an x scan angle and a y scan
+    /// angle. They are combined via the Euclidian norm sqrt(x^2 + y^2) to form the scan_angle.
+    ///
+    /// Constant values of the scan angle form concentric circles around the nadir point on the 
+    /// Earth's surface. All points along that line have a very similar (equal if the Earth was a 
+    /// sphere) angle between the satellites view and the local zenith. This is a good proxy for 
+    /// how much of an edge on vs straight down view, which can be useful for quality control.
     double scan_angle;
 };
 
