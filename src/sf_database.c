@@ -652,7 +652,7 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
                          "ORDER BY start_time ASC                         \n";
 
     int num_chars = 0;
-    char satellite_select[4] = {0};
+    char satellite_select[32] = {0};
     if (sat != SATFIRE_SATELLITE_NONE) {
         num_chars = snprintf(satellite_select, sizeof(satellite_select), "AND satellite = '%s'",
                              satfire_satellite_name(sat));
@@ -660,7 +660,7 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
                "satellite select buffer too small.");
     }
 
-    char sector_select[8] = {0};
+    char sector_select[32] = {0};
     if (sector != SATFIRE_SECTOR_NONE) {
         num_chars = snprintf(sector_select, sizeof(sector_select), "AND sector = '%s'",
                              satfire_sector_name(sector));
@@ -668,7 +668,7 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
                "sector select buffer too small.");
     }
 
-    char query_txt[512] = {0};
+    char query_txt[1024] = {0};
     double min_lat = area.ll.lat;
     double min_lon = area.ll.lon;
     double max_lat = area.ur.lat;
