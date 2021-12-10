@@ -637,6 +637,10 @@ satfire_pixel_list_kml_write_pixel_style(FILE *strm, double power)
     double bd = 0.0;
     double ad = 0.6;
 
+    if (isinf(power)) {
+        power = max_power;
+    }
+
     power = fmin(power, max_power);
 
     if (power <= full_red_power) {
