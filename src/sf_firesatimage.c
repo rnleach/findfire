@@ -140,7 +140,7 @@ satfire_convert_xy_to_latlon(struct CoordTransform const *trans, struct XYCoord 
 }
 
 static inline double *
-satfire_extract_variable(struct SatFireImage const *fdata, char const *variable)
+satfire_extract_variable_double(struct SatFireImage const *fdata, char const *variable)
 {
     double *vals = 0;
 
@@ -193,6 +193,33 @@ ERR_RETURN:
     return 0;
 }
 
+static inline unsigned char *
+satfire_extract_data_quality_flag(struct SatFireImage const *fdata)
+{
+    unsigned char *vals = 0;
+
+    int var_id = -1;
+    int status = nc_inq_varid(fdata->nc_file_id, "DQF", &var_id);
+    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading DQF variable id: %s",
+           nc_strerror(status));
+
+    size_t vals_len = fdata->xlen * fdata->ylen;
+    vals = malloc(vals_len * sizeof(unsigned char));
+    assert(vals);
+
+    size_t start[2] = {0, 0};
+    size_t counts[2] = {fdata->ylen, fdata->xlen};
+    status = nc_get_vara_uchar(fdata->nc_file_id, var_id, start, counts, vals);
+    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading DQF variable values: %s",
+           nc_strerror(status));
+
+    return vals;
+
+ERR_RETURN:
+    free(vals);
+    return 0;
+}
+
 GArray *
 fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
 {
@@ -202,17 +229,21 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
     double *powers = 0;
     double *areas = 0;
     double *temperatures = 0;
+    unsigned char *data_quality_flags = 0;
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
-    powers = satfire_extract_variable(fdata, "Power");
+    powers = satfire_extract_variable_double(fdata, "Power");
     Stopif(!powers, goto ERR_RETURN, "Error reading Power");
 
-    areas = satfire_extract_variable(fdata, "Area");
+    areas = satfire_extract_variable_double(fdata, "Area");
     Stopif(!areas, goto ERR_RETURN, "Error reading Area");
 
-    temperatures = satfire_extract_variable(fdata, "Temp");
+    temperatures = satfire_extract_variable_double(fdata, "Temp");
     Stopif(!temperatures, goto ERR_RETURN, "Error reading Temperature");
+
+    data_quality_flags = satfire_extract_data_quality_flag(fdata);
+    Stopif(!data_quality_flags, goto ERR_RETURN, "Error reading Data Quality Flags");
 
     for (int j = 0; j < fdata->ylen; ++j) {
         for (int i = 0; i < fdata->xlen; ++i) {
@@ -220,6 +251,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
             double power_mw = powers[fdata->xlen * j + i];
             double area = areas[fdata->xlen * j + i];
             double temperature = temperatures[fdata->xlen * j + i];
+            unsigned char dqf = data_quality_flags[fdata->xlen * j + i];
 
             if (power_mw > 0.0) {
 
@@ -248,6 +280,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
                                         .power = power_mw,
                                         .area = area,
                                         .temperature = temperature,
+                                        .data_quality_flag = dqf,
                                         .scan_angle = scan_angle};
 
                 struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel};
@@ -259,6 +292,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
     free(powers);
     free(areas);
     free(temperatures);
+    free(data_quality_flags);
     return points;
 
 ERR_RETURN:
@@ -268,6 +302,7 @@ ERR_RETURN:
     free(powers);
     free(areas);
     free(temperatures);
+    free(data_quality_flags);
 
     return 0;
 }

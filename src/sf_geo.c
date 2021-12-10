@@ -672,8 +672,10 @@ satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1
                 "Power: %.0lfMW<br/>"
                 "Area: %.0lf m^2</br>"
                 "Temperature: %.0lf&deg;K<br/>"
-                "scan angle: %.0lf&deg;<br/>",
-                pixel.power, pixel.area, pixel.temperature, pixel.scan_angle);
+                "scan angle: %.0lf&deg;<br/>"
+                "Data Quality Flag: %u<br/>",
+                pixel.power, pixel.area, pixel.temperature, pixel.scan_angle,
+                pixel.data_quality_flag);
 
         kamel_start_placemark(strm, 0, desc, 0);
 

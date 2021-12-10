@@ -191,6 +191,17 @@ struct SFPixel {
     /// sphere) angle between the satellites view and the local zenith. This is a good proxy for
     /// how much of an edge on vs straight down view, which can be useful for quality control.
     double scan_angle;
+    /// Data Quality Flag - the information below was copied from a NetCDF file. I have not yet
+    /// checked to make sure the values have the same meaning in every file.
+    ///
+    ///     0 = good_quality_fire_pixel_qf
+    ///     1 = good_quality_fire_free_land_pixel_qf
+    ///     2 = invalid_due_to_opaque_cloud_pixel_qf
+    ///     3 =
+    ///     invalid_due_to_surface_type_or_sunglint_or_LZA_threshold_exceeded_or_off_earth_or_missing_input_data_qf
+    ///     4 = invalid_due_to_bad_input_data_qf
+    ///     5 = invalid_due_to_algorithm_failure_qf
+    unsigned char data_quality_flag;
 };
 
 /** Calculate the centroid of a SFPixel.
