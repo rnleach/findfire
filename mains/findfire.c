@@ -253,8 +253,45 @@ skip_path(char const *path, SFClusterDatabaseQueryPresentH query)
  *                             Save a Cluster in a KML File
  *-----------------------------------------------------------------------------------------------*/
 static void
-save_satfire_cluster_kml(struct SFCluster *biggest, time_t start, time_t end, enum SFSatellite sat,
-                         enum SFSector sector)
+output_cluster_kml(FILE *out, char const *name, struct SFCluster *cluster, time_t start, time_t end,
+                   enum SFSatellite sat, enum SFSector sector)
+{
+
+    assert(name);
+    assert(out);
+    assert(cluster);
+
+    kamel_start_folder(out, name, 0, true);
+    kamel_timespan(out, start, end);
+
+    char *description = 0;
+    asprintf(&description,
+             "Satellite: %s<br/>"
+             "Sector: %s<br/>"
+             "Power: %.0lf MW<br/>"
+             "Area: %.0lf m^2<br/>"
+             "Max Temperature: %.0lf&deg;K",
+             satfire_satellite_name(sat), satfire_sector_name(sector),
+             satfire_cluster_total_power(cluster), satfire_cluster_total_area(cluster),
+             satfire_cluster_max_temperature(cluster));
+
+    kamel_start_placemark(out, name, description, "#fire");
+    struct SFCoord centroid = satfire_pixel_list_centroid(satfire_cluster_pixels(cluster));
+    kamel_point(out, centroid.lat, centroid.lon, 0.0);
+    kamel_end_placemark(out);
+    free(description);
+
+    satfire_pixel_list_kml_write(out, satfire_cluster_pixels(cluster));
+
+    kamel_end_folder(out);
+
+    return;
+}
+
+static void
+save_satfire_cluster_kml(struct SFCluster *biggest, time_t bstart, time_t bend,
+                         enum SFSatellite bsat, enum SFSector bsector, struct SFCluster *hottest,
+                         time_t hstart, time_t hend, enum SFSatellite hsat, enum SFSector hsector)
 {
     // Return early if no output file is configured.
     if (!options.kml_file) {
@@ -271,29 +308,8 @@ save_satfire_cluster_kml(struct SFCluster *biggest, time_t start, time_t end, en
     kamel_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
     kamel_end_style(out);
 
-    kamel_start_folder(out, "BiggestFire", 0, true);
-    kamel_timespan(out, start, end);
-
-    char *description = 0;
-    asprintf(&description,
-             "Satellite: %s<br/>"
-             "Sector: %s<br/>"
-             "Power: %.0lf MW<br/>"
-             "Area: %.0lf m^2<br/>"
-             "Max Temperature: %.0lf&deg;K",
-             satfire_satellite_name(sat), satfire_sector_name(sector),
-             satfire_cluster_total_power(biggest), satfire_cluster_total_area(biggest),
-             satfire_cluster_max_temperature(biggest));
-
-    kamel_start_placemark(out, "Biggest Fire", description, "#fire");
-    struct SFCoord centroid = satfire_pixel_list_centroid(satfire_cluster_pixels(biggest));
-    kamel_point(out, centroid.lat, centroid.lon, 0.0);
-    kamel_end_placemark(out);
-    free(description);
-
-    satfire_pixel_list_kml_write(out, satfire_cluster_pixels(biggest));
-
-    kamel_end_folder(out);
+    output_cluster_kml(out, "Biggest Fire", biggest, bstart, bend, bsat, bsector);
+    output_cluster_kml(out, "Hottest Fire", hottest, hstart, hend, hsat, hsector);
 
     kamel_end_document(out);
 
@@ -446,7 +462,7 @@ satfire_cluster_stats_print(struct ClusterStats stats)
         struct SFCoord hot_centroid = satfire_cluster_centroid(stats.hottest_fire);
 
         printf("\nIndividual Cluster Stats\n\n"
-               "M ost Powerfull:\n"
+               " Most Powerfull:\n"
                "      satellite: %s\n"
                "         sector: %s\n"
                "          start: %s"
@@ -456,7 +472,7 @@ satfire_cluster_stats_print(struct ClusterStats stats)
                " Max Scan Angle: %3.0lf\n"
                "          Count: %2d\n"
                "          Power: %5.0lf MW\n"
-               "           Area: %5.0lf square meters\n"
+               "           Area: %5.0lf square kilometers\n"
                "Max Temperature: %5.0lf Kelvin\n\n"
                "        Hottest:\n"
                "      satellite: %s\n"
@@ -468,7 +484,7 @@ satfire_cluster_stats_print(struct ClusterStats stats)
                " Max Scan Angle: %3.0lf\n"
                "          Count: %2d\n"
                "          Power: %5.0lf MW\n"
-               "           Area: %5.0lf square meters\n"
+               "           Area: %5.0lf square kilometers\n"
                "Max Temperature: %5.0lf Kelvin\n\n"
                "        Counts:\n"
                "         Total: %10u\n"
@@ -489,7 +505,7 @@ satfire_cluster_stats_print(struct ClusterStats stats)
                satfire_cluster_max_scan_angle(stats.biggest_fire),
                satfire_cluster_pixel_count(stats.biggest_fire),
                satfire_cluster_total_power(stats.biggest_fire),
-               satfire_cluster_total_area(stats.biggest_fire),
+               satfire_cluster_total_area(stats.biggest_fire) / (1000.0 * 1000.0),
                satfire_cluster_max_temperature(stats.biggest_fire),
 
                satfire_satellite_name(stats.hottest_sat), satfire_sector_name(stats.hottest_sector),
@@ -497,7 +513,7 @@ satfire_cluster_stats_print(struct ClusterStats stats)
                satfire_cluster_max_scan_angle(stats.hottest_fire),
                satfire_cluster_pixel_count(stats.hottest_fire),
                satfire_cluster_total_power(stats.hottest_fire),
-               satfire_cluster_total_area(stats.hottest_fire),
+               satfire_cluster_total_area(stats.hottest_fire) / (1000.0 * 1000.0),
                satfire_cluster_max_temperature(stats.hottest_fire),
 
                stats.num_clusters, stats.num_power_lt_1mw, stats.num_power_lt_10mw,
@@ -892,10 +908,12 @@ database_filler(void *arg)
         satfire_cluster_list_stats_print(clstats);
     }
 
-    save_satfire_cluster_kml(satfire_cluster_stats.biggest_fire,
-                             satfire_cluster_stats.biggest_start, satfire_cluster_stats.biggest_end,
-                             satfire_cluster_stats.biggest_sat,
-                             satfire_cluster_stats.biggest_sector);
+    save_satfire_cluster_kml(
+        satfire_cluster_stats.biggest_fire, satfire_cluster_stats.biggest_start,
+        satfire_cluster_stats.biggest_end, satfire_cluster_stats.biggest_sat,
+        satfire_cluster_stats.biggest_sector, satfire_cluster_stats.hottest_fire,
+        satfire_cluster_stats.hottest_start, satfire_cluster_stats.hottest_end,
+        satfire_cluster_stats.hottest_sat, satfire_cluster_stats.hottest_sector);
 
     satfire_cluster_stats_destroy(&satfire_cluster_stats);
 
