@@ -626,6 +626,12 @@ time_t satfire_cluster_db_satfire_cluster_row_end(struct SFClusterRow const *row
 /** Get the fire power in megawatts of this Cluster. */
 double satfire_cluster_db_satfire_cluster_row_power(struct SFClusterRow const *row);
 
+/** Get the maximum pixel temperature in Kelvin of this Cluster. */
+double satfire_cluster_db_satfire_cluster_row_max_temperature(struct SFClusterRow const *row);
+
+/** Get the fire area in square meters of this Cluster. */
+double satfire_cluster_db_satfire_cluster_row_area(struct SFClusterRow const *row);
+
 /** Get the scan angle of this Cluster. */
 double satfire_cluster_db_satfire_cluster_row_scan_angle(struct SFClusterRow const *row);
 

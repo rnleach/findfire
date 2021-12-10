@@ -26,30 +26,32 @@ open_database_to_write(char const *path, sqlite3 **result)
     // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
     sqlite3_busy_timeout(handle, 5000);
 
-    char *query = "CREATE TABLE IF NOT EXISTS clusters (                 \n"
-                  "  satellite      TEXT    NOT NULL,                    \n"
-                  "  sector         TEXT    NOT NULL,                    \n"
-                  "  start_time     INTEGER NOT NULL,                    \n"
-                  "  end_time       INTEGER NOT NULL,                    \n"
-                  "  lat            REAL    NOT NULL,                    \n"
-                  "  lon            REAL    NOT NULL,                    \n"
-                  "  power          REAL    NOT NULL,                    \n"
-                  "  max_scan_angle REAL    NOT NULL,                    \n"
-                  "  pixels         BLOB    NOT NULL);                   \n"
-                  "                                                      \n"
-                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups     \n"
-                  "  ON clusters (satellite, sector, start_time,         \n"
-                  "               end_time, lat, lon);                   \n"
-                  "                                                      \n"
-                  "CREATE INDEX IF NOT EXISTS file_processed             \n"
-                  "  ON clusters (satellite, sector, start_time,         \n"
-                  "               end_time);                             \n"
-                  "                                                      \n"
-                  "CREATE TABLE IF NOT EXISTS no_fire (                  \n"
-                  "  satellite  TEXT    NOT NULL,                        \n"
-                  "  sector     TEXT    NOT NULL,                        \n"
-                  "  start_time INTEGER NOT NULL,                        \n"
-                  "  end_time   INTEGER NOT NULL);                       \n";
+    char *query = "CREATE TABLE IF NOT EXISTS clusters (                  \n"
+                  "  satellite       TEXT    NOT NULL,                    \n"
+                  "  sector          TEXT    NOT NULL,                    \n"
+                  "  start_time      INTEGER NOT NULL,  -- unix timestamp \n"
+                  "  end_time        INTEGER NOT NULL,  -- unix timestamp \n"
+                  "  lat             REAL    NOT NULL,                    \n"
+                  "  lon             REAL    NOT NULL,                    \n"
+                  "  power           REAL    NOT NULL,  -- megawatts      \n"
+                  "  max_temperature REAL    NOT NULL,  -- Kelvin         \n"
+                  "  area            REAL    NOT NULL,  -- square meters  \n"
+                  "  max_scan_angle  REAL    NOT NULL,  -- degrees        \n"
+                  "  pixels          BLOB    NOT NULL);                   \n"
+                  "                                                       \n"
+                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups      \n"
+                  "  ON clusters (satellite, sector, start_time,          \n"
+                  "               end_time, lat, lon);                    \n"
+                  "                                                       \n"
+                  "CREATE INDEX IF NOT EXISTS file_processed              \n"
+                  "  ON clusters (satellite, sector, start_time,          \n"
+                  "               end_time);                              \n"
+                  "                                                       \n"
+                  "CREATE TABLE IF NOT EXISTS no_fire (                   \n"
+                  "  satellite  TEXT    NOT NULL,                         \n"
+                  "  sector     TEXT    NOT NULL,                         \n"
+                  "  start_time INTEGER NOT NULL,                         \n"
+                  "  end_time   INTEGER NOT NULL);                        \n";
 
     char *err_message = 0;
 
@@ -221,10 +223,19 @@ satfire_cluster_db_prepare_to_add(char const *path_to_db)
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "unable to open a connection to the database: %s",
            path_to_db);
 
-    char *add_query =
-        "INSERT OR REPLACE INTO clusters (                                                  \n"
-        "  satellite, sector, start_time, end_time, lat, lon, power, max_scan_angle, pixels)\n"
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)                                                 \n";
+    char *add_query = "INSERT OR REPLACE INTO clusters (        \n"
+                      "  satellite,                             \n"
+                      "  sector,                                \n"
+                      "  start_time,                            \n"
+                      "  end_time,                              \n"
+                      "  lat,                                   \n"
+                      "  lon,                                   \n"
+                      "  power,                                 \n"
+                      "  max_temperature,                       \n"
+                      "  area,                                  \n"
+                      "  max_scan_angle,                        \n"
+                      "  pixels)                                \n"
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \n";
 
     rc = sqlite3_prepare_v2(db, add_query, -1, &add_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing statement: %s", sqlite3_errstr(rc));
@@ -331,7 +342,13 @@ satfire_cluster_db_add_cluster(struct SFClusterDatabaseAdd *stmt, struct SFClust
         rc = sqlite3_bind_double(stmt->add_ptr, 7, satfire_cluster_total_power(cluster));
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding power: %s", sqlite3_errstr(rc));
 
-        rc = sqlite3_bind_double(stmt->add_ptr, 8, satfire_cluster_max_scan_angle(cluster));
+        rc = sqlite3_bind_double(stmt->add_ptr, 8, satfire_cluster_max_temperature(cluster));
+        Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding power: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_double(stmt->add_ptr, 9, satfire_cluster_total_area(cluster));
+        Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding power: %s", sqlite3_errstr(rc));
+
+        rc = sqlite3_bind_double(stmt->add_ptr, 10, satfire_cluster_max_scan_angle(cluster));
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding max scan angle: %s",
                sqlite3_errstr(rc));
 
@@ -349,7 +366,7 @@ satfire_cluster_db_add_cluster(struct SFClusterDatabaseAdd *stmt, struct SFClust
             satfire_cluster_pixels(cluster), buff_size, buf_ptr);
         Stopif(num_bytes_serialized != buff_size, exit(EXIT_FAILURE),
                "Buffer size error serializing PixelList");
-        rc = sqlite3_bind_blob(stmt->add_ptr, 9, buf_ptr, buff_size, transient_free);
+        rc = sqlite3_bind_blob(stmt->add_ptr, 11, buf_ptr, buff_size, transient_free);
 
         rc = sqlite3_step(stmt->add_ptr);
         Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, goto ERR_CLEANUP,
@@ -594,6 +611,8 @@ struct SFClusterRow {
     time_t start;
     time_t end;
     double power;
+    double max_temperature;
+    double area;
     double scan_angle;
     enum SFSector sector;
     enum SFSatellite sat;
@@ -614,15 +633,26 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
     db = open_database_readonly(path_to_db);
     Stopif(!db, goto ERR_CLEANUP, "Unable to open database: %s", path_to_db);
 
-    char *query_format =
-        "SELECT satellite, sector, start_time, end_time, power, max_scan_angle, pixels \n"
-        "FROM clusters                                                                 \n"
-        "WHERE start_time >= %ld AND end_time <= %ld AND lat >= %lf AND lat <= %lf AND \n"
-        "      lon >= %lf AND lon <= %lf %s %s                                         \n"
-        "ORDER BY start_time ASC";
+    char *query_format = "SELECT                                          \n"
+                         "  satellite,                                    \n"
+                         "  sector,                                       \n"
+                         "  start_time,                                   \n"
+                         "  end_time,                                     \n"
+                         "  power,                                        \n"
+                         "  max_temperature,                              \n"
+                         "  area,                                         \n"
+                         "  max_scan_angle,                               \n"
+                         "  pixels                                        \n"
+                         "FROM clusters                                   \n"
+                         "WHERE                                           \n"
+                         "  start_time >= %ld                             \n"
+                         "AND end_time <= %ld AND                         \n"
+                         "  lat >= %lf AND lat <= %lf AND                 \n"
+                         "  lon >= %lf AND lon <= %lf %s %s               \n"
+                         "ORDER BY start_time ASC                         \n";
 
     int num_chars = 0;
-    char satellite_select[32] = {0};
+    char satellite_select[4] = {0};
     if (sat != SATFIRE_SATELLITE_NONE) {
         num_chars = snprintf(satellite_select, sizeof(satellite_select), "AND satellite = '%s'",
                              satfire_satellite_name(sat));
@@ -630,7 +660,7 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
                "satellite select buffer too small.");
     }
 
-    char sector_select[32] = {0};
+    char sector_select[8] = {0};
     if (sector != SATFIRE_SECTOR_NONE) {
         num_chars = snprintf(sector_select, sizeof(sector_select), "AND sector = '%s'",
                              satfire_sector_name(sector));
@@ -715,9 +745,11 @@ satfire_cluster_db_query_rows_next(struct SFClusterDatabaseQueryRows *query,
     row->start = sqlite3_column_int64(query->row_stmt, 2);
     row->end = sqlite3_column_int64(query->row_stmt, 3);
     row->power = sqlite3_column_double(query->row_stmt, 4);
-    row->scan_angle = sqlite3_column_double(query->row_stmt, 5);
+    row->max_temperature = sqlite3_column_double(query->row_stmt, 5);
+    row->area = sqlite3_column_double(query->row_stmt, 6);
+    row->scan_angle = sqlite3_column_double(query->row_stmt, 7);
     row->pixels = satfire_pixel_list_destroy(row->pixels);
-    row->pixels = satfire_pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 6));
+    row->pixels = satfire_pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 8));
 
     return row;
 }
@@ -741,6 +773,20 @@ satfire_cluster_db_satfire_cluster_row_power(struct SFClusterRow const *row)
 {
     assert(row);
     return row->power;
+}
+
+double
+satfire_cluster_db_satfire_cluster_row_max_temperature(struct SFClusterRow const *row)
+{
+    assert(row);
+    return row->max_temperature;
+}
+
+double
+satfire_cluster_db_satfire_cluster_row_area(struct SFClusterRow const *row)
+{
+    assert(row);
+    return row->area;
 }
 
 double
