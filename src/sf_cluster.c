@@ -54,7 +54,9 @@ satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire
     assert(fire_point);
 
     cluster->pixels = satfire_pixel_list_append(cluster->pixels, &fire_point->pixel);
-    cluster->power += fire_point->pixel.power;
+    if (!isinf(fire_point->pixel.power)) {
+        cluster->power += fire_point->pixel.power;
+    }
 
     if (!isinf(fire_point->pixel.temperature)) {
         cluster->max_temp = fmax(cluster->max_temp, fire_point->pixel.temperature);

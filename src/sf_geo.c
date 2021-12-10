@@ -547,7 +547,9 @@ satfire_pixel_list_total_power(struct SFPixelList const list[static 1])
     double total_power = 0.0;
 
     for (unsigned int i = 0; i < list->len; ++i) {
-        total_power += list->pixels[i].power;
+        if (!isinf(list->pixels[i].power)) {
+            total_power += list->pixels[i].power;
+        }
     }
 
     return total_power;
@@ -561,7 +563,9 @@ satfire_pixel_list_total_area(struct SFPixelList const list[static 1])
     double total_area = 0.0;
 
     for (unsigned int i = 0; i < list->len; ++i) {
-        total_area += list->pixels[i].area;
+        if (!isinf(list->pixels[i].area)) {
+            total_area += list->pixels[i].area;
+        }
     }
 
     return total_area;

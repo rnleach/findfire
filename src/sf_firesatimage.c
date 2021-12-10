@@ -184,6 +184,12 @@ satfire_extract_variable_double(struct SatFireImage const *fdata, char const *va
                 vals[i] = -INFINITY;
             }
         }
+    } else {
+        for (size_t i = 0; i < vals_len; ++i) {
+            if (vals[i] == fill_value) {
+                vals[i] = -INFINITY;
+            }
+        }
     }
 
     return vals;
@@ -253,7 +259,8 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
             double temperature = temperatures[fdata->xlen * j + i];
             unsigned char dqf = data_quality_flags[fdata->xlen * j + i];
 
-            if (power_mw > 0.0) {
+            // 0 for a data quality flag indicates a good quality fire detection.
+            if (dqf == 0) {
 
                 double ips[5] = {i - 0.5, i - 0.5, i + 0.5, i + 0.5, i};
                 double jps[5] = {j - 0.5, j + 0.5, j + 0.5, j - 0.5, j};
