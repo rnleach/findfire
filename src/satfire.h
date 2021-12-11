@@ -123,6 +123,23 @@ char const *satfire_sector_name(enum SFSector const sector);
  */
 enum SFSector satfire_sector_string_contains_sector(char const *str);
 
+/** \brief Translate a mask code to a string.
+ *
+ * Mask codes are a form of metadata that describe each pixel's quality control characteristics.
+ * These codes were taken from table 5.19.6.1-1 of the GOES-R SERIES PRODUCT DEFINITION AND USERS’
+ * GUIDE retrieved December 10th, 2021 from https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
+ */
+char const *satfire_satellite_mask_code_to_string(unsigned short code);
+
+/** \brief Translate a data quality flag (DQF) code to a string.
+ *
+ * DQF codes are a simplified version of the mask codes described above that only tell the result
+ * of the quality control analysis.  These codes were taken from table 5.19.6.1-2 of the GOES-R
+ * SERIES PRODUCT DEFINITION AND USERS’ GUIDE retrieved December 10th, 2021 from
+ * https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
+ */
+char const *satfire_satellite_dqf_code_to_string(unsigned char code);
+
 /*-------------------------------------------------------------------------------------------------
  *                                         Coordinates
  *-----------------------------------------------------------------------------------------------*/
@@ -191,16 +208,13 @@ struct SFPixel {
     /// sphere) angle between the satellites view and the local zenith. This is a good proxy for
     /// how much of an edge on vs straight down view, which can be useful for quality control.
     double scan_angle;
-    /// Data Quality Flag - the information below was copied from a NetCDF file. I have not yet
-    /// checked to make sure the values have the same meaning in every file.
+    /// Mask is a code that describes the outcome of the algorithms that characterize a fire point.
     ///
-    ///     0 = good_quality_fire_pixel_qf
-    ///     1 = good_quality_fire_free_land_pixel_qf
-    ///     2 = invalid_due_to_opaque_cloud_pixel_qf
-    ///     3 =
-    ///     invalid_due_to_surface_type_or_sunglint_or_LZA_threshold_exceeded_or_off_earth_or_missing_input_data_qf
-    ///     4 = invalid_due_to_bad_input_data_qf
-    ///     5 = invalid_due_to_algorithm_failure_qf
+    /// See the satfire_satellite_mask_code_to_string() function for reference.
+    unsigned short mask_flag;
+    /// Data Quality Flag
+    ///
+    /// See the satfire_satellite_dqf_code_to_string() function for reference.
     unsigned char data_quality_flag;
 };
 

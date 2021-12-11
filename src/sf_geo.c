@@ -672,18 +672,22 @@ satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1
 {
     assert(plist);
 
-    char desc[128] = {0};
+    char desc[256] = {0};
     for (unsigned int i = 0; i < plist->len; ++i) {
         struct SFPixel pixel = plist->pixels[i];
 
-        sprintf(desc,
+        int num_printed = sprintf(desc,
                 "Power: %.0lfMW<br/>"
                 "Area: %.0lf m^2</br>"
                 "Temperature: %.0lf&deg;K<br/>"
                 "scan angle: %.0lf&deg;<br/>"
-                "Data Quality Flag: %u<br/>",
+                "Mask Flag: %s<br/>"
+                "Data Quality Flag: %s<br/>",
                 pixel.power, pixel.area, pixel.temperature, pixel.scan_angle,
-                pixel.data_quality_flag);
+                satfire_satellite_mask_code_to_string(pixel.mask_flag),
+                satfire_satellite_dqf_code_to_string(pixel.data_quality_flag));
+
+        Stopif(num_printed >= sizeof(desc), exit(EXIT_FAILURE), "description buffer too small");
 
         kamel_start_placemark(strm, 0, desc, 0);
 
