@@ -947,23 +947,22 @@ main(int argc, char *argv[argc + 1])
     struct PipelineLink dir_walk_filter_link = {.from = &dir_walk, .to = &filter};
     struct PipelineLink filter_to_loader = {.from = &filter, .to = &satfire_cluster_loader};
 
-    pthread_t threads[10] = {0};
+    pthread_t threads[7] = {0};
 
     int s = pthread_create(&threads[0], 0, directory_walker, &dir_walk);
     Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "directory_walker");
-    s = pthread_create(&threads[1], 0, database_filler, &satfire_cluster_loader);
-    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "database_filler");
+
+    s = pthread_create(&threads[1], 0, path_filter, &dir_walk_filter_link);
+    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "path_filter");
 
     for (unsigned int i = 2; i < 6; ++i) {
-        s = pthread_create(&threads[i], 0, path_filter, &dir_walk_filter_link);
-        Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s(%u) thread.", "path_filter", i);
-    }
-
-    for (unsigned int i = 6; i < sizeof(threads) / sizeof(threads[0]); ++i) {
         s = pthread_create(&threads[i], 0, fire_satfire_cluster_list_loader, &filter_to_loader);
         Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s(%u) thread.",
                "fire_satfire_cluster_list_loader", i);
     }
+
+    s = pthread_create(&threads[6], 0, database_filler, &satfire_cluster_loader);
+    Stopif(s, goto CLEANUP_AND_EXIT, "Error creating %s thread.", "database_filler");
 
     rc = EXIT_SUCCESS;
 
