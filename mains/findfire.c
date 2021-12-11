@@ -837,7 +837,7 @@ fire_satfire_cluster_list_loader(void *arg)
 
             success_sending = courier_send(to_database, clusters);
         } else {
-            fprintf(stderr, "    Error processing file.\n");
+            fprintf(stderr, "    Error processing file: %s\n", path);
             satfire_cluster_list_destroy(&clusters);
         }
 
