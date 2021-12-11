@@ -1,11 +1,18 @@
 #include <assert.h>
 #include <libgen.h>
-#include <tgmath.h>
-
 #include <netcdf.h>
+#include <pthread.h>
+#include <tgmath.h>
 
 #include "sf_private.h"
 #include "sf_util.h"
+
+/*
+ * I'm not sure if libnetcdf is thread safe yet, however after a few quick internet searches it
+ * appears that as recently as 2018, it was not. All access to libnetcdf needs to be protected
+ * by a mutex.
+ */
+pthread_mutex_t netcdf_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 bool
 fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
@@ -20,6 +27,9 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
     char *bname = basename(fname_copy);
     num_printed = snprintf(tgt->fname, sizeof(tgt->fname), "%s", bname);
     Stopif(num_printed >= sizeof(tgt->fname), return false, "File name too long: %s", fname);
+
+    int rc = pthread_mutex_lock(&netcdf_mtx);
+    Stopif(rc, return false, "Error acquiring mutex.");
 
     int file_id = -1;
     int status = nc_open(fname, NC_NOWRITE, &file_id);
@@ -84,16 +94,25 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
     Stopif(status != NC_NOERR, return false, "Error retrieving longitude_of_projection_origin: %s",
            nc_strerror(status));
 
+    rc = pthread_mutex_unlock(&netcdf_mtx);
+    Stopif(rc, return false, "Error unlocking mutex.");
+
     return true;
 }
 
 void
 fire_sat_image_close(struct SatFireImage *dataset)
 {
+    int rc = pthread_mutex_lock(&netcdf_mtx);
+    Stopif(rc, return, "Error acquiring mutex.");
+
     int status = nc_close(dataset->nc_file_id);
     Stopif(status != NC_NOERR, return, "Error closing NetCDF file %s: %s", dataset->fname,
            nc_strerror(status));
     memset(dataset, 0, sizeof(*dataset));
+
+    rc = pthread_mutex_unlock(&netcdf_mtx);
+    Stopif(rc, return, "Error unlocking mutex.");
 }
 
 struct XYCoord {
@@ -140,7 +159,7 @@ satfire_convert_xy_to_latlon(struct CoordTransform const *trans, struct XYCoord 
 }
 
 static inline double *
-satfire_extract_variable_double(struct SatFireImage const *fdata, char const *variable)
+satfire_nc_extract_variable_double(struct SatFireImage const *fdata, char const *variable)
 {
     double *vals = 0;
 
@@ -200,7 +219,7 @@ ERR_RETURN:
 }
 
 static inline unsigned char *
-satfire_extract_data_quality_flag(struct SatFireImage const *fdata)
+satfire_nc_extract_data_quality_flag(struct SatFireImage const *fdata)
 {
     unsigned char *vals = 0;
 
@@ -227,7 +246,7 @@ ERR_RETURN:
 }
 
 static inline short *
-satfire_extract_mask(struct SatFireImage const *fdata)
+satfire_nc_extract_mask(struct SatFireImage const *fdata)
 {
     short *vals = 0;
 
@@ -267,20 +286,28 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
-    powers = satfire_extract_variable_double(fdata, "Power");
-    Stopif(!powers, goto ERR_RETURN, "Error reading Power");
+    int rc = pthread_mutex_lock(&netcdf_mtx);
+    Stopif(rc, goto ERR_RETURN, "Error acquiring lock on libnetcdf.");
 
-    areas = satfire_extract_variable_double(fdata, "Area");
-    Stopif(!areas, goto ERR_RETURN, "Error reading Area");
+    powers = satfire_nc_extract_variable_double(fdata, "Power");
+    Stopif(!powers, pthread_mutex_unlock(&netcdf_mtx); goto ERR_RETURN, "Error reading Power");
 
-    temperatures = satfire_extract_variable_double(fdata, "Temp");
-    Stopif(!temperatures, goto ERR_RETURN, "Error reading Temperature");
+    areas = satfire_nc_extract_variable_double(fdata, "Area");
+    Stopif(!areas, pthread_mutex_unlock(&netcdf_mtx); goto ERR_RETURN, "Error reading Area");
 
-    masks = satfire_extract_mask(fdata);
-    Stopif(!masks, goto ERR_RETURN, "Error reading Mask");
+    temperatures = satfire_nc_extract_variable_double(fdata, "Temp");
+    Stopif(!temperatures, pthread_mutex_unlock(&netcdf_mtx);
+           goto ERR_RETURN, "Error reading Temperature");
 
-    data_quality_flags = satfire_extract_data_quality_flag(fdata);
-    Stopif(!data_quality_flags, goto ERR_RETURN, "Error reading Data Quality Flags");
+    masks = satfire_nc_extract_mask(fdata);
+    Stopif(!masks, pthread_mutex_unlock(&netcdf_mtx); goto ERR_RETURN, "Error reading Mask");
+
+    data_quality_flags = satfire_nc_extract_data_quality_flag(fdata);
+    Stopif(!data_quality_flags, pthread_mutex_unlock(&netcdf_mtx);
+           goto ERR_RETURN, "Error reading Data Quality Flags");
+
+    rc = pthread_mutex_unlock(&netcdf_mtx);
+    Stopif(rc, goto ERR_RETURN, "Error releasing lock on libnetcdf.");
 
     for (int j = 0; j < fdata->ylen; ++j) {
         for (int i = 0; i < fdata->xlen; ++i) {
