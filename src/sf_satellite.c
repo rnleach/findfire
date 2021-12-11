@@ -225,9 +225,11 @@ satfire_satellite_mask_code_to_string(short code)
 }
 
 char const *
-satfire_satellite_dqf_code_to_string(unsigned char code)
+satfire_satellite_dqf_code_to_string(signed char code)
 {
     switch (code) {
+    case -1:
+        return "missing";
     case 0:
         return "good_quality_fire_pixel_qf ";
     case 1:

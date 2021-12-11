@@ -218,10 +218,10 @@ ERR_RETURN:
     return 0;
 }
 
-static inline unsigned char *
+static inline signed char *
 satfire_nc_extract_data_quality_flag(struct SatFireImage const *fdata)
 {
-    unsigned char *vals = 0;
+    signed char *vals = 0;
 
     int var_id = -1;
     int status = nc_inq_varid(fdata->nc_file_id, "DQF", &var_id);
@@ -229,12 +229,12 @@ satfire_nc_extract_data_quality_flag(struct SatFireImage const *fdata)
            nc_strerror(status));
 
     size_t vals_len = fdata->xlen * fdata->ylen;
-    vals = malloc(vals_len * sizeof(unsigned char));
+    vals = malloc(vals_len * sizeof(signed char));
     assert(vals);
 
     size_t start[2] = {0, 0};
     size_t counts[2] = {fdata->ylen, fdata->xlen};
-    status = nc_get_vara_uchar(fdata->nc_file_id, var_id, start, counts, vals);
+    status = nc_get_vara_schar(fdata->nc_file_id, var_id, start, counts, vals);
     Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading DQF variable values: %s",
            nc_strerror(status));
 
@@ -281,7 +281,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
     double *powers = 0;
     double *areas = 0;
     double *temperatures = 0;
-    unsigned char *data_quality_flags = 0;
+    signed char *data_quality_flags = 0;
     short *masks = 0;
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
@@ -316,7 +316,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
             double area = areas[fdata->xlen * j + i];
             double temperature = temperatures[fdata->xlen * j + i];
             short mask = masks[fdata->xlen * j + i];
-            unsigned char dqf = data_quality_flags[fdata->xlen * j + i];
+            signed char dqf = data_quality_flags[fdata->xlen * j + i];
 
             // 0 for a data quality flag indicates a good quality fire detection.
             if (dqf == 0) {

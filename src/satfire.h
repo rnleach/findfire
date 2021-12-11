@@ -138,7 +138,7 @@ char const *satfire_satellite_mask_code_to_string(short code);
  * SERIES PRODUCT DEFINITION AND USERS’ GUIDE retrieved December 10th, 2021 from
  * https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
  */
-char const *satfire_satellite_dqf_code_to_string(unsigned char code);
+char const *satfire_satellite_dqf_code_to_string(signed char code);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         Coordinates
@@ -215,7 +215,7 @@ struct SFPixel {
     /// Data Quality Flag
     ///
     /// See the satfire_satellite_dqf_code_to_string() function for reference.
-    unsigned char data_quality_flag;
+    signed char data_quality_flag;
 };
 
 /** Calculate the centroid of a SFPixel.
