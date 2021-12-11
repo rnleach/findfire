@@ -398,6 +398,7 @@ satfire_cluster_list_from_file(char const *full_path)
 
     points = fire_sat_image_extract_fire_points(&fdata);
     fire_sat_image_close(&fdata);
+    Stopif(!points, goto ERR_RETURN, "Error extracting fire points.");
 
     clusters = clusters_from_fire_points(points);
     Stopif(!clusters, err_msg = "Error creating clusters.";
