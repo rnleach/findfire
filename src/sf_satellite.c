@@ -120,9 +120,11 @@ satfire_sector_string_contains_sector(char const *str)
 }
 
 char const *
-satfire_satellite_mask_code_to_string(unsigned short code)
+satfire_satellite_mask_code_to_string(short code)
 {
     switch (code) {
+    case -99:
+        return "missing";
     case 0:
         return "unprocessed_pixel";
     case 10:

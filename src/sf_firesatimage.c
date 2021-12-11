@@ -226,10 +226,10 @@ ERR_RETURN:
     return 0;
 }
 
-static inline unsigned short *
+static inline short *
 satfire_extract_mask(struct SatFireImage const *fdata)
 {
-    unsigned short *vals = 0;
+    short *vals = 0;
 
     int var_id = -1;
     int status = nc_inq_varid(fdata->nc_file_id, "Mask", &var_id);
@@ -237,12 +237,12 @@ satfire_extract_mask(struct SatFireImage const *fdata)
            nc_strerror(status));
 
     size_t vals_len = fdata->xlen * fdata->ylen;
-    vals = malloc(vals_len * sizeof(unsigned short));
+    vals = malloc(vals_len * sizeof(short));
     assert(vals);
 
     size_t start[2] = {0, 0};
     size_t counts[2] = {fdata->ylen, fdata->xlen};
-    status = nc_get_vara_ushort(fdata->nc_file_id, var_id, start, counts, vals);
+    status = nc_get_vara_short(fdata->nc_file_id, var_id, start, counts, vals);
     Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Mask variable values: %s",
            nc_strerror(status));
 
@@ -263,7 +263,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
     double *areas = 0;
     double *temperatures = 0;
     unsigned char *data_quality_flags = 0;
-    unsigned short *masks = 0;
+    short *masks = 0;
     points = g_array_new(false, true, sizeof(struct FirePoint));
     assert(points);
 
@@ -288,7 +288,7 @@ fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
             double power_mw = powers[fdata->xlen * j + i];
             double area = areas[fdata->xlen * j + i];
             double temperature = temperatures[fdata->xlen * j + i];
-            unsigned short mask = masks[fdata->xlen * j + i];
+            short mask = masks[fdata->xlen * j + i];
             unsigned char dqf = data_quality_flags[fdata->xlen * j + i];
 
             // 0 for a data quality flag indicates a good quality fire detection.

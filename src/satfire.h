@@ -129,7 +129,7 @@ enum SFSector satfire_sector_string_contains_sector(char const *str);
  * These codes were taken from table 5.19.6.1-1 of the GOES-R SERIES PRODUCT DEFINITION AND USERS’
  * GUIDE retrieved December 10th, 2021 from https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
  */
-char const *satfire_satellite_mask_code_to_string(unsigned short code);
+char const *satfire_satellite_mask_code_to_string(short code);
 
 /** \brief Translate a data quality flag (DQF) code to a string.
  *
@@ -211,7 +211,7 @@ struct SFPixel {
     /// Mask is a code that describes the outcome of the algorithms that characterize a fire point.
     ///
     /// See the satfire_satellite_mask_code_to_string() function for reference.
-    unsigned short mask_flag;
+    short mask_flag;
     /// Data Quality Flag
     ///
     /// See the satfire_satellite_dqf_code_to_string() function for reference.
