@@ -225,11 +225,9 @@ satfire_satellite_mask_code_to_string(short code)
 }
 
 char const *
-satfire_satellite_dqf_code_to_string(signed char code)
+satfire_satellite_dqf_code_to_string(signed short code)
 {
     switch (code) {
-    case -1:
-        return "missing";
     case 0:
         return "good_quality_fire_pixel_qf ";
     case 1:
@@ -243,6 +241,9 @@ satfire_satellite_dqf_code_to_string(signed char code)
         return "invalid_due_to_bad_input_data_qf ";
     case 5:
         return "invalid_due_to_algorithm_failure_qf";
+    case 255: // Intentional fall through.
+    case -1:
+        return "missing";
     default:
         return "unknown";
     }
