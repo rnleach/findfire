@@ -28,8 +28,8 @@ ifeq ($(DEBUG),1)
 	LDLIBS +=
 	BUILDDIR := $(DEBUGDIR)
 else
-	CFLAGS += -DNDEBUG -fPIC -flto -O3 
-	LDLIBS += -flto -fPIC
+	CFLAGS += -DNDEBUG -fPIC -O3 
+	LDLIBS += -fPIC
 	BUILDDIR := $(RELEASEDIR)
 endif
 

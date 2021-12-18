@@ -23,7 +23,7 @@
  */
 
 /*
- * Version 2.0.4 - November 13th, 2021
+ * Version 2.0.5 - December 18th, 2021
  */
 
 /** \file courier.h
@@ -137,6 +137,9 @@ courier_destroy(Courier *cr, void (*free_func)(void *))
     memset(cr->buf, 0, sizeof(cr->buf));
 }
 
+// Make clang-13 happy when -Wall and -Werror are used.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 /** Blocks until the Courier is ready to pass data to a receiver. */
 static inline void
 courier_wait_until_ready_to_receive(Courier *cr)
@@ -152,7 +155,11 @@ courier_wait_until_ready_to_receive(Courier *cr)
     rc = pthread_mutex_unlock(&cr->mtx);
     assert(!rc);
 }
+#pragma clang diagnostic pop
 
+// Make clang-13 happy when -Wall and -Werror are used.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 /** Blocks until the Courier is ready to accept data from a consumer. */
 static inline void
 courier_wait_until_ready_to_send(Courier *cr)
@@ -168,6 +175,7 @@ courier_wait_until_ready_to_send(Courier *cr)
     rc = pthread_mutex_unlock(&cr->mtx);
     assert(!rc);
 }
+#pragma clang diagnostic pop
 
 /** Register a Courier for sending data. */
 static inline void
@@ -288,6 +296,9 @@ courier_done_receiving(Courier *cr)
     assert(!rc);
 }
 
+// Make clang-13 happy when -Wall and -Werror are used.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 /** Push a value onto the queue.
  *
  * If all the calls to courier_register_sender() have been matched with calls to
@@ -338,7 +349,11 @@ courier_send(Courier *cr, void *data)
 
     return true;
 }
+#pragma clang diagnostic pop
 
+// Make clang-13 happy when -Wall and -Werror are used.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 /** Retrieve a value from the queue.
  *
  * If all the calls to courier_register_sender() have been matched with calls to
@@ -380,3 +395,4 @@ courier_receive(Courier *cr)
 
     return return_val;
 }
+#pragma clang diagnostic pop
