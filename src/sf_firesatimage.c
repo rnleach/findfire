@@ -20,6 +20,8 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
     assert(fname);
     assert(tgt);
 
+    bool success = false;
+
     char fname_copy[1024] = {0};
     int num_printed = snprintf(fname_copy, sizeof(fname_copy), "%s", fname);
     Stopif(num_printed >= sizeof(fname_copy), return false, "File name too long: %s", fname);
@@ -33,71 +35,74 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
 
     int file_id = -1;
     int status = nc_open(fname, NC_NOWRITE, &file_id);
-    Stopif(status != NC_NOERR, return false, "Error opening NetCDF %s: %s", fname,
+    Stopif(status != NC_NOERR, goto RETURN, "Error opening NetCDF %s: %s", fname,
            nc_strerror(status));
     tgt->nc_file_id = file_id;
 
     int xdimid = -1;
     int ydimid = -1;
     status = nc_inq_dimid(file_id, "x", &xdimid);
-    Stopif(status != NC_NOERR, return false, "Error retrieving dimension id x: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension id x: %s",
            nc_strerror(status));
     status = nc_inq_dimid(file_id, "y", &ydimid);
-    Stopif(status != NC_NOERR, return false, "Error retrieving dimension id y: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension id y: %s",
            nc_strerror(status));
 
     status = nc_inq_dimlen(file_id, xdimid, &tgt->xlen);
-    Stopif(status != NC_NOERR, return false, "Error retrieving dimension size x: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension size x: %s",
            nc_strerror(status));
     status = nc_inq_dimlen(file_id, ydimid, &tgt->ylen);
-    Stopif(status != NC_NOERR, return false, "Error retrieving dimension size y: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension size y: %s",
            nc_strerror(status));
 
     int xvarid = -1;
     int yvarid = -1;
     status = nc_inq_varid(file_id, "x", &xvarid);
-    Stopif(status != NC_NOERR, return false, "Error retrieving x variable id: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving x variable id: %s",
            nc_strerror(status));
     status = nc_inq_varid(file_id, "y", &yvarid);
-    Stopif(status != NC_NOERR, return false, "Error retrieving y variable id: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving y variable id: %s",
            nc_strerror(status));
 
     status = nc_get_att_double(file_id, xvarid, "scale_factor", &tgt->trans.xscale);
-    Stopif(status != NC_NOERR, return false, "Error retrieving x scale factor: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving x scale factor: %s",
            nc_strerror(status));
     status = nc_get_att_double(file_id, yvarid, "scale_factor", &tgt->trans.yscale);
-    Stopif(status != NC_NOERR, return false, "Error retrieving y scale factor: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving y scale factor: %s",
            nc_strerror(status));
     status = nc_get_att_double(file_id, xvarid, "add_offset", &tgt->trans.xoffset);
-    Stopif(status != NC_NOERR, return false, "Error retrieving x offset: %s", nc_strerror(status));
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving x offset: %s", nc_strerror(status));
     status = nc_get_att_double(file_id, yvarid, "add_offset", &tgt->trans.yoffset);
-    Stopif(status != NC_NOERR, return false, "Error retrieving y offset: %s", nc_strerror(status));
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving y offset: %s", nc_strerror(status));
 
     int projection_var_id = -1;
     status = nc_inq_varid(file_id, "goes_imager_projection", &projection_var_id);
-    Stopif(status != NC_NOERR, return false, "Error retrieving projection variable: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving projection variable: %s",
            nc_strerror(status));
 
     status = nc_get_att_double(file_id, projection_var_id, "semi_major_axis", &tgt->trans.req);
-    Stopif(status != NC_NOERR, return false, "Error retrieving semi_major_axis: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving semi_major_axis: %s",
            nc_strerror(status));
     status = nc_get_att_double(file_id, projection_var_id, "semi_minor_axis", &tgt->trans.rpol);
-    Stopif(status != NC_NOERR, return false, "Error retrieving semi_minor_axis: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving semi_minor_axis: %s",
            nc_strerror(status));
     status =
         nc_get_att_double(file_id, projection_var_id, "perspective_point_height", &tgt->trans.H);
-    Stopif(status != NC_NOERR, return false, "Error retrieving perspective_point_height: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving perspective_point_height: %s",
            nc_strerror(status));
     tgt->trans.H += tgt->trans.req;
     status = nc_get_att_double(file_id, projection_var_id, "longitude_of_projection_origin",
                                &tgt->trans.lon0);
-    Stopif(status != NC_NOERR, return false, "Error retrieving longitude_of_projection_origin: %s",
+    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving longitude_of_projection_origin: %s",
            nc_strerror(status));
 
+    success = true;
+
+RETURN:
     rc = pthread_mutex_unlock(&netcdf_mtx);
     Stopif(rc, return false, "Error unlocking mutex.");
 
-    return true;
+    return success;
 }
 
 void
