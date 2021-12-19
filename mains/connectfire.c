@@ -4,7 +4,7 @@
  * Connect clusters from the output database of findfire to make time series of fires. Each time
  * series is given an ID and stored in a database with a start date and an end date. In the future
  * other statistics may be added to that database. Another table in the database will record the
- * relationship to clusters by associating a row number from the sqlite database with a fire ID 
+ * relationship to clusters by associating a row number from the sqlite database with a fire ID
  * from the database table created by this program.
  */
 #include <stdio.h>
