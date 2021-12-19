@@ -809,6 +809,41 @@ path_filter(void *arg)
     return 0;
 }
 
+static bool
+is_cluster_a_keeper(struct SFCluster *clust)
+{
+    assert(clust);
+
+    // Check if it meets our mask criteria
+    bool keep_mask_criteria = false;
+    struct SFPixelList const *pixels = satfire_cluster_pixels(clust);
+    for (size_t i = 0; i < pixels->len; ++i) {
+        short mask_flag = pixels->pixels[i].mask_flag;
+
+        switch (mask_flag) {
+        // Fallthrough is intentional
+        case 10: // good_fire_pixel
+        case 11: // saturated_fire_pixel
+        case 12: // cloud_contaminated_fire_pixel
+        case 13: // high_probability_fire_pixel
+        case 14: // medium_probability_fire_pixel
+
+        case 30: // temporally_filtered_good_fire_pixel
+        case 31: // temporally_filtered_saturated_fire_pixel
+        case 32: // temporally_filtered_cloud_contaminated_fire_pixel
+        case 33: // temporally_filtered_high_probability_fire_pixel
+        case 34: // temporally_filtered_medium_probability_fire_pixel
+            keep_mask_criteria = true;
+        }
+
+        if (keep_mask_criteria) {
+            break;
+        }
+    }
+
+    return keep_mask_criteria;
+}
+
 static void *
 fire_satfire_cluster_list_loader(void *arg)
 {
@@ -834,6 +869,7 @@ fire_satfire_cluster_list_loader(void *arg)
 
         struct SFClusterList *clusters = satfire_cluster_list_from_file(path);
         if (!satfire_cluster_list_error(clusters)) {
+            clusters = satfire_cluster_list_filter(clusters, is_cluster_a_keeper);
 
             success_sending = courier_send(to_database, clusters);
         } else {

@@ -280,6 +280,29 @@ satfire_cluster_list_filter_scan_angle(struct SFClusterList *list, double max_sc
     return list;
 }
 
+struct SFClusterList *
+satfire_cluster_list_filter(struct SFClusterList *list, bool (*filter)(struct SFCluster *clust))
+{
+
+    assert(list);
+    assert(filter);
+
+    GArray *clusters = list->clusters;
+
+    for (unsigned int i = 0; i < clusters->len; ++i) {
+        struct SFCluster *clust = g_array_index(clusters, struct SFCluster *, i);
+
+        if (!filter(clust)) {
+            clusters = g_array_remove_index_fast(clusters, i);
+            --i; // Decrement this so we inspect this index again since a new value is there.
+        }
+    }
+
+    list->clusters = clusters; // In case g_array_remove_index_fast() moved the array.
+
+    return list;
+}
+
 char const *
 satfire_cluster_find_start_time(char const *fname)
 {

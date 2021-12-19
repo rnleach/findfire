@@ -105,8 +105,8 @@ char const *satfire_satellite_name(enum SFSatellite const sat);
 
 /** \brief Scan the string for the occurrence of a satellite name and return the first one found.
  *
- * \returnsSFSatellite that corresponds to the first satellite name found, or SATFIRE_SATELLITE_NONE
- * if none was found.
+ * \returns SFSatellite that corresponds to the first satellite name found, or
+ * SATFIRE_SATELLITE_NONE if none was found.
  */
 enum SFSatellite satfire_satellite_string_contains_satellite(char const *str);
 
@@ -470,6 +470,16 @@ struct SFClusterList *satfire_cluster_list_filter_box(struct SFClusterList *list
  */
 struct SFClusterList *satfire_cluster_list_filter_scan_angle(struct SFClusterList *list,
                                                              double max_scan_angle);
+
+/** \brief Filter the ClusterList to only include fires for which the provided filter function
+ * returns \c true.
+ *
+ * \returns NULL on error or a reference to the same \a list that was passed in. It is important to
+ * reassign the provided \a list to the return value of this function in case a reallocation moves
+ * the pointer.
+ */
+struct SFClusterList *satfire_cluster_list_filter(struct SFClusterList *list,
+                                                  bool (*filter)(struct SFCluster *clust));
 
 /**
  * \brief Parse the file name and find the scan start time.
