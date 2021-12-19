@@ -1,4 +1,5 @@
 #pragma once
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
 /*
  * Copyright (c) 2021 Ryan Leach
  *
