@@ -63,6 +63,8 @@ So far I'm only using the following from GLIB:
 ### netcdf
  This is critical for accessing the data. The data files are in NetCDF4 format.
 
+### libzip
+ The archive may store the NetCDF files in a zipped archive to save space.
 
 ### SQLITE3
  sqlite3 is used for the database backend. In the future a different backend could be used for a

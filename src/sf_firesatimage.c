@@ -1,8 +1,11 @@
 #include <assert.h>
 #include <libgen.h>
 #include <netcdf.h>
+#include <netcdf_mem.h>
 #include <pthread.h>
+#include <string.h>
 #include <tgmath.h>
+#include <zip.h>
 
 #include "sf_private.h"
 #include "sf_util.h"
@@ -14,34 +17,18 @@
  */
 pthread_mutex_t netcdf_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-bool
-fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
+static bool
+fire_sat_image_initialize_with_nc_handle(int file_id, struct SatFireImage *tgt)
 {
-    assert(fname);
     assert(tgt);
 
     bool success = false;
 
-    char fname_copy[1024] = {0};
-    int num_printed = snprintf(fname_copy, sizeof(fname_copy), "%s", fname);
-    Stopif(num_printed >= sizeof(fname_copy), return false, "File name too long: %s", fname);
-
-    char *bname = basename(fname_copy);
-    num_printed = snprintf(tgt->fname, sizeof(tgt->fname), "%s", bname);
-    Stopif(num_printed >= sizeof(tgt->fname), return false, "File name too long: %s", fname);
-
-    int rc = pthread_mutex_lock(&netcdf_mtx);
-    Stopif(rc, return false, "Error acquiring mutex.");
-
-    int file_id = -1;
-    int status = nc_open(fname, NC_NOWRITE, &file_id);
-    Stopif(status != NC_NOERR, goto RETURN, "Error opening NetCDF %s: %s", fname,
-           nc_strerror(status));
     tgt->nc_file_id = file_id;
 
     int xdimid = -1;
     int ydimid = -1;
-    status = nc_inq_dimid(file_id, "x", &xdimid);
+    int status = nc_inq_dimid(file_id, "x", &xdimid);
     Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension id x: %s",
            nc_strerror(status));
     status = nc_inq_dimid(file_id, "y", &ydimid);
@@ -99,8 +86,121 @@ fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
     success = true;
 
 RETURN:
+    return success;
+}
+
+static bool
+fire_sat_image_open_nc(char const *fname, struct SatFireImage *tgt)
+{
+    assert(fname);
+    assert(tgt);
+
+    bool success = false;
+
+    int rc = pthread_mutex_lock(&netcdf_mtx);
+    Stopif(rc, return false, "Error acquiring mutex.");
+
+    int file_id = -1;
+    int status = nc_open(fname, NC_NOWRITE, &file_id);
+    Stopif(status != NC_NOERR, goto RETURN, "Error opening NetCDF %s: %s", fname,
+           nc_strerror(status));
+
+    success = fire_sat_image_initialize_with_nc_handle(file_id, tgt);
+
+RETURN:
     rc = pthread_mutex_unlock(&netcdf_mtx);
     Stopif(rc, return false, "Error unlocking mutex.");
+
+    return success;
+}
+
+static bool
+fire_sat_image_open_zip(char const *fname, struct SatFireImage *tgt)
+{
+    assert(fname);
+    assert(tgt);
+
+    bool success = false;
+    unsigned char *memory = 0;
+
+    zip_t *zfile = zip_open(fname, ZIP_RDONLY, 0);
+    Stopif(!zfile, goto RETURN, "Error opening file: %s", fname);
+
+    assert(zip_get_num_entries(zfile, 0) == 1);
+
+    struct zip_stat stat = {0};
+    zip_stat_init(&stat);
+    int rc = zip_stat_index(zfile, 0, 0, &stat);
+    Stopif(rc, goto CLOSE_ZIP, "Error getting zip stat for %s", fname);
+    Stopif(!(stat.valid && ZIP_STAT_SIZE), goto CLOSE_ZIP,
+           "No file size returned from zip_stat for %s", fname);
+
+    memory = malloc(stat.size + 10);
+    Stopif(!memory, goto CLOSE_ZIP, "Out of memory.");
+    tgt->memory = memory;
+    tgt->memory_size = stat.size;
+
+    zip_file_t *inner_zfile = zip_fopen_index(zfile, 0, 0);
+    Stopif(!inner_zfile, goto CLEAN_UP_MEM, "Error opening file inside zip %s", fname);
+
+    size_t num_bytes_read = zip_fread(inner_zfile, tgt->memory, tgt->memory_size);
+    Stopif(num_bytes_read != tgt->memory_size, goto CLOSE_ZIP_INNER,
+           "Error reading data from zip %s", fname);
+
+    rc = pthread_mutex_lock(&netcdf_mtx);
+    Stopif(rc, return false, "Error acquiring mutex.");
+
+    int file_id = -1;
+    int status = nc_open_mem(fname, NC_NOWRITE, tgt->memory_size, tgt->memory, &file_id);
+    Stopif(status != NC_NOERR, goto RETURN, "Error opening NetCDF %s: %s", fname,
+           nc_strerror(status));
+
+    success = fire_sat_image_initialize_with_nc_handle(file_id, tgt);
+
+    rc = pthread_mutex_unlock(&netcdf_mtx);
+
+    if (rc) {
+        fprintf(stderr, "Error unlocking mutex.\n");
+        success = false;
+    }
+
+CLOSE_ZIP_INNER:
+    zip_fclose(inner_zfile);
+
+CLEAN_UP_MEM:
+    if (!success) {
+        free(memory);
+        memset(tgt, 0, sizeof(*tgt));
+    }
+
+CLOSE_ZIP:
+    zip_close(zfile);
+
+RETURN:
+    return success;
+}
+
+bool
+fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
+{
+    // Make sure the target is properly initialized
+    memset(tgt, 0, sizeof(*tgt));
+
+    bool success = false;
+
+    char fname_copy[1024] = {0};
+    int num_printed = snprintf(fname_copy, sizeof(fname_copy), "%s", fname);
+    Stopif(num_printed >= sizeof(fname_copy), return false, "File name too long: %s", fname);
+
+    char *bname = basename(fname_copy);
+    num_printed = snprintf(tgt->fname, sizeof(tgt->fname), "%s", bname);
+    Stopif(num_printed >= sizeof(tgt->fname), return false, "File name too long: %s", fname);
+
+    if (strstr(fname, ".zip") != 0) {
+        success = fire_sat_image_open_zip(fname, tgt);
+    } else {
+        success = fire_sat_image_open_nc(fname, tgt);
+    }
 
     return success;
 }
@@ -114,10 +214,17 @@ fire_sat_image_close(struct SatFireImage *dataset)
     int status = nc_close(dataset->nc_file_id);
     Stopif(status != NC_NOERR, return, "Error closing NetCDF file %s: %s", dataset->fname,
            nc_strerror(status));
-    memset(dataset, 0, sizeof(*dataset));
 
     rc = pthread_mutex_unlock(&netcdf_mtx);
-    Stopif(rc, return, "Error unlocking mutex.");
+    if (rc) {
+        fprintf(stderr, "Error unlocking mutex.\n");
+    }
+
+    if (dataset->memory) {
+        free(dataset->memory);
+    }
+
+    memset(dataset, 0, sizeof(*dataset));
 }
 
 struct XYCoord {

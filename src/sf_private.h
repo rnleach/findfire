@@ -38,16 +38,20 @@ struct CoordTransform {
  * \brief Handle to a GDAL dataset for the Fire Detection Characteristics and some metadata.
  */
 struct SatFireImage {
-    /// Orignial file name the dataset was loaded from.
-    char fname[512];
-    /// Handle to the NetCDF file
-    int nc_file_id;
     /// Image width in pixels
     size_t xlen;
     /// Image height in pixels
     size_t ylen;
     /// All the information needed for transforming from row and column numbers to coordinates.
     struct CoordTransform trans;
+    /// In memory buffer if this is from a zip file
+    unsigned char *memory;
+    /// Size of the buffer;
+    size_t memory_size;
+    /// Handle to the NetCDF file
+    int nc_file_id;
+    /// Orignial file name the dataset was loaded from.
+    char fname[512];
 };
 
 /**

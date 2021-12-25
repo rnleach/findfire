@@ -217,8 +217,11 @@ standard_dir_filter(char const *path, void *user_data)
 static bool
 skip_path(char const *path, SFClusterDatabaseQueryPresentH query)
 {
-    if (strcmp("nc", file_ext(path)) != 0) {
-        // Only process files with the '.nc' extension.
+    char const *ext = file_ext(path);
+
+    if ((strcmp("zip", ext) != 0 && strcmp("nc", ext) != 0) || strstr(path, ".txt") != 0) {
+        // Only process files with the '.nc' or the '.zip' extension, and that don't have '.txt'
+        // in the file name.
         return true;
     }
 

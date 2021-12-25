@@ -45,6 +45,10 @@ LDLIBS += `pkg-config --libs glib-2.0`
 CFLAGS += `pkg-config --cflags netcdf`
 LDLIBS += `pkg-config --libs netcdf`
 
+# libzip
+CFLAGS += `pkg-config --cflags libzip`
+LDLIBS += `pkg-config --libs libzip`
+
 # sqlite3 library for download cache
 CFLAGS += `pkg-config --cflags sqlite3`
 LDLIBS += `pkg-config --libs sqlite3`
