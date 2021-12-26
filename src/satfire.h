@@ -552,7 +552,7 @@ typedef struct SFClusterDatabaseAdd *SFClusterDatabaseAddH;
  *
  * \returns NULL or the 0 pointer on error.
  */
-SFClusterDatabaseAddH satfire_cluster_db_prepare_to_add(char const *path_to_db);
+SFClusterDatabaseAddH satfire_cluster_db_prepare_to_add(SFClusterDatabaseH db);
 
 /**
  * \brief Finalize add transaction.
@@ -579,7 +579,7 @@ typedef struct SFClusterDatabaseQueryPresent *SFClusterDatabaseQueryPresentH;
  *
  * \return NULL or the 0 pointer on error.
  */
-SFClusterDatabaseQueryPresentH satfire_cluster_db_prepare_to_query_present(char const *path_to_db);
+SFClusterDatabaseQueryPresentH satfire_cluster_db_prepare_to_query_present(SFClusterDatabaseH db);
 
 /**
  * \brief Finalize the 'is present' query.
@@ -605,7 +605,7 @@ typedef struct SFClusterDatabaseQueryRows *SFClusterDatabaseQueryRowsH;
 
 /** Query rows from the database.
  *
- * \param path_to_db is the location of the database file and may not be \c NULL.
+ * \param db is a handle to the database file and may not be \c NULL.
  * \param sat - limit results to this satellite only. If this is equal to SATFIRE_SATELLITE_NONE,
  *              then don't limit by satellite.
  * \param sector - limit results to this sector only. If this is equal to SATFIRE_SECTOR_NONE, then
@@ -617,7 +617,7 @@ typedef struct SFClusterDatabaseQueryRows *SFClusterDatabaseQueryRowsH;
  * \returns a handle to the query object. If there is an error such as a non-existent database, it
  * returns \c NULL.
  */
-SFClusterDatabaseQueryRowsH satfire_cluster_db_query_rows(char const *path_to_db,
+SFClusterDatabaseQueryRowsH satfire_cluster_db_query_rows(SFClusterDatabaseH db,
                                                           enum SFSatellite const sat,
                                                           enum SFSector const sector,
                                                           time_t const start, time_t const end,

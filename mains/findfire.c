@@ -771,8 +771,12 @@ path_filter(void *arg)
     Courier *from_dir_walker = links->from;
     Courier *to_satfire_cluster_list_loader = links->to;
 
+    SFClusterDatabaseH db = 0;
+    db = satfire_cluster_db_connect(options.database_file);
+    Stopif(!db, exit(EXIT_FAILURE), "Error opening database. (%s %u)", __FILE__, __LINE__);
+
     SFClusterDatabaseQueryPresentH present_query = 0;
-    present_query = satfire_cluster_db_prepare_to_query_present(options.database_file);
+    present_query = satfire_cluster_db_prepare_to_query_present(db);
     Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query. (%s %u)", __FILE__,
            __LINE__);
 
@@ -803,6 +807,7 @@ path_filter(void *arg)
     courier_done_receiving(from_dir_walker);
     courier_done_sending(to_satfire_cluster_list_loader);
     satfire_cluster_db_finalize_query_present(&present_query);
+    satfire_cluster_db_close(&db);
 
     return 0;
 }
@@ -897,9 +902,13 @@ database_filler(void *arg)
     courier_register_receiver(from_satfire_cluster_list_loader);
     courier_wait_until_ready_to_receive(from_satfire_cluster_list_loader);
 
+    SFClusterDatabaseH db = 0;
     SFClusterDatabaseAddH add_stmt = 0;
 
-    add_stmt = satfire_cluster_db_prepare_to_add(options.database_file);
+    db = satfire_cluster_db_connect(options.database_file);
+    Stopif(!db, goto CLEANUP_AND_RETURN, "Error opening database.");
+
+    add_stmt = satfire_cluster_db_prepare_to_add(db);
     Stopif(!add_stmt, goto CLEANUP_AND_RETURN, "Error preparing add statement.");
 
     // Stats on individual clusters.
@@ -956,6 +965,7 @@ database_filler(void *arg)
 CLEANUP_AND_RETURN:
     courier_done_receiving(from_satfire_cluster_list_loader);
     satfire_cluster_db_finalize_add(&add_stmt);
+    satfire_cluster_db_close(&db);
     return 0;
 }
 

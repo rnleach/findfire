@@ -217,7 +217,6 @@ main(int argc, char *argv[argc + 1])
     SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
     Stopif(!db, exit(EXIT_FAILURE), "Unable to connect to database %s.", options.database_file);
     time_t latest = satfire_cluster_db_newest_scan_start(db, options.sat, options.sector);
-    satfire_cluster_db_close(&db);
     Stopif(latest == 0, exit(EXIT_FAILURE),
            "No data in the database for satellite %s and sector %s.",
            satfire_satellite_name(options.sat), satfire_sector_name(options.sector));
@@ -232,7 +231,8 @@ main(int argc, char *argv[argc + 1])
     struct SFBoundingBox region = {.ll = ll, .ur = ur};
 
     SFClusterDatabaseQueryRowsH rows = satfire_cluster_db_query_rows(
-        options.database_file, options.sat, options.sector, latest, latest + 3600, region);
+        db, options.sat, options.sector, latest, latest + 3600, region);
+
     struct SFClusterRow *row = 0;
     GList *sorted_rows = 0;
     while ((row = satfire_cluster_db_query_rows_next(rows, 0))) {
@@ -297,6 +297,8 @@ main(int argc, char *argv[argc + 1])
     fclose(out);
 
     g_list_free_full(g_steal_pointer(&sorted_rows), satfire_cluster_row_destructor_for_glib);
+
+    satfire_cluster_db_close(&db);
 
     program_finalization();
 

@@ -247,6 +247,9 @@ main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
+    SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
+    Stopif(!db, exit(EXIT_FAILURE), "error opening database: %s", options.database_file);
+
     FILE *out = fopen(options.kml_file, "w");
     Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", options.kml_file);
 
@@ -261,7 +264,7 @@ main(int argc, char *argv[argc + 1])
             kamel_start_folder(out, satfire_sector_name(sector), 0, false);
 
             SFClusterDatabaseQueryRowsH rows = satfire_cluster_db_query_rows(
-                options.database_file, sat, sector, options.start, options.end, options.region);
+                db, sat, sector, options.start, options.end, options.region);
             struct SFClusterRow *row = 0;
 
             while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
@@ -290,6 +293,7 @@ main(int argc, char *argv[argc + 1])
     kamel_end_document(out);
 
     fclose(out);
+    satfire_cluster_db_close(&db);
 
     program_finalization();
 

@@ -26,32 +26,50 @@ open_database_to_write(char const *path, sqlite3 **result)
     // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
     sqlite3_busy_timeout(handle, 5000);
 
-    char *query = "CREATE TABLE IF NOT EXISTS clusters (                  \n"
-                  "  satellite       TEXT    NOT NULL,                    \n"
-                  "  sector          TEXT    NOT NULL,                    \n"
-                  "  start_time      INTEGER NOT NULL,  -- unix timestamp \n"
-                  "  end_time        INTEGER NOT NULL,  -- unix timestamp \n"
-                  "  lat             REAL    NOT NULL,                    \n"
-                  "  lon             REAL    NOT NULL,                    \n"
-                  "  power           REAL    NOT NULL,  -- megawatts      \n"
-                  "  max_temperature REAL    NOT NULL,  -- Kelvin         \n"
-                  "  area            REAL    NOT NULL,  -- square meters  \n"
-                  "  max_scan_angle  REAL    NOT NULL,  -- degrees        \n"
-                  "  pixels          BLOB    NOT NULL);                   \n"
-                  "                                                       \n"
-                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups      \n"
-                  "  ON clusters (satellite, sector, start_time,          \n"
-                  "               end_time, lat, lon);                    \n"
-                  "                                                       \n"
-                  "CREATE INDEX IF NOT EXISTS file_processed              \n"
-                  "  ON clusters (satellite, sector, start_time,          \n"
-                  "               end_time);                              \n"
-                  "                                                       \n"
-                  "CREATE TABLE IF NOT EXISTS no_fire (                   \n"
-                  "  satellite  TEXT    NOT NULL,                         \n"
-                  "  sector     TEXT    NOT NULL,                         \n"
-                  "  start_time INTEGER NOT NULL,                         \n"
-                  "  end_time   INTEGER NOT NULL);                        \n";
+    char *query = "CREATE TABLE IF NOT EXISTS clusters (                      \n"
+                  "  cluster_id      INTEGER PRIMARY KEY AUTOINCREMENT,       \n"
+                  "  satellite       TEXT    NOT NULL,                        \n"
+                  "  sector          TEXT    NOT NULL,                        \n"
+                  "  start_time      INTEGER NOT NULL,  -- unix timestamp     \n"
+                  "  end_time        INTEGER NOT NULL,  -- unix timestamp     \n"
+                  "  lat             REAL    NOT NULL,                        \n"
+                  "  lon             REAL    NOT NULL,                        \n"
+                  "  power           REAL    NOT NULL,  -- megawatts          \n"
+                  "  max_temperature REAL    NOT NULL,  -- Kelvin             \n"
+                  "  area            REAL    NOT NULL,  -- square meters      \n"
+                  "  max_scan_angle  REAL    NOT NULL,  -- degrees            \n"
+                  "  pixels          BLOB    NOT NULL);                       \n"
+                  "                                                           \n"
+                  "CREATE UNIQUE INDEX IF NOT EXISTS no_cluster_dups          \n"
+                  "  ON clusters (satellite, sector, start_time,              \n"
+                  "               end_time, lat, lon);                        \n"
+                  "                                                           \n"
+                  "CREATE INDEX IF NOT EXISTS file_processed                  \n"
+                  "  ON clusters (satellite, sector, start_time,              \n"
+                  "               end_time);                                  \n"
+                  "                                                           \n"
+                  "CREATE TABLE IF NOT EXISTS no_fire (                       \n"
+                  "  satellite  TEXT    NOT NULL,                             \n"
+                  "  sector     TEXT    NOT NULL,                             \n"
+                  "  start_time INTEGER NOT NULL,                             \n"
+                  "  end_time   INTEGER NOT NULL);                            \n"
+                  "                                                           \n"
+                  "CREATE TABLE IF NOT EXISTS fires (                         \n"
+                  "  fire_id        INTEGER PRIMARY KEY AUTOINCREMENT,        \n"
+                  "  satellite      TEXT    NOT NULL,                         \n"
+                  "  first_observed INTEGER NOT NULL,  --unix timestamp       \n"
+                  "  last_observed  INTEGER NOT NULL,  --unix timestamp       \n"
+                  "  lat            REAL    NOT NULL,                         \n"
+                  "  lon            REAL    NOT NULL,                         \n"
+                  "  pixels         BLOB    NOT NULL);                        \n"
+                  "                                                           \n"
+                  "PRAGMA foreign_keys = ON;                                  \n"
+                  "                                                           \n"
+                  "CREATE TABLE IF NOT EXISTS associations (                  \n"
+                  "  fire_id    INTEGER NOT NULL,                             \n"
+                  "  cluster_id INTEGER NOT NULL,                             \n"
+                  "  FOREIGN KEY(fire_id)    REFERENCES fires(fire_id),       \n"
+                  "  FOREIGN KEY(cluster_id) REFERENCES clusers(cluster_id)); \n";
 
     char *err_message = 0;
 
@@ -69,29 +87,6 @@ open_database_to_write(char const *path, sqlite3 **result)
 ERR_CLEANUP:
     sqlite3_close(handle);
     return rc;
-}
-
-static sqlite3 *
-open_database_readonly(char const *path)
-{
-    //
-    // The mode flag should be SQLITE_OPEN_READONLY instead of SQLITE_OPEN_READWRITE, however,
-    // when accessing a database from my mac this with multiple threads (some read, some write)
-    // this causes an SQLITE disk I/O error. It works fine on Ubuntu/PoP!_OS. But I'll leave it
-    // this way for now so it works on both machines!
-    //
-    sqlite3 *handle = 0;
-    int rc = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, 0);
-    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error connecting to %s", path);
-
-    // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
-    sqlite3_busy_timeout(handle, 5000);
-
-    return handle;
-
-ERR_CLEANUP:
-    sqlite3_close(handle);
-    return 0;
 }
 
 static int
@@ -134,7 +129,9 @@ struct SFClusterDatabase {
 struct SFClusterDatabase *
 satfire_cluster_db_connect(char const *path)
 {
-    sqlite3 *handle = open_database_readonly(path);
+    sqlite3 *handle = 0;
+    int rc = open_database_to_write(path, &handle);
+    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error opening the database: %s", sqlite3_errstr(rc));
 
     struct SFClusterDatabase *cdbh = malloc(sizeof(struct SFClusterDatabase));
     Stopif(!cdbh, goto ERR_CLEANUP, "out of memory");
@@ -210,18 +207,13 @@ struct SFClusterDatabaseAdd {
 };
 
 struct SFClusterDatabaseAdd *
-satfire_cluster_db_prepare_to_add(char const *path_to_db)
+satfire_cluster_db_prepare_to_add(struct SFClusterDatabase *db)
 {
-    assert(path_to_db);
+    assert(db);
 
     struct SFClusterDatabaseAdd *add = 0;
-    sqlite3 *db = 0;
     sqlite3_stmt *add_stmt = 0;
     sqlite3_stmt *no_fire_stmt = 0;
-
-    int rc = open_database_to_write(path_to_db, &db);
-    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "unable to open a connection to the database: %s",
-           path_to_db);
 
     char *add_query = "INSERT OR REPLACE INTO clusters (        \n"
                       "  satellite,                             \n"
@@ -237,20 +229,20 @@ satfire_cluster_db_prepare_to_add(char const *path_to_db)
                       "  pixels)                                \n"
                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \n";
 
-    rc = sqlite3_prepare_v2(db, add_query, -1, &add_stmt, 0);
+    int rc = sqlite3_prepare_v2(db->ptr, add_query, -1, &add_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing statement: %s", sqlite3_errstr(rc));
 
     char *no_fire_query = "INSERT OR REPLACE INTO no_fire              \n"
                           "  (satellite, sector, start_time, end_time) \n"
                           "VALUES (?, ?, ?, ?)                         \n";
 
-    rc = sqlite3_prepare_v2(db, no_fire_query, -1, &no_fire_stmt, 0);
+    rc = sqlite3_prepare_v2(db->ptr, no_fire_query, -1, &no_fire_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing statement: %s", sqlite3_errstr(rc));
 
     add = malloc(sizeof(struct SFClusterDatabaseAdd));
     Stopif(!add, goto ERR_CLEANUP, "out of memory");
 
-    add->db = db;
+    add->db = db->ptr;
     add->add_ptr = add_stmt;
     add->no_fire_ptr = no_fire_stmt;
 
@@ -260,7 +252,6 @@ ERR_CLEANUP:
     free(add);
     sqlite3_finalize(add_stmt);
     sqlite3_finalize(no_fire_stmt);
-    close_database(&db);
 
     return 0;
 }
@@ -279,10 +270,6 @@ satfire_cluster_db_finalize_add(struct SFClusterDatabaseAdd **stmt)
 
     rc_x = sqlite3_finalize((*stmt)->no_fire_ptr);
     Stopif(rc_x != SQLITE_OK, rc = rc_x, "Error finalizing no fire statement: %s",
-           sqlite3_errstr(rc_x));
-
-    rc_x = close_database(&(*stmt)->db);
-    Stopif(rc_x != SQLITE_OK, rc = rc_x, "Error closing database connection: %s",
            sqlite3_errstr(rc_x));
 
     free(*stmt);
@@ -456,40 +443,37 @@ struct SFClusterDatabaseQueryPresent {
 };
 
 struct SFClusterDatabaseQueryPresent *
-satfire_cluster_db_prepare_to_query_present(char const *path_to_db)
+satfire_cluster_db_prepare_to_query_present(struct SFClusterDatabase *db)
 {
+    assert(db);
+
     int rc = SQLITE_OK;
     struct SFClusterDatabaseQueryPresent *query = 0;
-    sqlite3 *db = 0;
     sqlite3_stmt *stmt_clusters = 0;
     sqlite3_stmt *stmt_no_fire = 0;
 
-    db = open_database_readonly(path_to_db);
+    char *query_clusters =
+        "SELECT COUNT(*) FROM clusters                                         \n"
+        "WHERE satellite = ? AND sector = ? AND start_time = ? AND end_time = ?\n";
 
-    if (db) {
-        char *query_clusters =
-            "SELECT COUNT(*) FROM clusters                                         \n"
-            "WHERE satellite = ? AND sector = ? AND start_time = ? AND end_time = ?\n";
+    rc = sqlite3_prepare_v2(db->ptr, query_clusters, -1, &stmt_clusters, 0);
+    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing count rows statement: %s",
+           sqlite3_errstr(rc));
 
-        rc = sqlite3_prepare_v2(db, query_clusters, -1, &stmt_clusters, 0);
-        Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing count rows statement: %s",
-               sqlite3_errstr(rc));
+    char *query_no_fire =
+        "SELECT COUNT(*) FROM no_fire                                          \n"
+        "WHERE satellite = ? AND sector = ? AND start_time = ? AND end_time = ?\n";
 
-        char *query_no_fire =
-            "SELECT COUNT(*) FROM no_fire                                          \n"
-            "WHERE satellite = ? AND sector = ? AND start_time = ? AND end_time = ?\n";
+    rc = sqlite3_prepare_v2(db->ptr, query_no_fire, -1, &stmt_no_fire, 0);
+    Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing count rows statement: %s",
+           sqlite3_errstr(rc));
 
-        rc = sqlite3_prepare_v2(db, query_no_fire, -1, &stmt_no_fire, 0);
-        Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing count rows statement: %s",
-               sqlite3_errstr(rc));
+    query = malloc(sizeof(struct SFClusterDatabaseQueryPresent));
+    Stopif(!query, goto ERR_CLEANUP, "out of memory");
 
-        query = malloc(sizeof(struct SFClusterDatabaseQueryPresent));
-        Stopif(!query, goto ERR_CLEANUP, "out of memory");
-
-        query->db = db;
-        query->count_stmt = stmt_clusters;
-        query->no_fire_stmt = stmt_no_fire;
-    }
+    query->db = db->ptr;
+    query->count_stmt = stmt_clusters;
+    query->no_fire_stmt = stmt_no_fire;
 
     return query;
 
@@ -498,7 +482,6 @@ ERR_CLEANUP:
     free(query);
     sqlite3_finalize(stmt_clusters);
     sqlite3_finalize(stmt_no_fire);
-    close_database(&db);
 
     return 0;
 }
@@ -518,10 +501,6 @@ satfire_cluster_db_finalize_query_present(struct SFClusterDatabaseQueryPresent *
 
     rc_x = sqlite3_finalize((*stmt)->count_stmt);
     Stopif(rc_x != SQLITE_OK, rc = rc_x, "Error finalizing cluster count statement: %s",
-           sqlite3_errstr(rc_x));
-
-    rc_x = close_database(&(*stmt)->db);
-    Stopif(rc_x != SQLITE_OK, rc = rc_x, "Error closing database connection: %s",
            sqlite3_errstr(rc_x));
 
     free(*stmt);
@@ -620,18 +599,14 @@ struct SFClusterRow {
 };
 
 struct SFClusterDatabaseQueryRows *
-satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat,
+satfire_cluster_db_query_rows(struct SFClusterDatabase *db, enum SFSatellite const sat,
                               enum SFSector const sector, time_t const start, time_t const end,
                               struct SFBoundingBox const area)
 {
-    assert(path_to_db);
+    assert(db);
 
-    sqlite3 *db = 0;
     sqlite3_stmt *row_stmt = 0;
     struct SFClusterDatabaseQueryRows *query = 0;
-
-    db = open_database_readonly(path_to_db);
-    Stopif(!db, goto ERR_CLEANUP, "Unable to open database: %s", path_to_db);
 
     char *query_format = "SELECT                                          \n"
                          "  satellite,                                    \n"
@@ -645,8 +620,8 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
                          "  pixels                                        \n"
                          "FROM clusters                                   \n"
                          "WHERE                                           \n"
-                         "  start_time >= %ld                             \n"
-                         "AND end_time <= %ld AND                         \n"
+                         "  start_time >= %ld AND                         \n"
+                         "  end_time <= %ld AND                           \n"
                          "  lat >= %lf AND lat <= %lf AND                 \n"
                          "  lon >= %lf AND lon <= %lf %s %s               \n"
                          "ORDER BY start_time ASC                         \n";
@@ -679,14 +654,14 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
     Stopif(num_chars >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
            __FILE__, __LINE__);
 
-    int rc = sqlite3_prepare_v2(db, query_txt, -1, &row_stmt, 0);
+    int rc = sqlite3_prepare_v2(db->ptr, query_txt, -1, &row_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing query:\n%s\n\n%s", query_txt,
            sqlite3_errstr(rc));
 
     query = malloc(sizeof(struct SFClusterDatabaseQueryRows));
     Stopif(!query, exit(EXIT_FAILURE), "Out of memory.");
 
-    query->db = db;
+    query->db = db->ptr;
     query->row_stmt = row_stmt;
 
     return query;
@@ -694,7 +669,6 @@ satfire_cluster_db_query_rows(char const *path_to_db, enum SFSatellite const sat
 ERR_CLEANUP:
     free(query);
     sqlite3_finalize(row_stmt);
-    sqlite3_close(db);
 
     return 0;
 }
@@ -708,7 +682,6 @@ satfire_cluster_db_query_rows_finalize(struct SFClusterDatabaseQueryRows **query
     int rc = SQLITE_OK;
 
     rc = sqlite3_finalize((*query)->row_stmt);
-    sqlite3_close((*query)->db);
     free(*query);
     *query = 0;
 
