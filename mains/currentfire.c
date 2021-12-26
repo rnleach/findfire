@@ -135,7 +135,8 @@ program_initialization(int argc[static 1], char ***argv)
 
     // Parse command line options.
     GError *error = 0;
-    GOptionContext *context = g_option_context_new("- Find clusters and add them to a database.");
+    GOptionContext *context = g_option_context_new(
+        "- Output a KML file with the most recently detected fires in the database.");
     g_option_context_add_main_entries(context, option_entries, 0);
     g_option_context_parse(context, argc, argv, &error);
     Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
