@@ -325,12 +325,10 @@ save_satfire_cluster_kml(struct SFCluster *biggest, time_t bstart, time_t bend,
  * summary statistics. This is a QC tool, there are a lot of outliers on the limb of the Earth as
  * viewed by the GOES satellites, and the angles / geometry seem to have something to do with it.
  *
- * TODO: I need to update this based on the new definition of scan angle.
- * The value of 67.0 degrees is based on visual inspection of a graph of cluster power vs scan
- * angle of the cluster centroid.
+ * The value of 8.3 degrees is based on visual inspection of a graph of cluster power vs max scan
+ * angle of the cluster member centroids.
  */
-// TODO: Update this based on the new definition of scan angle.
-#define MAX_SCAN_ANGLE 67.0
+#define MAX_SCAN_ANGLE 8.3
 
 struct ClusterStats {
     struct SFCluster *biggest_fire;
@@ -914,11 +912,11 @@ database_filler(void *arg)
     while ((item = courier_receive(from_satfire_cluster_list_loader))) {
         struct SFClusterList *clusters = item;
 
-        int failure = satfire_cluster_db_add(add_stmt, clusters);
-        Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
-
         // Filter out clusters on the limb for some QC
         clusters = satfire_cluster_list_filter_scan_angle(clusters, MAX_SCAN_ANGLE);
+
+        int failure = satfire_cluster_db_add(add_stmt, clusters);
+        Stopif(failure, goto CLEANUP_AND_RETURN, "Error adding row to database.");
 
         enum SFSatellite sat = satfire_cluster_list_satellite(clusters);
         enum SFSector sector = satfire_cluster_list_sector(clusters);
