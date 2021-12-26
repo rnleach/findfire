@@ -773,12 +773,11 @@ path_filter(void *arg)
 
     SFClusterDatabaseH db = 0;
     db = satfire_cluster_db_connect(options.database_file);
-    Stopif(!db, exit(EXIT_FAILURE), "Error opening database. (%s %u)", __FILE__, __LINE__);
+    Stopif(!db, exit(EXIT_FAILURE), "Error opening database.");
 
     SFClusterDatabaseQueryPresentH present_query = 0;
     present_query = satfire_cluster_db_prepare_to_query_present(db);
-    Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query. (%s %u)", __FILE__,
-           __LINE__);
+    Stopif(!present_query, exit(EXIT_FAILURE), "Error preparing query.");
 
     courier_register_receiver(from_dir_walker);
     courier_register_sender(to_satfire_cluster_list_loader);

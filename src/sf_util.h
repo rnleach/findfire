@@ -24,7 +24,7 @@
     {                                                                                              \
         if (assertion) {                                                                           \
             fprintf(stderr, __VA_ARGS__);                                                          \
-            fprintf(stderr, "\n");                                                                 \
+            fprintf(stderr, " [%d %s]\n", __LINE__, __FILE__);                                     \
             {                                                                                      \
                 error_action;                                                                      \
             }                                                                                      \

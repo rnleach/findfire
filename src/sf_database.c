@@ -356,8 +356,8 @@ satfire_cluster_db_add_cluster(struct SFClusterDatabaseAdd *stmt, struct SFClust
         rc = sqlite3_bind_blob(stmt->add_ptr, 11, buf_ptr, buff_size, transient_free);
 
         rc = sqlite3_step(stmt->add_ptr);
-        Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, goto ERR_CLEANUP,
-               "Error stepping: %s (%s, %u)", sqlite3_errstr(rc), __FILE__, __LINE__);
+        Stopif(rc != SQLITE_OK && rc != SQLITE_DONE, goto ERR_CLEANUP, "Error stepping: %s",
+               sqlite3_errstr(rc));
 
         rc = sqlite3_reset(stmt->add_ptr);
         Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error resetting: %s", sqlite3_errstr(rc));
@@ -529,8 +529,7 @@ satfire_cluster_db_present(struct SFClusterDatabaseQueryPresent *stmt, enum SFSa
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error binding start time: %s", sqlite3_errstr(rc));
 
     rc = sqlite3_step(stmt->count_stmt);
-    Stopif(rc != SQLITE_ROW, goto ERR_CLEANUP, "Error stepping: %s (%s, %u)", sqlite3_errstr(rc),
-           __FILE__, __LINE__);
+    Stopif(rc != SQLITE_ROW, goto ERR_CLEANUP, "Error stepping: %s", sqlite3_errstr(rc));
 
     num_rows = sqlite3_column_int64(stmt->count_stmt, 0);
 
@@ -554,8 +553,7 @@ satfire_cluster_db_present(struct SFClusterDatabaseQueryPresent *stmt, enum SFSa
                sqlite3_errstr(rc));
 
         rc = sqlite3_step(stmt->no_fire_stmt);
-        Stopif(rc != SQLITE_ROW, goto ERR_CLEANUP, "Error stepping: %s (%s, %u)",
-               sqlite3_errstr(rc), __FILE__, __LINE__);
+        Stopif(rc != SQLITE_ROW, goto ERR_CLEANUP, "Error stepping: %s)", sqlite3_errstr(rc));
 
         num_rows = sqlite3_column_int64(stmt->no_fire_stmt, 0);
 
@@ -651,8 +649,7 @@ satfire_cluster_db_query_rows(struct SFClusterDatabase *db, enum SFSatellite con
 
     num_chars = snprintf(query_txt, sizeof(query_txt), query_format, start, end, min_lat, max_lat,
                          min_lon, max_lon, satellite_select, sector_select);
-    Stopif(num_chars >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small: %s %d",
-           __FILE__, __LINE__);
+    Stopif(num_chars >= sizeof(query_txt), goto ERR_CLEANUP, "query_txt buffer too small.");
 
     int rc = sqlite3_prepare_v2(db->ptr, query_txt, -1, &row_stmt, 0);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error preparing query:\n%s\n\n%s", query_txt,
