@@ -51,7 +51,7 @@
  * some functions that can be used to filter lists based on cluster properties.
  *
  * <h3>The Cluster Database</h3>
- * \ref SFClusterDatabaseH<br/>
+ * \ref SFDatabaseH<br/>
  * \ref SFClusterDatabaseAddH<br/>
  * \ref SFClusterDatabaseQueryPresentH<br/>
  * \ref SFClusterDatabaseQueryRowsH<br/>
@@ -502,6 +502,48 @@ unsigned int satfire_cluster_list_length(struct SFClusterList *list);
 double satfire_cluster_list_total_power(struct SFClusterList *list);
 
 /*-------------------------------------------------------------------------------------------------
+ *                                        Wildfire
+ *-----------------------------------------------------------------------------------------------*/
+/**
+ * \struct SFWildfire
+ * \brief The aggregate properties of a temporally connected group of \ref SFCluster objects.
+ */
+struct SFWildfire;
+
+/** Create a new wildfire. */
+struct SFWildfire *satfire_wildfire_new(unsigned int id, time_t observed);
+
+/** Cleanup a Wildfire. */
+void satfire_wildfire_destroy(struct SFWildfire **wildfire);
+
+/** Get the id number of the fire. */
+unsigned int satfire_wildfire_id(struct SFWildfire const *wildfire);
+
+/** Get the time the fire was first observed. */
+time_t satfire_wildfire_get_first_observed(struct SFWildfire const *wildfire);
+
+/** Get the time the fire was last observed. */
+time_t satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire);
+
+/** Get the centroid of a wildfire. */
+struct SFCoord satfire_wildfire_centroid(struct SFWildfire const *wildfire);
+
+/** Get the maximum power of observed for this fire, megawatts. */
+double satfire_wildfire_max_power(struct SFWildfire const *wildfire);
+
+/** Get the max fire temperature observed on this fire, Kelvin. */
+double satfire_wildfire_max_temperature(struct SFWildfire const *wildfire);
+
+/** Get access to the pixels in the wildfire. */
+const struct SFPixelList *satfire_wildfire_pixels(struct SFWildfire const *wildfire);
+
+/** Get the satellite this fire was observed from. */
+enum SFSatellite satfire_wildfire_satllite(struct SFWildfire const *wildfire);
+
+/** Update a wildfire by adding the information in this \ref SFCluster to it. */
+void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFCluster *cluster);
+
+/*-------------------------------------------------------------------------------------------------
  *                            Query general info about the database
  *-----------------------------------------------------------------------------------------------*/
 /** \brief Initialize a database.
@@ -511,17 +553,17 @@ double satfire_cluster_list_total_power(struct SFClusterList *list);
  *
  * \returns 0 on success and non-zero if there is an error.
  */
-int satfire_cluster_db_initialize(char const *path);
+int satfire_db_initialize(char const *path);
 
-/** A handle to a SFClusterDatabase connection. */
-typedef struct SFClusterDatabase *SFClusterDatabaseH;
+/** A handle to a SFDatabase connection. */
+typedef struct SFDatabase *SFDatabaseH;
 
 /**
- * \brief Open a connection to the database to store clusters.
+ * \brief Open a connection to the database to store clusters, wildfires, and associations.
  *
  * \returns the database connect object or NULL if there is an error.
  */
-SFClusterDatabaseH satfire_cluster_db_connect(char const *path);
+SFDatabaseH satfire_db_connect(char const *path);
 
 /**
  * \brief Close and finalize the connection to the database.
@@ -530,7 +572,7 @@ SFClusterDatabaseH satfire_cluster_db_connect(char const *path);
  *
  * \returns 0 if there is no error, otherwise it returns non-zero.
  */
-int satfire_cluster_db_close(SFClusterDatabaseH *db);
+int satfire_db_close(SFDatabaseH *db);
 
 /**
  * \brief Find the latest valid time in the database so you can safely skip anything older.
@@ -538,7 +580,7 @@ int satfire_cluster_db_close(SFClusterDatabaseH *db);
  * \returns 0 if there is an error or the database is empty, otherwise returns the scan start
  * time of the latest path for that satellite and sector.
  */
-time_t satfire_cluster_db_newest_scan_start(SFClusterDatabaseH db, enum SFSatellite satellite,
+time_t satfire_cluster_db_newest_scan_start(SFDatabaseH db, enum SFSatellite satellite,
                                             enum SFSector sector);
 
 /*-------------------------------------------------------------------------------------------------
@@ -552,7 +594,7 @@ typedef struct SFClusterDatabaseAdd *SFClusterDatabaseAddH;
  *
  * \returns NULL or the 0 pointer on error.
  */
-SFClusterDatabaseAddH satfire_cluster_db_prepare_to_add(SFClusterDatabaseH db);
+SFClusterDatabaseAddH satfire_cluster_db_prepare_to_add(SFDatabaseH db);
 
 /**
  * \brief Finalize add transaction.
@@ -579,7 +621,7 @@ typedef struct SFClusterDatabaseQueryPresent *SFClusterDatabaseQueryPresentH;
  *
  * \return NULL or the 0 pointer on error.
  */
-SFClusterDatabaseQueryPresentH satfire_cluster_db_prepare_to_query_present(SFClusterDatabaseH db);
+SFClusterDatabaseQueryPresentH satfire_cluster_db_prepare_to_query_present(SFDatabaseH db);
 
 /**
  * \brief Finalize the 'is present' query.
@@ -617,7 +659,7 @@ typedef struct SFClusterDatabaseQueryRows *SFClusterDatabaseQueryRowsH;
  * \returns a handle to the query object. If there is an error such as a non-existent database, it
  * returns \c NULL.
  */
-SFClusterDatabaseQueryRowsH satfire_cluster_db_query_rows(SFClusterDatabaseH db,
+SFClusterDatabaseQueryRowsH satfire_cluster_db_query_rows(SFDatabaseH db,
                                                           enum SFSatellite const sat,
                                                           enum SFSector const sector,
                                                           time_t const start, time_t const end,
@@ -693,3 +735,30 @@ satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row);
  *
  */
 void satfire_cluster_db_satfire_cluster_row_finalize(struct SFClusterRow *row);
+
+/*-------------------------------------------------------------------------------------------------
+ *                             Add Rows to the Fires Database
+ *-----------------------------------------------------------------------------------------------*/
+/** A handle to an add transaction. */
+typedef struct SFFiresDatabaseAdd *SFFiresDatabaseAddH;
+
+/**
+ * \brief Prepare to add rows to the fires database.
+ *
+ * \returns NULL or the 0 pointer on error.
+ */
+SFFiresDatabaseAddH satfire_fires_db_prepare_to_add(SFDatabaseH db);
+
+/**
+ * \brief Finalize add transaction.
+ *
+ * \returns 0 if there is no error.
+ */
+int satfire_fires_db_finalize_add(SFFiresDatabaseAddH *stmt);
+
+/**
+ * \brief Adds or updates a fire to the database.
+ *
+ * \returns the 0 on success and non-zero on error.
+ */
+int satfire_fires_db_add(SFFiresDatabaseAddH stmt, struct SFWildfire *fire);

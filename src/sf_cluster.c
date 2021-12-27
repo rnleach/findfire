@@ -7,7 +7,7 @@
 #include "sf_private.h"
 #include "sf_util.h"
 
-char const *out_of_memory = "memory allocation error";
+extern char const *out_of_memory;
 
 /*-------------------------------------------------------------------------------------------------
                                                  Cluster

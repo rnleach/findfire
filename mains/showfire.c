@@ -247,7 +247,7 @@ main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
-    SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
+    SFDatabaseH db = satfire_db_connect(options.database_file);
     Stopif(!db, exit(EXIT_FAILURE), "error opening database: %s", options.database_file);
 
     FILE *out = fopen(options.kml_file, "w");
@@ -293,7 +293,7 @@ main(int argc, char *argv[argc + 1])
     kamel_end_document(out);
 
     fclose(out);
-    satfire_cluster_db_close(&db);
+    satfire_db_close(&db);
 
     program_finalization();
 

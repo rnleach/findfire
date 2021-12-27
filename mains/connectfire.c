@@ -70,7 +70,7 @@ program_initialization(int argc[static 1], char ***argv)
         fprintf(stdout, "  Database: %s\n", options.database_file);
     }
 
-    satfire_cluster_db_initialize(options.database_file);
+    satfire_db_initialize(options.database_file);
 }
 
 static void
@@ -80,19 +80,6 @@ program_finalization()
 
     satfire_finalize();
 }
-
-/*-------------------------------------------------------------------------------------------------
- *                                             Wildfire
- *-----------------------------------------------------------------------------------------------*/
-/** \brief A wildfire. */
-struct Wildfire {
-    time_t first_observed;
-    time_t last_observed;
-    struct SFCoord centroid;
-    unsigned int id;
-    struct SFPixelList *area;
-    enum SFSatellite sat;
-};
 
 /*-------------------------------------------------------------------------------------------------
  *                                             Main

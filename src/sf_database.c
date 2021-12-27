@@ -55,13 +55,15 @@ open_database_to_write(char const *path, sqlite3 **result)
                   "  end_time   INTEGER NOT NULL);                            \n"
                   "                                                           \n"
                   "CREATE TABLE IF NOT EXISTS fires (                         \n"
-                  "  fire_id        INTEGER PRIMARY KEY AUTOINCREMENT,        \n"
-                  "  satellite      TEXT    NOT NULL,                         \n"
-                  "  first_observed INTEGER NOT NULL,  --unix timestamp       \n"
-                  "  last_observed  INTEGER NOT NULL,  --unix timestamp       \n"
-                  "  lat            REAL    NOT NULL,                         \n"
-                  "  lon            REAL    NOT NULL,                         \n"
-                  "  pixels         BLOB    NOT NULL);                        \n"
+                  "  fire_id         INTEGER PRIMARY KEY AUTOINCREMENT,       \n"
+                  "  satellite       TEXT    NOT NULL,                        \n"
+                  "  first_observed  INTEGER NOT NULL,  --unix timestamp      \n"
+                  "  last_observed   INTEGER NOT NULL,  --unix timestamp      \n"
+                  "  lat             REAL    NOT NULL,                        \n"
+                  "  lon             REAL    NOT NULL,                        \n"
+                  "  max_power       REAL    NOT NULL,                        \n"
+                  "  max_temperature REAL    NOR NULL,                        \n"
+                  "  pixels          BLOB    NOT NULL);                       \n"
                   "                                                           \n"
                   "PRAGMA foreign_keys = ON;                                  \n"
                   "                                                           \n"
@@ -109,7 +111,7 @@ close_database(sqlite3 **db)
  *                            Query general info about the database
  *-----------------------------------------------------------------------------------------------*/
 int
-satfire_cluster_db_initialize(char const *path)
+satfire_db_initialize(char const *path)
 {
     sqlite3 *db = 0;
 
@@ -122,18 +124,18 @@ satfire_cluster_db_initialize(char const *path)
     return rc;
 }
 
-struct SFClusterDatabase {
+struct SFDatabase {
     sqlite3 *ptr;
 };
 
-struct SFClusterDatabase *
-satfire_cluster_db_connect(char const *path)
+struct SFDatabase *
+satfire_db_connect(char const *path)
 {
     sqlite3 *handle = 0;
     int rc = open_database_to_write(path, &handle);
     Stopif(rc != SQLITE_OK, goto ERR_CLEANUP, "Error opening the database: %s", sqlite3_errstr(rc));
 
-    struct SFClusterDatabase *cdbh = malloc(sizeof(struct SFClusterDatabase));
+    struct SFDatabase *cdbh = malloc(sizeof(struct SFDatabase));
     Stopif(!cdbh, goto ERR_CLEANUP, "out of memory");
     cdbh->ptr = handle;
 
@@ -146,7 +148,7 @@ ERR_CLEANUP:
 }
 
 int
-satfire_cluster_db_close(struct SFClusterDatabase **db)
+satfire_db_close(struct SFDatabase **db)
 {
     assert(db);
 
@@ -161,7 +163,7 @@ satfire_cluster_db_close(struct SFClusterDatabase **db)
 }
 
 time_t
-satfire_cluster_db_newest_scan_start(struct SFClusterDatabase *db, enum SFSatellite satellite,
+satfire_cluster_db_newest_scan_start(struct SFDatabase *db, enum SFSatellite satellite,
                                      enum SFSector sector)
 {
     int rc = SQLITE_OK;
@@ -207,7 +209,7 @@ struct SFClusterDatabaseAdd {
 };
 
 struct SFClusterDatabaseAdd *
-satfire_cluster_db_prepare_to_add(struct SFClusterDatabase *db)
+satfire_cluster_db_prepare_to_add(struct SFDatabase *db)
 {
     assert(db);
 
@@ -443,7 +445,7 @@ struct SFClusterDatabaseQueryPresent {
 };
 
 struct SFClusterDatabaseQueryPresent *
-satfire_cluster_db_prepare_to_query_present(struct SFClusterDatabase *db)
+satfire_cluster_db_prepare_to_query_present(struct SFDatabase *db)
 {
     assert(db);
 
@@ -597,7 +599,7 @@ struct SFClusterRow {
 };
 
 struct SFClusterDatabaseQueryRows *
-satfire_cluster_db_query_rows(struct SFClusterDatabase *db, enum SFSatellite const sat,
+satfire_cluster_db_query_rows(struct SFDatabase *db, enum SFSatellite const sat,
                               enum SFSector const sector, time_t const start, time_t const end,
                               struct SFBoundingBox const area)
 {

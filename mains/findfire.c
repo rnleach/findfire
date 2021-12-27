@@ -125,7 +125,7 @@ program_initialization(int argc[static 1], char ***argv)
         fprintf(stdout, "  Only New: %s\n", options.only_new ? "yes" : "no");
     }
 
-    satfire_cluster_db_initialize(options.database_file);
+    satfire_db_initialize(options.database_file);
 }
 
 static void
@@ -714,7 +714,7 @@ directory_walker(void *arg)
     struct tm most_recent[SATFIRE_SATELLITE_NUM][SATFIRE_SECTOR_NUM] = {0};
     if (options.only_new) {
         int rc = 0;
-        SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
+        SFDatabaseH db = satfire_db_connect(options.database_file);
 
         for (unsigned int sat_entry = 0; sat_entry < SATFIRE_SATELLITE_NUM; ++sat_entry) {
             for (unsigned int sector_entry = 0; sector_entry < SATFIRE_SECTOR_NUM; ++sector_entry) {
@@ -731,7 +731,7 @@ directory_walker(void *arg)
             }
         }
 
-        rc = satfire_cluster_db_close(&db);
+        rc = satfire_db_close(&db);
         Stopif(rc, goto CLEAN_UP_DIR_WALK_AND_RETURN, "Error querying cluster database.");
 
         dir_walk_set_directory_filter(&dir_walk_state, standard_dir_filter, most_recent);
@@ -771,8 +771,8 @@ path_filter(void *arg)
     Courier *from_dir_walker = links->from;
     Courier *to_satfire_cluster_list_loader = links->to;
 
-    SFClusterDatabaseH db = 0;
-    db = satfire_cluster_db_connect(options.database_file);
+    SFDatabaseH db = 0;
+    db = satfire_db_connect(options.database_file);
     Stopif(!db, exit(EXIT_FAILURE), "Error opening database.");
 
     SFClusterDatabaseQueryPresentH present_query = 0;
@@ -806,7 +806,7 @@ path_filter(void *arg)
     courier_done_receiving(from_dir_walker);
     courier_done_sending(to_satfire_cluster_list_loader);
     satfire_cluster_db_finalize_query_present(&present_query);
-    satfire_cluster_db_close(&db);
+    satfire_db_close(&db);
 
     return 0;
 }
@@ -901,10 +901,10 @@ database_filler(void *arg)
     courier_register_receiver(from_satfire_cluster_list_loader);
     courier_wait_until_ready_to_receive(from_satfire_cluster_list_loader);
 
-    SFClusterDatabaseH db = 0;
+    SFDatabaseH db = 0;
     SFClusterDatabaseAddH add_stmt = 0;
 
-    db = satfire_cluster_db_connect(options.database_file);
+    db = satfire_db_connect(options.database_file);
     Stopif(!db, goto CLEANUP_AND_RETURN, "Error opening database.");
 
     add_stmt = satfire_cluster_db_prepare_to_add(db);
@@ -964,7 +964,7 @@ database_filler(void *arg)
 CLEANUP_AND_RETURN:
     courier_done_receiving(from_satfire_cluster_list_loader);
     satfire_cluster_db_finalize_add(&add_stmt);
-    satfire_cluster_db_close(&db);
+    satfire_db_close(&db);
     return 0;
 }
 

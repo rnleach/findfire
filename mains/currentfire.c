@@ -214,7 +214,7 @@ main(int argc, char *argv[argc + 1])
     //
     // Get the time of the most recent scan matching the options
     //
-    SFClusterDatabaseH db = satfire_cluster_db_connect(options.database_file);
+    SFDatabaseH db = satfire_db_connect(options.database_file);
     Stopif(!db, exit(EXIT_FAILURE), "Unable to connect to database %s.", options.database_file);
     time_t latest = satfire_cluster_db_newest_scan_start(db, options.sat, options.sector);
     Stopif(latest == 0, exit(EXIT_FAILURE),
@@ -298,7 +298,7 @@ main(int argc, char *argv[argc + 1])
 
     g_list_free_full(g_steal_pointer(&sorted_rows), satfire_cluster_row_destructor_for_glib);
 
-    satfire_cluster_db_close(&db);
+    satfire_db_close(&db);
 
     program_finalization();
 
