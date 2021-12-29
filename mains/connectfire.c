@@ -89,6 +89,46 @@ main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
+    time_t start = 0;
+    time_t end = time(0);
+
+    SFDatabaseH db = satfire_db_connect(options.database_file);
+    struct SFBoundingBox area = {.ll = (struct SFCoord){.lat = -90.0, .lon = -180.0},
+                                 .ur = (struct SFCoord){.lat = 90.0, .lon = 180.0}};
+
+    for (unsigned int sat = 0; sat < SATFIRE_SATELLITE_NUM; sat++) {
+        SFClusterDatabaseQueryRowsH rows =
+            satfire_cluster_db_query_rows(db, sat, SATFIRE_SECTOR_NONE, start, end, area);
+        Stopif(!rows, continue, "Error querying rows for %s, moving on to next satellite.",
+               satfire_satellite_name(sat));
+
+        time_t current_time_step = 0;
+
+        struct SFClusterRow *row = 0;
+        while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
+
+            time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
+            struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
+
+            if (start != current_time_step) {
+                printf("\n");
+                current_time_step = start;
+            }
+
+            printf("lat: %10.6lf lon: %11.6lf power: %6.0lf max_temperature: %3.0lf from %s %s %s",
+                   centroid.lat, centroid.lon, satfire_cluster_db_satfire_cluster_row_power(row),
+                   satfire_cluster_db_satfire_cluster_row_max_temperature(row),
+                   satfire_satellite_name(satfire_cluster_db_satfire_cluster_row_satellite(row)),
+                   satfire_sector_name(satfire_cluster_db_satfire_cluster_row_sector(row)),
+                   ctime(&start));
+        }
+
+        int sc = satfire_cluster_db_query_rows_finalize(&rows);
+        Stopif(sc, break, "Error finalizing row query, quiting.");
+    }
+
+    satfire_db_close(&db);
+
     program_finalization();
 
     return EXIT_SUCCESS;

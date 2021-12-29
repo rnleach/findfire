@@ -712,6 +712,9 @@ double satfire_cluster_db_satfire_cluster_row_area(struct SFClusterRow const *ro
 /** Get the scan angle of this Cluster. */
 double satfire_cluster_db_satfire_cluster_row_scan_angle(struct SFClusterRow const *row);
 
+/** Get the centroid of the cluster. */
+struct SFCoord satfire_cluster_db_satfire_cluster_row_centroid(struct SFClusterRow const *row);
+
 /** Get the satellite that detected this Cluster. */
 enum SFSatellite satfire_cluster_db_satfire_cluster_row_satellite(struct SFClusterRow const *row);
 

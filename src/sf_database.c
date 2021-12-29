@@ -593,6 +593,7 @@ struct SFClusterRow {
     double max_temperature;
     double area;
     double scan_angle;
+    struct SFCoord centroid;
     enum SFSector sector;
     enum SFSatellite sat;
     struct SFPixelList *pixels;
@@ -617,6 +618,8 @@ satfire_cluster_db_query_rows(struct SFDatabase *db, enum SFSatellite const sat,
                          "  max_temperature,                              \n"
                          "  area,                                         \n"
                          "  max_scan_angle,                               \n"
+                         "  lat,                                          \n"
+                         "  lon,                                          \n"
                          "  pixels                                        \n"
                          "FROM clusters                                   \n"
                          "WHERE                                           \n"
@@ -720,8 +723,10 @@ satfire_cluster_db_query_rows_next(struct SFClusterDatabaseQueryRows *query,
     row->max_temperature = sqlite3_column_double(query->row_stmt, 5);
     row->area = sqlite3_column_double(query->row_stmt, 6);
     row->scan_angle = sqlite3_column_double(query->row_stmt, 7);
+    row->centroid.lat = sqlite3_column_double(query->row_stmt, 8);
+    row->centroid.lon = sqlite3_column_double(query->row_stmt, 9);
     row->pixels = satfire_pixel_list_destroy(row->pixels);
-    row->pixels = satfire_pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 8));
+    row->pixels = satfire_pixel_list_binary_deserialize(sqlite3_column_blob(query->row_stmt, 10));
 
     return row;
 }
@@ -766,6 +771,13 @@ satfire_cluster_db_satfire_cluster_row_scan_angle(struct SFClusterRow const *row
 {
     assert(row);
     return row->scan_angle;
+}
+
+struct SFCoord
+satfire_cluster_db_satfire_cluster_row_centroid(struct SFClusterRow const *row)
+{
+    assert(row);
+    return row->centroid;
 }
 
 enum SFSatellite
