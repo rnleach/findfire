@@ -25,7 +25,7 @@ struct SFWildfire {
 };
 
 struct SFWildfire *
-satfire_wildfire_new(unsigned int id, time_t observed)
+satfire_wildfire_new(unsigned int id, time_t observed, struct SFCluster *initial)
 {
     // TODO implement
     assert(false);
@@ -110,4 +110,70 @@ satfire_wildfire_update(struct SFWildfire *wildfire, struct SFCluster *cluster)
     // TODO implement
     assert(false);
     return;
+}
+
+/*-------------------------------------------------------------------------------------------------
+ *                                        Wildfire List
+ *-----------------------------------------------------------------------------------------------*/
+struct SFWildfireList {
+};
+
+struct SFWildfireList *
+satfire_wildfirelist_destroy(struct SFWildfireList *list)
+{
+    // TODO
+    assert(false);
+    return 0;
+}
+
+struct SFWildfireList *
+satfire_wildfirelist_add_fire(struct SFWildfireList *list, struct SFWildfire *new_fire)
+{
+    assert(new_fire);
+
+    // TODO
+    assert(false);
+    return 0;
+}
+
+struct SFCluster *
+satfire_wildfirelist_take_update(struct SFWildfireList *const list, struct SFCluster *clust)
+{
+    assert(list);
+    assert(clust);
+
+    // TODO
+    assert(false);
+    return 0;
+}
+
+struct SFWildfireList *
+satfire_wildfirelist_extend(struct SFWildfireList *list, struct SFWildfireList *const src)
+{
+    if (!src) {
+        // Nothing to add
+        return list;
+    }
+
+    // TODO
+    assert(false);
+    return 0;
+}
+
+struct SFWildfireList *
+satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
+                                 struct SFWildfireList *merged_away)
+{
+    // TODO
+    assert(false);
+    return 0;
+}
+
+struct SFWildfireList *
+satfire_wildfire_list_drain_fires_not_seen_since(struct SFWildfireList *const list,
+                                                 struct SFWildfireList *tgt_list, time_t older_than)
+{
+    // TODO
+    assert(false);
+    return 0;
 }
