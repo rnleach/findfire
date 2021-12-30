@@ -15,6 +15,9 @@
 
 #include "sf_util.h"
 
+#define DAYS_BACK 30
+#define DAY_SEC (60 * 60 * 24)
+
 /*-------------------------------------------------------------------------------------------------
  *                          Program Initialization, Finalization, and Options
  *-----------------------------------------------------------------------------------------------*/
@@ -92,26 +95,70 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
     Stopif(!rows, return, "Error querying rows for %s, returning from function.",
            satfire_satellite_name(sat));
 
+    struct SFWildfireList *current_fires = 0;
+    struct SFWildfireList *new_fires = 0;
+    struct SFWildfireList *old_fires = 0;
+
     time_t current_time_step = 0;
 
     struct SFClusterRow *row = 0;
     while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
 
         time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
-        struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
 
         if (start != current_time_step) {
-            printf("\n");
+            time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
+
+            // moving on to a new time step, let's take some time to clean up.
+            old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
+            old_fires = satfire_wildfirelist_drain_fires_not_seen_since(current_fires, old_fires,
+                                                                        oldest_allowed);
+
+            // TODO: send old fires to a database thread.
+
+            current_fires = satfire_wildfirelist_extend(current_fires, new_fires);
+
             current_time_step = start;
         }
 
-        printf("lat: %10.6lf lon: %11.6lf power: %6.0lf max_temperature: %3.0lf from %s %s %s",
-               centroid.lat, centroid.lon, satfire_cluster_db_satfire_cluster_row_power(row),
-               satfire_cluster_db_satfire_cluster_row_max_temperature(row),
-               satfire_satellite_name(satfire_cluster_db_satfire_cluster_row_satellite(row)),
-               satfire_sector_name(satfire_cluster_db_satfire_cluster_row_sector(row)),
-               ctime(&start));
+        row = satfire_wildfirelist_take_update(current_fires, row);
+
+        if (row) {
+            // The row couldn't be merged
+
+            time_t end = satfire_cluster_db_satfire_cluster_row_end(row);
+
+            // TODO: Initialize the next id number from the database with a global, atomic constant.
+            struct SFWildfire *new = satfire_wildfire_new(0, start, end, row);
+            new_fires = satfire_wildfirelist_add_fire(new_fires, new);
+
+            /*-----*/
+            struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
+
+            if (start != current_time_step) {
+                printf("\n");
+                current_time_step = start;
+            }
+
+            printf("lat: %10.6lf lon: %11.6lf power: %6.0lf max_temperature: %3.0lf from %s %s %s",
+                   centroid.lat, centroid.lon, satfire_cluster_db_satfire_cluster_row_power(row),
+                   satfire_cluster_db_satfire_cluster_row_max_temperature(row),
+                   satfire_satellite_name(satfire_cluster_db_satfire_cluster_row_satellite(row)),
+                   satfire_sector_name(satfire_cluster_db_satfire_cluster_row_sector(row)),
+                   ctime(&start));
+            /*-----*/
+        }
     }
+
+    old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
+
+    // TODO: send old fires to a database thread
+    // TODO: send current fires to a database thread
+    // TODO: send new fires to a database thread
+
+    current_fires = satfire_wildfirelist_destroy(current_fires);
+    new_fires = satfire_wildfirelist_destroy(new_fires);
+    old_fires = satfire_wildfirelist_destroy(old_fires);
 
     int sc = satfire_cluster_db_query_rows_finalize(&rows);
 

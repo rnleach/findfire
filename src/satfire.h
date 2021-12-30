@@ -502,129 +502,6 @@ unsigned int satfire_cluster_list_length(struct SFClusterList *list);
 double satfire_cluster_list_total_power(struct SFClusterList *list);
 
 /*-------------------------------------------------------------------------------------------------
- *                                        Wildfire
- *-----------------------------------------------------------------------------------------------*/
-/**
- * \struct SFWildfire
- * \brief The aggregate properties of a temporally connected group of \ref SFCluster objects.
- */
-struct SFWildfire;
-
-/** Create a new wildfire. */
-struct SFWildfire *satfire_wildfire_new(unsigned int id, time_t observed,
-                                        struct SFCluster *initial);
-
-/** Cleanup a Wildfire. */
-void satfire_wildfire_destroy(struct SFWildfire **wildfire);
-
-/** Get the id number of the fire. */
-unsigned int satfire_wildfire_id(struct SFWildfire const *wildfire);
-
-/** Get the time the fire was first observed. */
-time_t satfire_wildfire_get_first_observed(struct SFWildfire const *wildfire);
-
-/** Get the time the fire was last observed. */
-time_t satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire);
-
-/** Get the centroid of a wildfire. */
-struct SFCoord satfire_wildfire_centroid(struct SFWildfire const *wildfire);
-
-/** Get the maximum power of observed for this fire, megawatts. */
-double satfire_wildfire_max_power(struct SFWildfire const *wildfire);
-
-/** Get the max fire temperature observed on this fire, Kelvin. */
-double satfire_wildfire_max_temperature(struct SFWildfire const *wildfire);
-
-/** Get access to the pixels in the wildfire. */
-const struct SFPixelList *satfire_wildfire_pixels(struct SFWildfire const *wildfire);
-
-/** Get the satellite this fire was observed from. */
-enum SFSatellite satfire_wildfire_satllite(struct SFWildfire const *wildfire);
-
-/** Update a wildfire by adding the information in this \ref SFCluster to it. */
-void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFCluster *cluster);
-
-/*-------------------------------------------------------------------------------------------------
- *                                        Wildfire List
- *-----------------------------------------------------------------------------------------------*/
-/**
- * \struct SFWildfireList
- * \brief A list of wildfires.
- */
-struct SFWildfireList;
-
-/** Clean up the memory associated with this \ref SFWildfireList.
- *
- * \returns the updated pointer to the list, in this case it should be NULL.
- */
-struct SFWildfireList *satfire_wildfirelist_destroy(struct SFWildfireList *list);
-
-/** Add a wildfire to the list.
- *
- * The pointer to the list may be reallocated, so the argument \p list should be assigned the return
- * value. This ensures that it is not left dangling.
- *
- * \param list is the list to add the new fire to. If this is \c NULL, then a new list is created.
- * \param new_fire is the fire to be added to the \p list, the \p list takes ownership of the fire.
- *
- * \returns a pointer to the (possibly new) location of \p list.
- */
-struct SFWildfireList *satfire_wildfirelist_add_fire(struct SFWildfireList *list,
-                                                     struct SFWildfire *new_fire);
-
-/** Update the list with the provided cluster.
- *
- * Matches the cluster to a wildfire in the list and then updates that wildfire.
- *
- * \param list is the list to search and see if you can find a wildfire that matches this cluster.
- * \param clust is the cluster you are trying to assign to the fire. This function takes ownership
- * of the \p clust, and after this function call it should not be destroyed or freed.
- *
- * \returns \c NULL if the \p clust was matched to a wildfire. Otherwise a pointer to \p clust is
- * returned. This implies that it should be used to create a new wildfire and add that to the list.
- */
-struct SFCluster *satfire_wildfirelist_take_update(struct SFWildfireList *const list,
-                                                   struct SFCluster *clust);
-
-/** Extend a wildfire list using another wildfire list.
- *
- * Modifies \p list by moving the elements of \p src to it. The parameter \p list should have the
- * return value assigned back to it in case there was a reallocation, and \p src will be left empty
- * but with all of it's memory still allocated. So when you're finally done with it you'll need to
- * call \ref satfire_wildfirelist_destroy() on it.
- */
-struct SFWildfireList *satfire_wildfirelist_extend(struct SFWildfireList *list,
-                                                   struct SFWildfireList *const src);
-
-/** Detect overlaps in the wildfires in the list and merge them together into a single fire.
- *
- * Fires that are merged into another fire, and so they no longer exist are moved to the
- * \p merged_away list. The return value of this list should be assigned to the \p merged_away list
- * in case a reallocation occurred and the pointer moved.
- *
- * \param list is the list of wildfires to be checked for mergers.
- * \param merged_away is a list that will be grown with the fires that are removed because they were
- * merged into another fire. This pointer may be \c NULL if you want to start a new list.
- *
- * \returns the updated location of the \p merged_away list.
- */
-struct SFWildfireList *satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
-                                                        struct SFWildfireList *merged_away);
-
-/** Remove fires older than \p older_than from the list and place them in \p tgt_list.
- *
- * \param list is the source list to drain fires from if they are older than \p older_than.
- * \param tgt_list is the list to add the drained elements into. If this point is \c NULL, then a
- * new list will be created. The return value of this function should be assigned to the variable
- * that was passed into this argument in case it was moved for a reallocation.
- * \param older_than, all fires last observed than this time will be moved to the \p tgt_list.
- *
- * \returns an updated pointer to \p tgt_list.
- */
-struct SFWildfireList *satfire_wildfire_list_drain_fires_not_seen_since(
-    struct SFWildfireList *const list, struct SFWildfireList *tgt_list, time_t older_than);
-
-/*-------------------------------------------------------------------------------------------------
  *                            Query general info about the database
  *-----------------------------------------------------------------------------------------------*/
 /** \brief Initialize a database.
@@ -819,6 +696,130 @@ satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row);
  *
  */
 void satfire_cluster_db_satfire_cluster_row_finalize(struct SFClusterRow *row);
+
+/*-------------------------------------------------------------------------------------------------
+ *                                        Wildfire
+ *-----------------------------------------------------------------------------------------------*/
+/**
+ * \struct SFWildfire
+ * \brief The aggregate properties of a temporally connected group of \ref SFCluster objects.
+ */
+struct SFWildfire;
+
+/** Create a new wildfire. */
+struct SFWildfire *satfire_wildfire_new(unsigned int id, time_t first_observed,
+                                        time_t last_observed, struct SFClusterRow *initial);
+
+/** Cleanup a Wildfire. */
+void satfire_wildfire_destroy(struct SFWildfire **wildfire);
+
+/** Get the id number of the fire. */
+unsigned int satfire_wildfire_id(struct SFWildfire const *wildfire);
+
+/** Get the time the fire was first observed. */
+time_t satfire_wildfire_get_first_observed(struct SFWildfire const *wildfire);
+
+/** Get the time the fire was last observed. */
+time_t satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire);
+
+/** Get the centroid of a wildfire. */
+struct SFCoord satfire_wildfire_centroid(struct SFWildfire const *wildfire);
+
+/** Get the maximum power of observed for this fire, megawatts. */
+double satfire_wildfire_max_power(struct SFWildfire const *wildfire);
+
+/** Get the max fire temperature observed on this fire, Kelvin. */
+double satfire_wildfire_max_temperature(struct SFWildfire const *wildfire);
+
+/** Get access to the pixels in the wildfire. */
+const struct SFPixelList *satfire_wildfire_pixels(struct SFWildfire const *wildfire);
+
+/** Get the satellite this fire was observed from. */
+enum SFSatellite satfire_wildfire_satllite(struct SFWildfire const *wildfire);
+
+/** Update a wildfire by adding the information in this \ref SFCluster to it. */
+void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFCluster *cluster);
+
+/*-------------------------------------------------------------------------------------------------
+ *                                        Wildfire List
+ *-----------------------------------------------------------------------------------------------*/
+/**
+ * \struct SFWildfireList
+ * \brief A list of wildfires.
+ */
+struct SFWildfireList;
+
+/** Clean up the memory associated with this \ref SFWildfireList.
+ *
+ * \returns the updated pointer to the list, in this case it should be NULL.
+ */
+struct SFWildfireList *satfire_wildfirelist_destroy(struct SFWildfireList *list);
+
+/** Add a wildfire to the list.
+ *
+ * The pointer to the list may be reallocated, so the argument \p list should be assigned the return
+ * value. This ensures that it is not left dangling.
+ *
+ * \param list is the list to add the new fire to. If this is \c NULL, then a new list is created.
+ * \param new_fire is the fire to be added to the \p list, the \p list takes ownership of the fire.
+ *
+ * \returns a pointer to the (possibly new) location of \p list.
+ */
+struct SFWildfireList *satfire_wildfirelist_add_fire(struct SFWildfireList *list,
+                                                     struct SFWildfire *new_fire);
+
+/** Update the list with the provided cluster.
+ *
+ * Matches the cluster to a wildfire in the list and then updates that wildfire.
+ *
+ * \param list is the list to search and see if you can find a wildfire that matches this cluster.
+ * \param clust is the cluster you are trying to assign to the fire. This function takes ownership
+ * of the \p clust, and after this function call it should not be destroyed or freed.
+ *
+ * \returns \c NULL if the \p clust was matched to a wildfire. Otherwise a pointer to \p clust is
+ * returned. This implies that it should be used to create a new wildfire and add that to the list.
+ */
+struct SFClusterRow *satfire_wildfirelist_take_update(struct SFWildfireList *const list,
+                                                      struct SFClusterRow *clust);
+
+/** Extend a wildfire list using another wildfire list.
+ *
+ * Modifies \p list by moving the elements of \p src to it. The parameter \p list should have the
+ * return value assigned back to it in case there was a reallocation, and \p src will be left empty
+ * but with all of it's memory still allocated. So when you're finally done with it you'll need to
+ * call \ref satfire_wildfirelist_destroy() on it.
+ */
+struct SFWildfireList *satfire_wildfirelist_extend(struct SFWildfireList *list,
+                                                   struct SFWildfireList *const src);
+
+/** Detect overlaps in the wildfires in the list and merge them together into a single fire.
+ *
+ * Fires that are merged into another fire, and so they no longer exist are moved to the
+ * \p merged_away list. The return value of this list should be assigned to the \p merged_away list
+ * in case a reallocation occurred and the pointer moved.
+ *
+ * \param list is the list of wildfires to be checked for mergers.
+ * \param merged_away is a list that will be grown with the fires that are removed because they were
+ * merged into another fire. This pointer may be \c NULL if you want to start a new list.
+ *
+ * \returns the updated location of the \p merged_away list.
+ */
+struct SFWildfireList *satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
+                                                        struct SFWildfireList *merged_away);
+
+/** Remove fires older than \p older_than from the list and place them in \p tgt_list.
+ *
+ * \param list is the source list to drain fires from if they are older than \p older_than.
+ * \param tgt_list is the list to add the drained elements into. If this point is \c NULL, then a
+ * new list will be created. The return value of this function should be assigned to the variable
+ * that was passed into this argument in case it was moved for a reallocation.
+ * \param older_than, all fires last observed than this time will be moved to the \p tgt_list.
+ *
+ * \returns an updated pointer to \p tgt_list.
+ */
+struct SFWildfireList *
+satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const list,
+                                                struct SFWildfireList *tgt_list, time_t older_than);
 
 /*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Fires Database
