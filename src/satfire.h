@@ -229,8 +229,8 @@ struct SFCoord satfire_pixel_centroid(struct SFPixel const pxl[static 1]);
  *
  * This compares the four corners of the pixel using the satfire_coord_are_close() function.
  */
-bool satfire_pixels_approx_equal(struct SFPixel left[static 1], struct SFPixel right[static 1],
-                                 double eps);
+bool satfire_pixels_approx_equal(struct SFPixel const left[static 1],
+                                 struct SFPixel const right[static 1], double eps);
 
 /** Determine if a coordinate is interior to a pixel.
  *
@@ -249,8 +249,8 @@ bool satfire_pixel_contains_coord(struct SFPixel const pxl[static 1], struct SFC
  * compared. There are a few places in the algorithm where that happens, and if they are within
  * eps units of each other, they are considered equal.
  */
-bool satfire_pixels_overlap(struct SFPixel left[static 1], struct SFPixel right[static 1],
-                            double eps);
+bool satfire_pixels_overlap(struct SFPixel const left[static 1],
+                            struct SFPixel const right[static 1], double eps);
 
 /** Determine if satellite pixels are adjacent.
  *
@@ -262,8 +262,8 @@ bool satfire_pixels_overlap(struct SFPixel left[static 1], struct SFPixel right[
  * \param right the pixel to check against.
  * \param eps The scale to use for comparison in the same units as the lat and lon.
  **/
-bool satfire_pixels_are_adjacent(struct SFPixel left[static 1], struct SFPixel right[static 1],
-                                 double eps);
+bool satfire_pixels_are_adjacent(struct SFPixel const left[static 1],
+                                 struct SFPixel const right[static 1], double eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         SFPixelList
@@ -296,9 +296,9 @@ struct SFPixelList *satfire_pixel_list_copy(struct SFPixelList plist[static 1]);
  * \return A (potentially new) pointer to the list \param plist.
  */
 struct SFPixelList *satfire_pixel_list_append(struct SFPixelList list[static 1],
-                                              struct SFPixel apix[static 1]);
+                                              struct SFPixel const apix[static 1]);
 
-/** Clear the list but keep the memory in tact.
+/** Clear the list but keep the memory intact.
  *
  * After this call the list is basically in the same state as after calling
  * satfire_pixel_list_new().
@@ -316,6 +316,10 @@ double satfire_pixel_list_total_area(struct SFPixelList const list[static 1]);
 
 /** Calculate the maximum temperature in a SFPixelList, kelvin. */
 double satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1]);
+
+/** Check to see if these two \ref SFPixelList are adjacent or overlapping. */
+bool satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
+                                             struct SFPixelList const right[static 1], double eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                  Pixel List Binary Format
@@ -683,6 +687,9 @@ enum SFSector satfire_cluster_db_satfire_cluster_row_sector(struct SFClusterRow 
 const struct SFPixelList *
 satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row);
 
+/** Steal the pixels from this row and destroy it. */
+struct SFPixelList *satfire_cluster_db_satfire_cluster_row_steal_pixels(struct SFClusterRow *row);
+
 /** Call this on a SFClusterRow if you're done using it.
  *
  * It's not necessary to call this if you will reuse this SFClusterRow in another call to
@@ -725,20 +732,20 @@ time_t satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire);
 /** Get the centroid of a wildfire. */
 struct SFCoord satfire_wildfire_centroid(struct SFWildfire const *wildfire);
 
-/** Get the maximum power of observed for this fire, megawatts. */
+/** Get the maximum power observed for this fire, megawatts. */
 double satfire_wildfire_max_power(struct SFWildfire const *wildfire);
 
 /** Get the max fire temperature observed on this fire, Kelvin. */
 double satfire_wildfire_max_temperature(struct SFWildfire const *wildfire);
 
 /** Get access to the pixels in the wildfire. */
-const struct SFPixelList *satfire_wildfire_pixels(struct SFWildfire const *wildfire);
+struct SFPixelList const *satfire_wildfire_pixels(struct SFWildfire const *wildfire);
 
 /** Get the satellite this fire was observed from. */
-enum SFSatellite satfire_wildfire_satllite(struct SFWildfire const *wildfire);
+enum SFSatellite satfire_wildfire_satellite(struct SFWildfire const *wildfire);
 
-/** Update a wildfire by adding the information in this \ref SFCluster to it. */
-void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFCluster *cluster);
+/** Update a wildfire by adding the information in this \ref SFClusterRow to it. */
+void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow *row);
 
 /*-------------------------------------------------------------------------------------------------
  *                                        Wildfire List

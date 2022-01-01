@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include <glib.h>
+
 #include "satfire.h"
 
 #include "sf_util.h"
@@ -106,7 +108,7 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
 
         time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
 
-        if (start != current_time_step) {
+        if (start != current_time_step && current_time_step != 0) {
             time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
 
             // moving on to a new time step, let's take some time to clean up.
@@ -121,16 +123,12 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
             current_time_step = start;
         }
 
-        row = satfire_wildfirelist_take_update(current_fires, row);
+        row = satfire_wildfirelist_take_update(current_fires, g_steal_pointer(&row));
 
         if (row) {
             // The row couldn't be merged
 
             time_t end = satfire_cluster_db_satfire_cluster_row_end(row);
-
-            // TODO: Initialize the next id number from the database with a global, atomic constant.
-            struct SFWildfire *new = satfire_wildfire_new(0, start, end, row);
-            new_fires = satfire_wildfirelist_add_fire(new_fires, new);
 
             /*-----*/
             struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
@@ -147,6 +145,10 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
                    satfire_sector_name(satfire_cluster_db_satfire_cluster_row_sector(row)),
                    ctime(&start));
             /*-----*/
+
+            // TODO: Initialize the next id number from the database with a global, atomic constant.
+            struct SFWildfire *new = satfire_wildfire_new(0, start, end, g_steal_pointer(&row));
+            new_fires = satfire_wildfirelist_add_fire(new_fires, new);
         }
     }
 

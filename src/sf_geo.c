@@ -248,8 +248,8 @@ satfire_pixel_centroid(struct SFPixel const pxl[static 1])
 }
 
 bool
-satfire_pixels_approx_equal(struct SFPixel left[static 1], struct SFPixel right[static 1],
-                            double eps)
+satfire_pixels_approx_equal(struct SFPixel const left[static 1],
+                            struct SFPixel const right[static 1], double eps)
 {
     return satfire_coord_are_close(left->ul, right->ul, eps) &&
            satfire_coord_are_close(left->ur, right->ur, eps) &&
@@ -303,7 +303,8 @@ satfire_pixel_contains_coord(struct SFPixel const pxl[static 1], struct SFCoord 
 }
 
 bool
-satfire_pixels_overlap(struct SFPixel left[static 1], struct SFPixel right[static 1], double eps)
+satfire_pixels_overlap(struct SFPixel const left[static 1], struct SFPixel const right[static 1],
+                       double eps)
 {
     // Check if they are equal first, then of course they overlap!
     if (satfire_pixels_approx_equal(left, right, eps)) {
@@ -375,8 +376,8 @@ satfire_pixels_overlap(struct SFPixel left[static 1], struct SFPixel right[stati
 }
 
 bool
-satfire_pixels_are_adjacent(struct SFPixel left[static 1], struct SFPixel right[static 1],
-                            double eps)
+satfire_pixels_are_adjacent(struct SFPixel const left[static 1],
+                            struct SFPixel const right[static 1], double eps)
 {
     if (satfire_pixels_approx_equal(left, right, eps)) {
         return false;
@@ -486,7 +487,10 @@ satfire_pixel_list_new_with_capacity(size_t capacity)
 struct SFPixelList *
 satfire_pixel_list_destroy(struct SFPixelList plist[static 1])
 {
-    free(plist);
+    if(plist) {
+        free(plist);
+    }
+
     return 0;
 }
 
@@ -503,7 +507,7 @@ satfire_pixel_list_copy(struct SFPixelList plist[static 1])
 }
 
 struct SFPixelList *
-satfire_pixel_list_append(struct SFPixelList list[static 1], struct SFPixel apix[static 1])
+satfire_pixel_list_append(struct SFPixelList list[static 1], struct SFPixel const apix[static 1])
 {
     if (list->len == list->capacity) {
         list = satfire_pixel_list_expand(list);
@@ -585,6 +589,25 @@ satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1])
     return max_temperature;
 }
 
+bool
+satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
+                                        struct SFPixelList const right[static 1], double eps)
+{
+    assert(left);
+    assert(right);
+
+    for (unsigned int l = 0; l < left->len; ++l) {
+        struct SFPixel const *lp = &left->pixels[l];
+        for (unsigned int r = 0; r < right->len; ++r) {
+            struct SFPixel const *rp = &right->pixels[r];
+            if (satfire_pixels_overlap(lp, rp, eps)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
