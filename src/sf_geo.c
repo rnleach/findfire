@@ -487,7 +487,7 @@ satfire_pixel_list_new_with_capacity(size_t capacity)
 struct SFPixelList *
 satfire_pixel_list_destroy(struct SFPixelList plist[static 1])
 {
-    if(plist) {
+    if (plist) {
         free(plist);
     }
 
