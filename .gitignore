@@ -4,6 +4,7 @@ tags
 vgdump
 useful_commands.txt
 .vscode
+.gdb_history
 
 # Project layout
 release
