@@ -76,3 +76,15 @@ GArray *fire_sat_image_extract_fire_points(struct SatFireImage const *fdata);
 
 /** Add a FirePoint to this Cluster. */
 void satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire_point);
+
+/** Steal the pixels from this row.
+ *
+ * This is very unsafe because it leaves the struct in an invalid state with a \c NULL pointer
+ * in the row->pixels. Use carefully and finalize/destroy the object soon after calling this
+ * function.
+ *
+ * An alternative would be to call satfire_pixel_list_copy() and get a deep copy of the
+ * \ref SFPixelList. But in some cases that would be a wasteful copy if we are done using the
+ * \ref SFClusterRow now.
+ */
+struct SFPixelList *satfire_cluster_db_satfire_cluster_row_steal_pixels(struct SFClusterRow *row);

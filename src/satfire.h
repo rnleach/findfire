@@ -687,9 +687,6 @@ enum SFSector satfire_cluster_db_satfire_cluster_row_sector(struct SFClusterRow 
 const struct SFPixelList *
 satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row);
 
-/** Steal the pixels from this row and destroy it. */
-struct SFPixelList *satfire_cluster_db_satfire_cluster_row_steal_pixels(struct SFClusterRow *row);
-
 /** Call this on a SFClusterRow if you're done using it.
  *
  * It's not necessary to call this if you will reuse this SFClusterRow in another call to
