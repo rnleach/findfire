@@ -447,7 +447,13 @@ satfire_pixels_are_adjacent(struct SFPixel const left[static 1],
 static struct SFPixelList *
 satfire_pixel_list_expand(struct SFPixelList plist[static 1])
 {
+    assert(plist);
+    assert(plist->len <= plist->capacity);
+
     size_t new_capacity = (plist->capacity * 3) / 2;
+    if (new_capacity <= plist->capacity) {
+        new_capacity = 2 * plist->capacity;
+    }
 
     plist = realloc(plist, sizeof(struct SFPixelList) + new_capacity * sizeof(struct SFPixel));
     Stopif(!plist, exit(EXIT_FAILURE), "unable to realloc, aborting");
@@ -498,6 +504,7 @@ struct SFPixelList *
 satfire_pixel_list_copy(struct SFPixelList plist[static 1])
 {
     assert(plist);
+    assert(plist->len <= plist->capacity);
 
     size_t copy_size = plist->len >= 4 ? plist->len : 4;
     struct SFPixelList *copy = satfire_pixel_list_new_with_capacity(copy_size);
@@ -509,18 +516,28 @@ satfire_pixel_list_copy(struct SFPixelList plist[static 1])
 struct SFPixelList *
 satfire_pixel_list_append(struct SFPixelList list[static 1], struct SFPixel const apix[static 1])
 {
+    assert(list);
+    assert(list->len <= list->capacity);
+
     if (list->len == list->capacity) {
         list = satfire_pixel_list_expand(list);
     }
 
     list->pixels[list->len] = *apix;
     list->len++;
+
+    assert(list);
+    assert(list->len <= list->capacity);
+
     return list;
 }
 
 struct SFPixelList *
 satfire_pixel_list_clear(struct SFPixelList list[static 1])
 {
+    assert(list);
+    assert(list->len <= list->capacity);
+
     list->len = 0;
     return list;
 }
@@ -529,6 +546,7 @@ struct SFCoord
 satfire_pixel_list_centroid(struct SFPixelList const list[static 1])
 {
     assert(list);
+    assert(list->len <= list->capacity);
 
     struct SFCoord centroid = {.lat = 0.0, .lon = 0.0};
     for (unsigned int i = 0; i < list->len; ++i) {
@@ -547,6 +565,7 @@ double
 satfire_pixel_list_total_power(struct SFPixelList const list[static 1])
 {
     assert(list);
+    assert(list->len <= list->capacity);
 
     double total_power = 0.0;
 
@@ -563,6 +582,7 @@ double
 satfire_pixel_list_total_area(struct SFPixelList const list[static 1])
 {
     assert(list);
+    assert(list->len <= list->capacity);
 
     double total_area = 0.0;
 
@@ -579,6 +599,7 @@ double
 satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1])
 {
     assert(list);
+    assert(list->len <= list->capacity);
 
     double max_temperature = -HUGE_VAL;
 
@@ -594,7 +615,10 @@ satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
                                         struct SFPixelList const right[static 1], double eps)
 {
     assert(left);
+    assert(left->len <= left->capacity);
+
     assert(right);
+    assert(right->len <= right->capacity);
 
     for (unsigned int l = 0; l < left->len; ++l) {
         struct SFPixel const *lp = &left->pixels[l];

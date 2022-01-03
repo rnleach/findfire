@@ -805,16 +805,6 @@ satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row)
 struct SFPixelList *
 satfire_cluster_db_satfire_cluster_row_steal_pixels(struct SFClusterRow *row)
 {
-    row->start = 0;
-    row->end = 0;
-    row->power = NAN;
-    row->max_temperature = NAN;
-    row->area = NAN;
-    row->scan_angle = NAN;
-    row->centroid = (struct SFCoord){.lat = NAN, .lon = NAN};
-    row->sector = SATFIRE_SECTOR_NONE;
-    row->sat = SATFIRE_SATELLITE_NONE;
-
     return g_steal_pointer(&row->pixels);
 }
 

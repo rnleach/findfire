@@ -172,12 +172,10 @@ satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow *row)
     wildfire->max_temperature = fmax(cluster_maxt, wildfire->max_temperature);
     wildfire->last_observed = cluster_end;
 
-    struct SFPixelList *wf_pixels = wildfire->area;
     struct SFPixelList const *row_pixels = satfire_cluster_db_satfire_cluster_row_pixels(row);
-    max_merge_pixel_lists(&wf_pixels, row_pixels);
+    max_merge_pixel_lists(&wildfire->area, row_pixels);
 
     wildfire->centroid = satfire_pixel_list_centroid(wildfire->area);
-    wildfire->area = wf_pixels;
 
     return;
 }
@@ -239,7 +237,7 @@ satfire_wildfirelist_destroy(struct SFWildfireList *list)
 struct SFWildfireList *
 satfire_wildfirelist_add_fire(struct SFWildfireList *list, struct SFWildfire *new_fire)
 {
-    if (!list || list->len + 1 < list->capacity) {
+    if (!list || list->len + 1 > list->capacity) {
         list = expand_wildfirelist(list, 1);
     }
 
@@ -275,7 +273,7 @@ satfire_wildfirelist_extend(struct SFWildfireList *list, struct SFWildfireList *
     }
 
     size_t need_cap = (list ? list->capacity : 0) + src->len;
-    if (list->capacity < need_cap) {
+    if (!list || list->capacity > need_cap) {
         list = expand_wildfirelist(list, src->len);
     }
 
@@ -377,7 +375,25 @@ struct SFWildfireList *
 satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const list,
                                                 struct SFWildfireList *tgt_list, time_t older_than)
 {
-    // TODO
-    assert(false);
-    return 0;
+    if (!list) {
+        return tgt_list;
+    }
+
+    for (unsigned int i = 0; i < list->len; ++i) {
+        if (list->fires[i].last_observed < older_than) {
+            tgt_list = satfire_wildfirelist_add_fire(tgt_list, &list->fires[i]);
+
+            // Move the fire in the last position here - and zero out the value at the end of
+            // the list
+            list->fires[i] = list->fires[list->len - 1];
+            memset(&list->fires[list->len - 1], 0, sizeof(struct SFWildfire));
+
+            // Shrink the list length since we moved the element to the other list
+            list->len--;
+
+            i--; // So we'll look at this index again since we just moved something into it.
+        }
+    }
+
+    return tgt_list;
 }
