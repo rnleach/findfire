@@ -246,6 +246,23 @@ satfire_wildfirelist_destroy(struct SFWildfireList *list)
     return 0;
 }
 
+static struct SFWildfireList *
+satfire_wildfirelist_steal_fire(struct SFWildfireList *list, struct SFWildfire *new_fire)
+{
+    if (!list || list->len + 1 > list->capacity) {
+        list = expand_wildfirelist(list, 1);
+    }
+
+    // Move the fire to the list
+    list->fires[list->len] = *new_fire;
+    list->len++;
+
+    // Wipe out the original
+    memset(new_fire, 0, sizeof(*new_fire));
+
+    return list;
+}
+
 struct SFWildfireList *
 satfire_wildfirelist_add_fire(struct SFWildfireList *list, struct SFWildfire *new_fire)
 {
@@ -297,9 +314,7 @@ satfire_wildfirelist_extend(struct SFWildfireList *list, struct SFWildfireList *
     }
 
     for (unsigned int i = 0; i < src->len; ++i) {
-        // TODO: We're calling copy deep in here a lot, we could do better
-        list = satfire_wildfirelist_add_fire(list, &src->fires[i]);
-        satfire_wildfire_cleanup(&src->fires[i]);
+        list = satfire_wildfirelist_steal_fire(list, &src->fires[i]);
     }
 
     src->len = 0;
@@ -372,15 +387,11 @@ satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
         for (unsigned int j = i + 1; j < list->len; ++j) {
             if (wildfires_overlap(&list->fires[i], &list->fires[j])) {
                 merge_wildfires(&list->fires[i], &list->fires[j]);
-                // TODO: a lot of copying going on here. I should make a steal fire function
-                // that leaves the 'j' fire in an invalid state.
-                merged_away = satfire_wildfirelist_add_fire(merged_away, &list->fires[j]);
+                merged_away = satfire_wildfirelist_steal_fire(merged_away, &list->fires[j]);
 
-                // Move the fire in the last position here - and zero out the value at the end of
-                // the list
-                satfire_wildfire_cleanup(&list->fires[j]);
+                // Move the fire in the last position here - 'j' has already been cleaned up by
+                // the satfire_wildfirelist_steal_fire() function.
                 list->fires[j] = list->fires[list->len - 1];
-                memset(&list->fires[list->len - 1], 0, sizeof(struct SFWildfire));
 
                 // Shrink the list length since we moved the element to the other list
                 list->len--;
@@ -405,12 +416,11 @@ satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const lis
 
     for (unsigned int i = 0; i < list->len; ++i) {
         if (list->fires[i].last_observed < older_than) {
-            tgt_list = satfire_wildfirelist_add_fire(tgt_list, &list->fires[i]);
+            tgt_list = satfire_wildfirelist_steal_fire(tgt_list, &list->fires[i]);
 
-            // Move the fire in the last position here - and zero out the value at the end of
-            // the list
+            // Move the fire in the last position here - 'i' was cleand up by the function
+            // satfire_wildfirelist_steal_fire()
             list->fires[i] = list->fires[list->len - 1];
-            memset(&list->fires[list->len - 1], 0, sizeof(struct SFWildfire));
 
             // Shrink the list length since we moved the element to the other list
             list->len--;
