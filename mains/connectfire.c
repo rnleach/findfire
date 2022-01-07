@@ -7,14 +7,16 @@
  * relationship to clusters by associating a row number from the sqlite database with a fire ID
  * from the database table created by this program.
  */
+// Standard C
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
+// System installed libraries
 #include <glib.h>
 
+// My project headers
 #include "satfire.h"
-
 #include "sf_util.h"
 
 #define DAYS_BACK 30
@@ -104,53 +106,56 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
     time_t current_time_step = 0;
 
     struct SFClusterRow *row = 0;
-    size_t num_merged = 0;
+    size_t num_absorbed = 0;
     while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
 
         time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
 
         if (start != current_time_step) {
+
             time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
 
-            // moving on to a new time step, let's take some time to clean up.
+            size_t num_merged = satfire_wildfirelist_len(current_fires);
             old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
+            num_merged -= satfire_wildfirelist_len(current_fires);
+
+            size_t num_old = satfire_wildfirelist_len(current_fires);
             old_fires = satfire_wildfirelist_drain_fires_not_seen_since(current_fires, old_fires,
                                                                         oldest_allowed);
+            num_old -= satfire_wildfirelist_len(current_fires);
 
-            // TODO: send old fires to a database thread.
-
+            size_t num_new = satfire_wildfirelist_len(new_fires);
             current_fires = satfire_wildfirelist_extend(current_fires, new_fires);
 
-            current_time_step = start;
+            printf("Absorbed = %4ld Merged = %4ld Aged out = %4ld New = %4ld at %s", num_absorbed,
+                   num_merged, num_old, num_new, ctime(&current_time_step));
 
-            printf("Merged = %ld\n\n", num_merged);
-            num_merged = 0;
+            current_time_step = start;
+            num_absorbed = 0;
+
+            // TODO: send old fires to a database thread.
         }
 
         bool cluster_merged = satfire_wildfirelist_update(current_fires, row);
 
         if (!cluster_merged) {
 
-            /*-----*/
-            struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
-
-            printf("lat: %10.6lf lon: %11.6lf power: %6.0lf max_temperature: %4.0lf from %s %s %s",
-                   centroid.lat, centroid.lon, satfire_cluster_db_satfire_cluster_row_power(row),
-                   satfire_cluster_db_satfire_cluster_row_max_temperature(row),
-                   satfire_satellite_name(satfire_cluster_db_satfire_cluster_row_satellite(row)),
-                   satfire_sector_name(satfire_cluster_db_satfire_cluster_row_sector(row)),
-                   ctime(&start));
-            /*-----*/
-
             // TODO: Initialize the next id number from the database with a global, atomic constant.
             new_fires = satfire_wildfirelist_create_add_fire(new_fires, 0, row);
 
         } else {
-            ++num_merged;
+            ++num_absorbed;
         }
     }
 
     old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
+
+    printf("\n\nRun Summary for satellite %s:\n\t"
+           "    Old Fires: %5ld\n\t"
+           "Current Fires: %5ld\n\t"
+           "    New Fires: %5ld\n\n\n",
+           satfire_satellite_name(sat), satfire_wildfirelist_len(old_fires),
+           satfire_wildfirelist_len(current_fires), satfire_wildfirelist_len(new_fires));
 
     // TODO: send old fires to a database thread
     // TODO: send current fires to a database thread
@@ -174,6 +179,7 @@ main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
+    // TODO: Figure this out from the database.
     time_t start = 0;
     time_t end = time(0);
 

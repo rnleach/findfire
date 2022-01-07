@@ -849,6 +849,9 @@ struct SFWildfireList *
 satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const list,
                                                 struct SFWildfireList *tgt_list, time_t older_than);
 
+/** Get the number of fires in the list. */
+size_t satfire_wildfirelist_len(struct SFWildfireList const *list);
+
 /*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Fires Database
  *-----------------------------------------------------------------------------------------------*/

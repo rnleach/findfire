@@ -445,3 +445,9 @@ satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const lis
 
     return tgt_list;
 }
+
+size_t
+satfire_wildfirelist_len(struct SFWildfireList const *list)
+{
+    return list ? list->len : 0;
+}
