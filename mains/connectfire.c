@@ -104,11 +104,12 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
     time_t current_time_step = 0;
 
     struct SFClusterRow *row = 0;
+    size_t num_merged = 0;
     while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
 
         time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
 
-        if (start != current_time_step && current_time_step != 0) {
+        if (start != current_time_step) {
             time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
 
             // moving on to a new time step, let's take some time to clean up.
@@ -121,6 +122,9 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
             current_fires = satfire_wildfirelist_extend(current_fires, new_fires);
 
             current_time_step = start;
+
+            printf("Merged = %ld\n\n", num_merged);
+            num_merged = 0;
         }
 
         row = satfire_wildfirelist_take_update(current_fires, g_steal_pointer(&row));
@@ -133,12 +137,7 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
             /*-----*/
             struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
 
-            if (start != current_time_step) {
-                printf("\n");
-                current_time_step = start;
-            }
-
-            printf("lat: %10.6lf lon: %11.6lf power: %6.0lf max_temperature: %3.0lf from %s %s %s",
+            printf("lat: %10.6lf lon: %11.6lf power: %6.0lf max_temperature: %4.0lf from %s %s %s",
                    centroid.lat, centroid.lon, satfire_cluster_db_satfire_cluster_row_power(row),
                    satfire_cluster_db_satfire_cluster_row_max_temperature(row),
                    satfire_satellite_name(satfire_cluster_db_satfire_cluster_row_satellite(row)),
@@ -148,7 +147,11 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
 
             // TODO: Initialize the next id number from the database with a global, atomic constant.
             struct SFWildfire *new = satfire_wildfire_new(0, start, end, g_steal_pointer(&row));
+            // TODO: make the add function take the row directly.
             new_fires = satfire_wildfirelist_add_fire(new_fires, new);
+            satfire_wildfire_destroy(new);
+        } else {
+            ++num_merged;
         }
     }
 

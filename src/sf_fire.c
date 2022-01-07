@@ -48,13 +48,20 @@ satfire_wildfire_new(unsigned int id, time_t first_observed, time_t last_observe
     return new;
 }
 
-void
-satfire_wildfire_destroy(struct SFWildfire **wildfire)
+static void
+satfire_wildfire_cleanup(struct SFWildfire *wildfire)
 {
-    if (*wildfire) {
-        satfire_pixel_list_destroy((*wildfire)->area);
-        free(*wildfire);
-        wildfire = 0;
+    if (wildfire) {
+        satfire_pixel_list_destroy(wildfire->area);
+    }
+}
+
+void
+satfire_wildfire_destroy(struct SFWildfire *wildfire)
+{
+    if (wildfire) {
+        satfire_wildfire_cleanup(wildfire);
+        free(wildfire);
     }
 
     return;
@@ -227,6 +234,11 @@ struct SFWildfireList *
 satfire_wildfirelist_destroy(struct SFWildfireList *list)
 {
     if (list) {
+
+        for (unsigned int i = 0; i < list->len; ++i) {
+            satfire_wildfire_cleanup(&list->fires[i]);
+        }
+
         free(list->fires);
         free(list);
     }
@@ -242,10 +254,12 @@ satfire_wildfirelist_add_fire(struct SFWildfireList *list, struct SFWildfire *ne
     }
 
     list->fires[list->len] = *new_fire;
+    list->fires[list->len].area = satfire_pixel_list_copy(new_fire->area);
     list->len++;
     return list;
 }
 
+// TODO: Update this to return a bool so we can reuse row and make the row const
 struct SFClusterRow *
 satfire_wildfirelist_take_update(struct SFWildfireList *const list, struct SFClusterRow *row)
 {
@@ -257,7 +271,8 @@ satfire_wildfirelist_take_update(struct SFWildfireList *const list, struct SFClu
     for (unsigned int i = 0; i < list->len; ++i) {
         struct SFPixelList *fire_pixels = list->fires[i].area;
         if (satfire_pixel_lists_adjacent_or_overlap(fire_pixels, cluster_pixels, 1.0e-5)) {
-            satfire_wildfire_update(&list->fires[i], g_steal_pointer(&row));
+            satfire_wildfire_update(&list->fires[i], row);
+            satfire_cluster_db_satfire_cluster_row_finalize(row);
             return 0;
         }
     }
@@ -272,13 +287,19 @@ satfire_wildfirelist_extend(struct SFWildfireList *list, struct SFWildfireList *
         return list;
     }
 
-    size_t need_cap = (list ? list->capacity : 0) + src->len;
-    if (!list || list->capacity > need_cap) {
-        list = expand_wildfirelist(list, src->len);
+    size_t list_len = list ? list->len : 0;
+    size_t list_cap = list ? list->capacity : 0;
+
+    size_t need_cap = list_len + src->len;
+
+    if (!list || list_cap < need_cap) {
+        list = expand_wildfirelist(list, need_cap - list_cap);
     }
 
     for (unsigned int i = 0; i < src->len; ++i) {
+        // TODO: We're calling copy deep in here a lot, we could do better
         list = satfire_wildfirelist_add_fire(list, &src->fires[i]);
+        satfire_wildfire_cleanup(&src->fires[i]);
     }
 
     src->len = 0;
@@ -351,10 +372,13 @@ satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
         for (unsigned int j = i + 1; j < list->len; ++j) {
             if (wildfires_overlap(&list->fires[i], &list->fires[j])) {
                 merge_wildfires(&list->fires[i], &list->fires[j]);
+                // TODO: a lot of copying going on here. I should make a steal fire function
+                // that leaves the 'j' fire in an invalid state.
                 merged_away = satfire_wildfirelist_add_fire(merged_away, &list->fires[j]);
 
                 // Move the fire in the last position here - and zero out the value at the end of
                 // the list
+                satfire_wildfire_cleanup(&list->fires[j]);
                 list->fires[j] = list->fires[list->len - 1];
                 memset(&list->fires[list->len - 1], 0, sizeof(struct SFWildfire));
 

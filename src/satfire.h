@@ -715,7 +715,7 @@ struct SFWildfire *satfire_wildfire_new(unsigned int id, time_t first_observed,
                                         time_t last_observed, struct SFClusterRow *initial);
 
 /** Cleanup a Wildfire. */
-void satfire_wildfire_destroy(struct SFWildfire **wildfire);
+void satfire_wildfire_destroy(struct SFWildfire *wildfire);
 
 /** Get the id number of the fire. */
 unsigned int satfire_wildfire_id(struct SFWildfire const *wildfire);

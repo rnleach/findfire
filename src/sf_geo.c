@@ -213,6 +213,9 @@ static bool
 satfire_pixels_bounding_boxes_overlap(struct SFPixel const left[static 1],
                                       struct SFPixel const right[static 1], double eps)
 {
+    assert(left);
+    assert(right);
+
     struct SFBoundingBox bb_left = satfire_pixel_bounding_box(left);
     struct SFBoundingBox bb_right = satfire_pixel_bounding_box(right);
 
@@ -508,7 +511,7 @@ satfire_pixel_list_copy(struct SFPixelList plist[static 1])
 
     size_t copy_size = plist->len >= 4 ? plist->len : 4;
     struct SFPixelList *copy = satfire_pixel_list_new_with_capacity(copy_size);
-    memcpy(copy, plist, sizeof(struct SFPixelList) + copy_size * sizeof(struct SFPixel));
+    memcpy(copy, plist, sizeof(struct SFPixelList) + plist->len * sizeof(struct SFPixel));
 
     return copy;
 }
