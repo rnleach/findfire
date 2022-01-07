@@ -710,9 +710,13 @@ void satfire_cluster_db_satfire_cluster_row_finalize(struct SFClusterRow *row);
  */
 struct SFWildfire;
 
-/** Create a new wildfire. */
-struct SFWildfire *satfire_wildfire_new(unsigned int id, time_t first_observed,
-                                        time_t last_observed, struct SFClusterRow *initial);
+/** Create a new wildfire.
+ *
+ * The \ref SFClusterRow \p initial is left in an invalid state after this function is called. The
+ * \ref SFPixelList member pointer is set to \c NULL as creating the new SFWildfire steals the
+ * pixels from the \ref SFClusterRow.
+ */
+struct SFWildfire *satfire_wildfire_new(unsigned int id, struct SFClusterRow *initial);
 
 /** Cleanup a Wildfire. */
 void satfire_wildfire_destroy(struct SFWildfire *wildfire);
@@ -742,7 +746,7 @@ struct SFPixelList const *satfire_wildfire_pixels(struct SFWildfire const *wildf
 enum SFSatellite satfire_wildfire_satellite(struct SFWildfire const *wildfire);
 
 /** Update a wildfire by adding the information in this \ref SFClusterRow to it. */
-void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow *row);
+void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow const *row);
 
 /*-------------------------------------------------------------------------------------------------
  *                                        Wildfire List
@@ -772,19 +776,39 @@ struct SFWildfireList *satfire_wildfirelist_destroy(struct SFWildfireList *list)
 struct SFWildfireList *satfire_wildfirelist_add_fire(struct SFWildfireList *list,
                                                      struct SFWildfire *new_fire);
 
+/** Create a new wildfire and add it to the list.
+ *
+ * The pointer to the list may be reallocated, so the argument \p list should be assigned the return
+ * value. This ensures that it is not left dangling.
+ *
+ * The \ref SFClusterRow \p initial is left in an invalid state after this function is called. The
+ * \ref SFPixelList member pointer is set to \c NULL as creating the new SFWildfire steals the
+ * pixels from the \ref SFClusterRow.
+ *
+ * \param list is the list to add the new fire to. If this is \c NULL, then a new list is created.
+ * \param id is the id number to be forwarded to satfire_wildfire_new().
+ * \param initial is the initial \ref SFClusterRow to be forwarded to satfire_wildfire_new().
+ *
+ * \returns a pointer to the (possibly new) location of \p list.
+ *
+ * \see satfire_wildfire_new()
+ */
+struct SFWildfireList *satfire_wildfirelist_create_add_fire(struct SFWildfireList *list,
+                                                            unsigned int id,
+                                                            struct SFClusterRow *initial);
+
 /** Update the list with the provided cluster.
  *
  * Matches the cluster to a wildfire in the list and then updates that wildfire.
  *
  * \param list is the list to search and see if you can find a wildfire that matches this cluster.
- * \param clust is the cluster you are trying to assign to the fire. This function takes ownership
- * of the \p clust, and after this function call it should not be destroyed or freed.
+ * \param clust is the cluster you are trying to assign to the fire.
  *
- * \returns \c NULL if the \p clust was matched to a wildfire. Otherwise a pointer to \p clust is
- * returned. This implies that it should be used to create a new wildfire and add that to the list.
+ * \returns \c true if \p clust was matched to a wildfire and used to update it, returns \c false
+ * otherwise.
  */
-struct SFClusterRow *satfire_wildfirelist_take_update(struct SFWildfireList *const list,
-                                                      struct SFClusterRow *clust);
+bool satfire_wildfirelist_update(struct SFWildfireList *const list,
+                                 struct SFClusterRow const *clust);
 
 /** Extend a wildfire list using another wildfire list.
  *

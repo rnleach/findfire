@@ -127,12 +127,9 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
             num_merged = 0;
         }
 
-        row = satfire_wildfirelist_take_update(current_fires, g_steal_pointer(&row));
+        bool cluster_merged = satfire_wildfirelist_update(current_fires, row);
 
-        if (row) {
-            // The row couldn't be merged
-
-            time_t end = satfire_cluster_db_satfire_cluster_row_end(row);
+        if (!cluster_merged) {
 
             /*-----*/
             struct SFCoord centroid = satfire_cluster_db_satfire_cluster_row_centroid(row);
@@ -146,10 +143,8 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
             /*-----*/
 
             // TODO: Initialize the next id number from the database with a global, atomic constant.
-            struct SFWildfire *new = satfire_wildfire_new(0, start, end, g_steal_pointer(&row));
-            // TODO: make the add function take the row directly.
-            new_fires = satfire_wildfirelist_add_fire(new_fires, new);
-            satfire_wildfire_destroy(new);
+            new_fires = satfire_wildfirelist_create_add_fire(new_fires, 0, row);
+
         } else {
             ++num_merged;
         }

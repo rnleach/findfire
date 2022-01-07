@@ -25,25 +25,28 @@ struct SFWildfire {
     enum SFSatellite sat;
 };
 
-struct SFWildfire *
-satfire_wildfire_new(unsigned int id, time_t first_observed, time_t last_observed,
-                     struct SFClusterRow *initial)
+static struct SFWildfire
+satfire_wildfire_initialize(unsigned int id, struct SFClusterRow *initial)
 {
-    struct SFWildfire *new = malloc(sizeof(struct SFWildfire));
-    assert(new);
-
-    *new = (struct SFWildfire){
+    return (struct SFWildfire){
         .id = id,
-        .first_observed = first_observed,
-        .last_observed = last_observed,
+        .first_observed = satfire_cluster_db_satfire_cluster_row_start(initial),
+        .last_observed = satfire_cluster_db_satfire_cluster_row_end(initial),
         .centroid = satfire_cluster_db_satfire_cluster_row_centroid(initial),
         .max_power = satfire_cluster_db_satfire_cluster_row_power(initial),
         .max_temperature = satfire_cluster_db_satfire_cluster_row_max_temperature(initial),
         .sat = satfire_cluster_db_satfire_cluster_row_satellite(initial),
         .area = satfire_cluster_db_satfire_cluster_row_steal_pixels(initial),
     };
+}
 
-    satfire_cluster_db_satfire_cluster_row_finalize(initial);
+struct SFWildfire *
+satfire_wildfire_new(unsigned int id, struct SFClusterRow *initial)
+{
+    struct SFWildfire *new = malloc(sizeof(struct SFWildfire));
+    assert(new);
+
+    *new = satfire_wildfire_initialize(id, initial);
 
     return new;
 }
@@ -165,7 +168,7 @@ max_merge_pixel_lists(struct SFPixelList **leftp, struct SFPixelList const *righ
 }
 
 void
-satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow *row)
+satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow const *row)
 {
     assert(wildfire);
     assert(row);
@@ -276,12 +279,24 @@ satfire_wildfirelist_add_fire(struct SFWildfireList *list, struct SFWildfire *ne
     return list;
 }
 
-// TODO: Update this to return a bool so we can reuse row and make the row const
-struct SFClusterRow *
-satfire_wildfirelist_take_update(struct SFWildfireList *const list, struct SFClusterRow *row)
+struct SFWildfireList *
+satfire_wildfirelist_create_add_fire(struct SFWildfireList *list, unsigned int id,
+                                     struct SFClusterRow *initial)
+{
+    if (!list || list->len + 1 > list->capacity) {
+        list = expand_wildfirelist(list, 1);
+    }
+
+    list->fires[list->len] = satfire_wildfire_initialize(id, initial);
+    list->len++;
+    return list;
+}
+
+bool
+satfire_wildfirelist_update(struct SFWildfireList *const list, struct SFClusterRow const *row)
 {
     if (!list) {
-        return row;
+        return false;
     }
 
     struct SFPixelList const *cluster_pixels = satfire_cluster_db_satfire_cluster_row_pixels(row);
@@ -289,12 +304,11 @@ satfire_wildfirelist_take_update(struct SFWildfireList *const list, struct SFClu
         struct SFPixelList *fire_pixels = list->fires[i].area;
         if (satfire_pixel_lists_adjacent_or_overlap(fire_pixels, cluster_pixels, 1.0e-5)) {
             satfire_wildfire_update(&list->fires[i], row);
-            satfire_cluster_db_satfire_cluster_row_finalize(row);
-            return 0;
+            return true;
         }
     }
 
-    return row;
+    return false;
 }
 
 struct SFWildfireList *
