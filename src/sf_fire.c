@@ -51,6 +51,54 @@ satfire_wildfire_new(unsigned int id, struct SFClusterRow *initial)
     return new;
 }
 
+struct SFWildfire *
+satfire_wildfire_clone(struct SFWildfire const *src)
+{
+    struct SFWildfire *clone = malloc(sizeof(*src));
+
+    *clone = *src;
+    clone->area = satfire_pixel_list_copy(src->area);
+
+    return clone;
+}
+
+void
+satfire_wildfire_print(struct SFWildfire const *src)
+{
+    if (!src) {
+        printf("NULL - no wildfire information.\n");
+        return;
+    }
+
+    struct tm start = *gmtime(&src->first_observed);
+    char start_buf[32] = {0};
+    strftime(start_buf, sizeof(start_buf), "%Y-%m-%d %H:%M:%SZ", &start);
+
+    struct tm end = *gmtime(&src->last_observed);
+    char end_buf[32] = {0};
+    strftime(end_buf, sizeof(end_buf), "%Y-%m-%d %H:%M:%SZ", &end);
+
+    double duration = satfire_wildfire_duration(src);
+
+    int days = (int)floor(duration / 60.0 / 60.0 / 24.0);
+    double so_far = days * 60.0 * 60.0 * 24.0;
+
+    int hours = (int)floor((duration - so_far) / 60.0 / 60.0);
+
+    printf("~~ Wildfire ~~\n");
+    printf("                   id: %u\n", src->id);
+    printf("            satellite: %s\n", satfire_satellite_name(src->sat));
+    printf("       first observed: %s\n", start_buf);
+    printf("        last observed: %s\n", end_buf);
+    printf("             duration: %d days %d hours\n", days, hours);
+    printf("          centered at: (%10.6lf, %11.6lf)\n", src->centroid.lat, src->centroid.lon);
+    printf("           num pixels: %lu\n", src->area->len);
+    printf("        maximum power: %7.0lf MW\n", src->max_power);
+    printf("  maximum temperature: %7.0lf K\n", src->max_temperature);
+
+    return;
+}
+
 static void
 satfire_wildfire_cleanup(struct SFWildfire *wildfire)
 {
@@ -92,6 +140,19 @@ satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire)
     assert(wildfire);
 
     return wildfire->last_observed;
+}
+
+double
+satfire_wildfire_duration(struct SFWildfire const *wildfire)
+{
+    if (!wildfire) {
+        return 0.0;
+    }
+
+    time_t start = wildfire->first_observed;
+    time_t end = wildfire->last_observed;
+
+    return difftime(end, start);
 }
 
 struct SFCoord
@@ -450,4 +511,10 @@ size_t
 satfire_wildfirelist_len(struct SFWildfireList const *list)
 {
     return list ? list->len : 0;
+}
+
+struct SFWildfire const *
+satfire_wildfirelist_get(struct SFWildfireList const *list, size_t index)
+{
+    return &list->fires[index];
 }

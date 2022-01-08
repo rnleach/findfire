@@ -504,7 +504,7 @@ satfire_pixel_list_destroy(struct SFPixelList plist[static 1])
 }
 
 struct SFPixelList *
-satfire_pixel_list_copy(struct SFPixelList plist[static 1])
+satfire_pixel_list_copy(struct SFPixelList const *plist)
 {
     assert(plist);
     assert(plist->len <= plist->capacity);

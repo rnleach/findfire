@@ -89,6 +89,79 @@ program_finalization()
 }
 
 static void
+update_wildfire_stats(struct SFWildfireList const *curr, struct SFWildfire **longest,
+                      struct SFWildfire **most_powerful, struct SFWildfire **hottest)
+{
+    assert(longest && most_powerful && hottest);
+
+    // If the list is empty, just return.
+    if (!curr) {
+        return;
+    }
+
+    //
+    // Get the maximums for the current list
+    //
+    struct SFWildfire const *longest_curr = satfire_wildfirelist_get(curr, 0);
+    double longest_duration = satfire_wildfire_duration(longest_curr);
+
+    struct SFWildfire const *most_powerful_curr = satfire_wildfirelist_get(curr, 0);
+    double most_power = satfire_wildfire_max_power(most_powerful_curr);
+
+    struct SFWildfire const *hottest_curr = satfire_wildfirelist_get(curr, 0);
+    double hottest_temp = satfire_wildfire_max_temperature(hottest_curr);
+
+    for (size_t i = 1; i < satfire_wildfirelist_len(curr); ++i) {
+        struct SFWildfire const *tst = satfire_wildfirelist_get(curr, i);
+
+        double duration = satfire_wildfire_duration(tst);
+        double power = satfire_wildfire_max_power(tst);
+        double temp = satfire_wildfire_max_temperature(tst);
+
+        if (duration > longest_duration) {
+            longest_curr = tst;
+            longest_duration = duration;
+        }
+
+        if (power > most_power) {
+            most_powerful_curr = tst;
+            most_power = power;
+        }
+
+        if (temp > hottest_temp) {
+            hottest_curr = tst;
+            hottest_temp = temp;
+        }
+    }
+
+    // Compare to the inputs
+    bool update_longest = (*longest && longest_duration > satfire_wildfire_duration(*longest) &&
+                           *longest != longest_curr) ||
+                          (!*longest);
+    if (update_longest) {
+        satfire_wildfire_destroy(g_steal_pointer(longest));
+        *longest = satfire_wildfire_clone(longest_curr);
+    }
+
+    bool update_power =
+        (*most_powerful && most_power > satfire_wildfire_max_power(*most_powerful) &&
+         *most_powerful != most_powerful_curr) ||
+        (!*most_powerful);
+    if (update_power) {
+        satfire_wildfire_destroy(g_steal_pointer(most_powerful));
+        *most_powerful = satfire_wildfire_clone(most_powerful_curr);
+    }
+
+    bool update_hottest = (*hottest && hottest_temp > satfire_wildfire_max_temperature(*hottest) &&
+                           *hottest != hottest_curr) ||
+                          (!*hottest);
+    if (update_hottest) {
+        satfire_wildfire_destroy(g_steal_pointer(hottest));
+        *hottest = satfire_wildfire_clone(hottest_curr);
+    }
+}
+
+static void
 process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
                            struct SFBoundingBox area, SFDatabaseH db)
 {
@@ -103,6 +176,10 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
     struct SFWildfireList *new_fires = 0;
     struct SFWildfireList *old_fires = 0;
 
+    struct SFWildfire *longest = 0;
+    struct SFWildfire *most_powerful = 0;
+    struct SFWildfire *hottest = 0;
+
     time_t current_time_step = 0;
 
     struct SFClusterRow *row = 0;
@@ -113,12 +190,11 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
 
         if (start != current_time_step) {
 
-            time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
-
             size_t num_merged = satfire_wildfirelist_len(current_fires);
             old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
             num_merged -= satfire_wildfirelist_len(current_fires);
 
+            time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
             size_t num_old = satfire_wildfirelist_len(current_fires);
             old_fires = satfire_wildfirelist_drain_fires_not_seen_since(current_fires, old_fires,
                                                                         oldest_allowed);
@@ -132,6 +208,8 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
 
             current_time_step = start;
             num_absorbed = 0;
+
+            update_wildfire_stats(old_fires, &longest, &most_powerful, &hottest);
 
             // TODO: send old fires to a database thread.
         }
@@ -149,6 +227,10 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
     }
 
     old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
+    old_fires = satfire_wildfirelist_extend(old_fires, current_fires);
+    old_fires = satfire_wildfirelist_extend(old_fires, new_fires);
+
+    update_wildfire_stats(old_fires, &longest, &most_powerful, &hottest);
 
     printf("\n\nRun Summary for satellite %s:\n\t"
            "    Old Fires: %5ld\n\t"
@@ -158,16 +240,28 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
            satfire_wildfirelist_len(current_fires), satfire_wildfirelist_len(new_fires));
 
     // TODO: send old fires to a database thread
-    // TODO: send current fires to a database thread
-    // TODO: send new fires to a database thread
 
     current_fires = satfire_wildfirelist_destroy(current_fires);
     new_fires = satfire_wildfirelist_destroy(new_fires);
     old_fires = satfire_wildfirelist_destroy(old_fires);
 
     int sc = satfire_cluster_db_query_rows_finalize(&rows);
-
     Stopif(sc, return, "Error finalizing row query, returning from function.");
+
+    printf("\nLongest duration fire:\n");
+    satfire_wildfire_print(longest);
+
+    printf("\nMost powerul fire:\n");
+    satfire_wildfire_print(most_powerful);
+
+    printf("\nHottest fire:\n");
+    satfire_wildfire_print(hottest);
+
+    printf("\n\n");
+
+    satfire_wildfire_destroy(longest);
+    satfire_wildfire_destroy(most_powerful);
+    satfire_wildfire_destroy(hottest);
 
     return;
 }

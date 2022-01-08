@@ -285,7 +285,7 @@ struct SFPixelList *satfire_pixel_list_new_with_capacity(size_t capacity);
 struct SFPixelList *satfire_pixel_list_destroy(struct SFPixelList plist[static 1]);
 
 /** Create a deep copy of the SFPixelList. */
-struct SFPixelList *satfire_pixel_list_copy(struct SFPixelList plist[static 1]);
+struct SFPixelList *satfire_pixel_list_copy(struct SFPixelList const *plist);
 
 /** Append a SFPixel to the list.
  *
@@ -718,6 +718,15 @@ struct SFWildfire;
  */
 struct SFWildfire *satfire_wildfire_new(unsigned int id, struct SFClusterRow *initial);
 
+/** Create a deep copy of this wildfire.
+ *
+ * If \p source is \c NULL, then \c NULL is returned.
+ */
+struct SFWildfire *satfire_wildfire_clone(struct SFWildfire const *src);
+
+/** Print out a wildfire to the terminal. */
+void satfire_wildfire_print(struct SFWildfire const *src);
+
 /** Cleanup a Wildfire. */
 void satfire_wildfire_destroy(struct SFWildfire *wildfire);
 
@@ -729,6 +738,9 @@ time_t satfire_wildfire_get_first_observed(struct SFWildfire const *wildfire);
 
 /** Get the time the fire was last observed. */
 time_t satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire);
+
+/** Get the time in seconds between the first and last observed times. */
+double satfire_wildfire_duration(struct SFWildfire const *wildfire);
 
 /** Get the centroid of a wildfire. */
 struct SFCoord satfire_wildfire_centroid(struct SFWildfire const *wildfire);
@@ -851,6 +863,9 @@ satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const lis
 
 /** Get the number of fires in the list. */
 size_t satfire_wildfirelist_len(struct SFWildfireList const *list);
+
+/** Get a reference to an element at a given index. */
+struct SFWildfire const *satfire_wildfirelist_get(struct SFWildfireList const *list, size_t index);
 
 /*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Fires Database
