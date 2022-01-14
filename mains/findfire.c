@@ -233,9 +233,9 @@ skip_path(char const *path, SFClusterDatabaseQueryPresentH query)
     }
 
     // Skip meso-sectors for now, I don't have many of those.
-    if (sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2) {
-        return true;
-    }
+    // if (sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2) {
+    //    return true;
+    //}
 
     // TODO: Need to add error checking to here. On error, parse_time_string should return the
     // time 0 since that is way out of bounds for the GOES R/S/T/.... era.

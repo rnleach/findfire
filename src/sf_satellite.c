@@ -116,6 +116,12 @@ satfire_sector_string_contains_sector(char const *str)
         return SATFIRE_SECTOR_MESO2;
     }
 
+    // The directory name for mesosector data does not differentiate between mesosector 1 and
+    // mesosector 2, so just assume it contains mesosector one data.
+    if (strstr(str, "FDCM")) {
+        return SATFIRE_SECTOR_MESO1;
+    }
+
     return SATFIRE_SECTOR_NONE;
 }
 
