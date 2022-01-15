@@ -317,6 +317,9 @@ double satfire_pixel_list_total_area(struct SFPixelList const list[static 1]);
 /** Calculate the maximum temperature in a SFPixelList, kelvin. */
 double satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1]);
 
+/** Calculate the maximum scan angle in a SFPixelList, degrees. */
+double satfire_pixel_list_max_scan_angle(struct SFPixelList const list[static 1]);
+
 /** Check to see if these two \ref SFPixelList are adjacent or overlapping. */
 bool satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
                                              struct SFPixelList const right[static 1], double eps);

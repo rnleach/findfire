@@ -85,6 +85,8 @@ satfire_wildfire_print(struct SFWildfire const *src)
 
     int hours = (int)floor((duration - so_far) / 60.0 / 60.0);
 
+    double max_scan_angle = satfire_pixel_list_max_scan_angle(src->area);
+
     printf("~~ Wildfire ~~\n");
     printf("                   id: %u\n", src->id);
     printf("            satellite: %s\n", satfire_satellite_name(src->sat));
@@ -93,6 +95,7 @@ satfire_wildfire_print(struct SFWildfire const *src)
     printf("             duration: %d days %d hours\n", days, hours);
     printf("          centered at: (%10.6lf, %11.6lf)\n", src->centroid.lat, src->centroid.lon);
     printf("           num pixels: %lu\n", src->area->len);
+    printf("   maximum scan angle: %7.0lf degrees\n", max_scan_angle);
     printf("        maximum power: %7.0lf MW\n", src->max_power);
     printf("  maximum temperature: %7.0lf K\n", src->max_temperature);
 

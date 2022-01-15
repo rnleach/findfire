@@ -613,6 +613,21 @@ satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1])
     return max_temperature;
 }
 
+double
+satfire_pixel_list_max_scan_angle(struct SFPixelList const list[static 1])
+{
+    assert(list);
+    assert(list->len <= list->capacity);
+
+    double max_scan_angle = -HUGE_VAL;
+
+    for (unsigned int i = 0; i < list->len; ++i) {
+        max_scan_angle = fmax(list->pixels[i].scan_angle, max_scan_angle);
+    }
+
+    return max_scan_angle;
+}
+
 bool
 satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
                                         struct SFPixelList const right[static 1], double eps)
