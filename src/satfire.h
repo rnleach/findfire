@@ -868,6 +868,14 @@ size_t satfire_wildfirelist_len(struct SFWildfireList const *list);
 struct SFWildfire const *satfire_wildfirelist_get(struct SFWildfireList const *list, size_t index);
 
 /*-------------------------------------------------------------------------------------------------
+ *                             Wildfire Database Query Metadata
+ *-----------------------------------------------------------------------------------------------*/
+/**
+ * \brief Get the next id number for a wildfire.
+ */
+unsigned int satfire_fires_db_next_wildfire_id(SFDatabaseH db);
+
+/*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Fires Database
  *-----------------------------------------------------------------------------------------------*/
 /** A handle to an add transaction. */

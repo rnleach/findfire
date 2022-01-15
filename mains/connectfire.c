@@ -8,6 +8,7 @@
  * from the database table created by this program.
  */
 // Standard C
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -21,6 +22,11 @@
 
 #define DAYS_BACK 30
 #define DAY_SEC (60 * 60 * 24)
+
+/*-------------------------------------------------------------------------------------------------
+ *                                        Global State
+ *-----------------------------------------------------------------------------------------------*/
+_Atomic(unsigned int) next_wildfire_id;
 
 /*-------------------------------------------------------------------------------------------------
  *                          Program Initialization, Finalization, and Options
@@ -218,8 +224,8 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
 
         if (!cluster_merged) {
 
-            // TODO: Initialize the next id number from the database with a global, atomic constant.
-            new_fires = satfire_wildfirelist_create_add_fire(new_fires, 0, row);
+            unsigned int id = atomic_fetch_add(&next_wildfire_id, 1);
+            new_fires = satfire_wildfirelist_create_add_fire(new_fires, id, row);
 
         } else {
             ++num_absorbed;
@@ -273,20 +279,36 @@ main(int argc, char *argv[argc + 1])
 {
     program_initialization(&argc, &argv);
 
-    // TODO: Figure this out from the database.
-    time_t start = 0;
+    // Connect to the chosen database.
+    SFDatabaseH db = satfire_db_connect(options.database_file);
+    Stopif(!db, exit(EXIT_FAILURE), "Unable to connect to database %s", options.database_file);
+
+    //
+    // Restore state from where we last left off.
+    //
+    unsigned int next_id = satfire_fires_db_next_wildfire_id(db);
+
+    if (options.verbose) {
+        fprintf(stdout, "  Next wildfire ID number: %u\n", next_id);
+    }
+
+    atomic_init(&next_wildfire_id, next_id);
+
+    time_t start = 0; // TODO: Figure this out from the database.
     time_t end = time(0);
 
-    SFDatabaseH db = satfire_db_connect(options.database_file);
+    // Start out using the whole world! For this program, no reason to limit the area.
     struct SFBoundingBox area = {.ll = (struct SFCoord){.lat = -90.0, .lon = -180.0},
                                  .ur = (struct SFCoord){.lat = 90.0, .lon = 180.0}};
 
+    //
+    // Do the processing.
+    //
     for (unsigned int sat = 0; sat < SATFIRE_SATELLITE_NUM; sat++) {
         process_rows_for_satellite(sat, start, end, area, db);
     }
 
     satfire_db_close(&db);
-
     program_finalization();
 
     return EXIT_SUCCESS;

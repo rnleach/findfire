@@ -816,3 +816,64 @@ satfire_cluster_db_satfire_cluster_row_finalize(struct SFClusterRow *row)
         free(row);
     }
 }
+
+/*-------------------------------------------------------------------------------------------------
+ *                             Wildfire Database Query Metadata
+ *-----------------------------------------------------------------------------------------------*/
+unsigned int
+satfire_fires_db_next_wildfire_id(SFDatabaseH db)
+{
+    assert(db);
+
+    char const *query = "SELECT IFNULL(MAX(fire_id) + 1, 1) FROM fires";
+    sqlite3_stmt *stmt = 0;
+
+    unsigned int next_id = 0;
+
+    int rc = sqlite3_prepare_v2(db->ptr, query, -1, &stmt, 0);
+    Stopif(rc != SQLITE_OK, goto CLEAN_UP, "Error preparing next fire id statement: %s",
+           sqlite3_errstr(rc));
+
+    rc = sqlite3_step(stmt);
+    Stopif(rc != SQLITE_ROW, goto CLEAN_UP, "Error stepping in fire id statement: %s",
+           sqlite3_errstr(rc));
+
+    long int signed_fire_id = sqlite3_column_int64(stmt, 0);
+    Stopif(signed_fire_id <= 0, goto CLEAN_UP, "Negative or zero fire id!");
+    next_id = signed_fire_id;
+
+CLEAN_UP:
+    rc = sqlite3_finalize(stmt);
+    Stopif(rc != SQLITE_OK, return next_id, "Error finalizing: %s", sqlite3_errstr(rc));
+    return next_id;
+}
+
+/*-------------------------------------------------------------------------------------------------
+ *                             Add Rows to the Fires Database
+ *-----------------------------------------------------------------------------------------------*/
+struct SFFiresDatabaseAdd {
+};
+
+SFFiresDatabaseAddH
+satfire_fires_db_prepare_to_add(SFDatabaseH db)
+{
+    // TODO implement
+    assert(false);
+    return 0;
+}
+
+int
+satfire_fires_db_finalize_add(SFFiresDatabaseAddH *stmt)
+{
+    // TODO implement
+    assert(false);
+    return 0;
+}
+
+int
+satfire_fires_db_add(SFFiresDatabaseAddH stmt, struct SFWildfire *fire)
+{
+    // TODO implement
+    assert(false);
+    return 0;
+}
