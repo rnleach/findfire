@@ -484,16 +484,50 @@ satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
     return merged_away;
 }
 
+static bool
+wildfire_is_stale(struct SFWildfire *fire, time_t current_time)
+{
+
+    assert(fire);
+
+    // Seconds in a four day duration
+    double const four_days = 60 * 60 * 24 * 4;
+    double const thirty_days = 60 * 60 * 24 * 30;
+
+    time_t last_observed = satfire_wildfire_get_last_observed(fire);
+    double duration_since_last_observed = difftime(current_time, last_observed);
+
+    // Give it at least four days to come back to life again.
+    if (duration_since_last_observed < four_days) {
+        return false;
+    }
+
+    // If it's been out for 30 days, it's stale
+    if (duration_since_last_observed > thirty_days) {
+        return true;
+    }
+
+    double wildfire_duration = satfire_wildfire_duration(fire);
+
+    // If it's not been seen in a longer time than it was burning, call it stale.
+    if (wildfire_duration < duration_since_last_observed) {
+        return true;
+    }
+
+    return false;
+}
+
 struct SFWildfireList *
-satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const list,
-                                                struct SFWildfireList *tgt_list, time_t older_than)
+satfire_wildfirelist_drain_stale_fires(struct SFWildfireList *const list,
+                                       struct SFWildfireList *tgt_list, time_t current_time)
 {
     if (!list) {
         return tgt_list;
     }
 
     for (unsigned int i = 0; i < list->len; ++i) {
-        if (list->fires[i].last_observed < older_than) {
+        if (wildfire_is_stale(&list->fires[i], current_time)) {
+
             tgt_list = satfire_wildfirelist_steal_fire(tgt_list, &list->fires[i]);
 
             // Move the fire in the last position here - 'i' was cleand up by the function

@@ -276,7 +276,7 @@ bool satfire_pixels_are_adjacent(struct SFPixel const left[static 1],
  * \param eps The scale to use for comparison in the same units as the lat and lon.
  **/
 bool satfire_pixels_are_adjacent_or_overlap(struct SFPixel const left[static 1],
-                                 struct SFPixel const right[static 1], double eps);
+                                            struct SFPixel const right[static 1], double eps);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         SFPixelList
@@ -865,19 +865,19 @@ struct SFWildfireList *satfire_wildfirelist_extend(struct SFWildfireList *list,
 struct SFWildfireList *satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
                                                         struct SFWildfireList *merged_away);
 
-/** Remove fires older than \p older_than from the list and place them in \p tgt_list.
+/** Remove fires from \p list that are likely no longer burning.
  *
  * \param list is the source list to drain fires from if they are older than \p older_than.
  * \param tgt_list is the list to add the drained elements into. If this point is \c NULL, then a
  * new list will be created. The return value of this function should be assigned to the variable
  * that was passed into this argument in case it was moved for a reallocation.
- * \param older_than, all fires last observed than this time will be moved to the \p tgt_list.
+ * \param current_time is the current time of the clusters that are being processed.
  *
  * \returns an updated pointer to \p tgt_list.
  */
-struct SFWildfireList *
-satfire_wildfirelist_drain_fires_not_seen_since(struct SFWildfireList *const list,
-                                                struct SFWildfireList *tgt_list, time_t older_than);
+struct SFWildfireList *satfire_wildfirelist_drain_stale_fires(struct SFWildfireList *const list,
+                                                              struct SFWildfireList *tgt_list,
+                                                              time_t current_time);
 
 /** Get the number of fires in the list. */
 size_t satfire_wildfirelist_len(struct SFWildfireList const *list);

@@ -23,9 +23,6 @@
 #include "satfire.h"
 #include "sf_util.h"
 
-#define DAYS_BACK 30
-#define DAY_SEC (60 * 60 * 24)
-
 /*-------------------------------------------------------------------------------------------------
  *                                        Global State
  *-----------------------------------------------------------------------------------------------*/
@@ -279,10 +276,9 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
             old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
             num_merged -= satfire_wildfirelist_len(current_fires);
 
-            time_t oldest_allowed = current_time_step - DAYS_BACK * DAY_SEC;
             size_t num_old = satfire_wildfirelist_len(current_fires);
-            old_fires = satfire_wildfirelist_drain_fires_not_seen_since(current_fires, old_fires,
-                                                                        oldest_allowed);
+            old_fires =
+                satfire_wildfirelist_drain_stale_fires(current_fires, old_fires, current_time_step);
             num_old -= satfire_wildfirelist_len(current_fires);
 
             size_t num_new = satfire_wildfirelist_len(new_fires);
