@@ -16,6 +16,9 @@
 // System installed libraries
 #include <glib.h>
 
+// My source libs
+#include "kamel.h"
+
 // My project headers
 #include "satfire.h"
 #include "sf_util.h"
@@ -94,6 +97,9 @@ program_finalization()
     satfire_finalize();
 }
 
+/*-------------------------------------------------------------------------------------------------
+ *                                    Stats for this run.
+ *-----------------------------------------------------------------------------------------------*/
 static void
 update_wildfire_stats(struct SFWildfireList const *curr, struct SFWildfire **longest,
                       struct SFWildfire **most_powerful, struct SFWildfire **hottest)
@@ -167,6 +173,79 @@ update_wildfire_stats(struct SFWildfireList const *curr, struct SFWildfire **lon
     }
 }
 
+/*-------------------------------------------------------------------------------------------------
+ *                                   Output List of Fires as KML
+ *-----------------------------------------------------------------------------------------------*/
+static void
+save_wildfire_list(struct SFWildfireList *fires, char const *fname)
+{
+    assert(fires);
+
+    FILE *out = fopen(fname, "w");
+    Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", fname);
+
+    kamel_start_document(out);
+
+    kamel_start_style(out, "fire");
+    kamel_poly_style(out, "880000FF", true, false);
+    kamel_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
+    kamel_end_style(out);
+
+    size_t len = satfire_wildfirelist_len(fires);
+    for (size_t i = 0; i < len; ++i) {
+        struct SFWildfire const *f = satfire_wildfirelist_get(fires, i);
+
+        char id[32] = {0};
+        snprintf(id, sizeof(id), "%u", satfire_wildfire_id(f));
+
+        time_t starttm = satfire_wildfire_get_first_observed(f);
+        struct tm start = *gmtime(&starttm);
+        char start_buf[32] = {0};
+        strftime(start_buf, sizeof(start_buf), "%Y-%m-%d %H:%M:%SZ", &start);
+
+        time_t endtm = satfire_wildfire_get_last_observed(f);
+        struct tm end = *gmtime(&endtm);
+        char end_buf[32] = {0};
+        strftime(end_buf, sizeof(end_buf), "%Y-%m-%d %H:%M:%SZ", &end);
+
+        double duration = satfire_wildfire_duration(f);
+
+        int days = (int)floor(duration / 60.0 / 60.0 / 24.0);
+        double so_far = days * 60.0 * 60.0 * 24.0;
+
+        int hours = (int)floor((duration - so_far) / 60.0 / 60.0);
+
+        char desc[1024] = {0};
+        snprintf(desc, sizeof(desc),
+                 "ID: %u<br/>"
+                 "Start: %s<br/>"
+                 "End: %s<br/>"
+                 "Duration: %d days %d hours<br/>"
+                 "Max Power: %.0lf MW<br/>"
+                 "Max Temperature: %.0lf Kelvin<br/>",
+                 satfire_wildfire_id(f), start_buf, end_buf, days, hours,
+                 satfire_wildfire_max_power(f), satfire_wildfire_max_temperature(f));
+
+        kamel_start_folder(out, id, 0, false);
+
+        kamel_start_placemark(out, id, desc, "#fire");
+        struct SFCoord centroid = satfire_wildfire_centroid(f);
+        kamel_point(out, centroid.lat, centroid.lon, 0.0);
+        kamel_end_placemark(out);
+
+        satfire_pixel_list_kml_write(out, satfire_wildfire_pixels(f));
+
+        kamel_end_folder(out);
+    }
+
+    kamel_end_document(out);
+
+    fclose(out);
+}
+
+/*-------------------------------------------------------------------------------------------------
+ *                                   Processing For A Satellite
+ *-----------------------------------------------------------------------------------------------*/
 static void
 process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
                            struct SFBoundingBox area, SFDatabaseH db)
@@ -237,6 +316,12 @@ process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
     old_fires = satfire_wildfirelist_extend(old_fires, new_fires);
 
     update_wildfire_stats(old_fires, &longest, &most_powerful, &hottest);
+
+    char fname[256] = {0};
+    int num_printed = snprintf(fname, sizeof(fname), "%s_%s.kml", options.database_file,
+                               satfire_satellite_name(sat));
+    Stopif(num_printed >= sizeof(fname), exit(EXIT_FAILURE), "filename buffer overflow");
+    save_wildfire_list(old_fires, fname);
 
     printf("\n\nRun Summary for satellite %s:\n\t"
            "    Old Fires: %5ld\n\t"
