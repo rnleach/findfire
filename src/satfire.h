@@ -177,8 +177,12 @@ struct SFBoundingBox {
 bool satfire_bounding_box_contains_coord(struct SFBoundingBox const box, struct SFCoord const coord,
                                          double eps);
 
+/** \brief Check to see if these bounding boxes overlap. */
+bool satfire_bounding_boxes_overlap(struct SFBoundingBox const *left,
+                                    struct SFBoundingBox const *right, double eps);
+
 /*-------------------------------------------------------------------------------------------------
- *                                         SFPixels
+ *                                          SFPixel
  *-----------------------------------------------------------------------------------------------*/
 /** The coordinates describing the area of a pixel viewed from a GOES-R/S satellite. */
 struct SFPixel {
@@ -265,6 +269,15 @@ bool satfire_pixels_overlap(struct SFPixel const left[static 1],
 bool satfire_pixels_are_adjacent(struct SFPixel const left[static 1],
                                  struct SFPixel const right[static 1], double eps);
 
+/** Determine if satellite pixels are adjacent or overlapping.
+ *
+ * \param left a satellite pixel to check.
+ * \param right the pixel to check against.
+ * \param eps The scale to use for comparison in the same units as the lat and lon.
+ **/
+bool satfire_pixels_are_adjacent_or_overlap(struct SFPixel const left[static 1],
+                                 struct SFPixel const right[static 1], double eps);
+
 /*-------------------------------------------------------------------------------------------------
  *                                         SFPixelList
  *-----------------------------------------------------------------------------------------------*/
@@ -324,6 +337,8 @@ double satfire_pixel_list_max_scan_angle(struct SFPixelList const list[static 1]
 bool satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
                                              struct SFPixelList const right[static 1], double eps);
 
+/** Get a bounding box for this list of pixels. */
+struct SFBoundingBox satfire_pixel_list_bounding_box(struct SFPixelList const list[static 1]);
 /*-------------------------------------------------------------------------------------------------
  *                                  Pixel List Binary Format
  *-----------------------------------------------------------------------------------------------*/

@@ -161,20 +161,37 @@ test_satfire_pixels_overlap(void)
     g_assert_true(satfire_pixels_overlap(&pxl3, &pxl3, 1.0e-6));
     g_assert_true(satfire_pixels_overlap(&pxl4, &pxl4, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl1, &pxl1, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl2, &pxl2, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl3, &pxl3, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl4, &pxl4, 1.0e-6));
+
     // pxl1 and pxl3 are adjacent, but they do not overlap.
     g_assert_false(satfire_pixels_overlap(&pxl1, &pxl3, 1.0e-6));
     g_assert_false(satfire_pixels_overlap(&pxl3, &pxl1, 1.0e-6));
+
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl1, &pxl3, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl3, &pxl1, 1.0e-6));
 
     // pxl2 overlaps pxl1 and pxl3 - order doesn't matter
     g_assert_true(satfire_pixels_overlap(&pxl1, &pxl2, 1.0e-6));
     g_assert_true(satfire_pixels_overlap(&pxl2, &pxl1, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl1, &pxl2, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl2, &pxl1, 1.0e-6));
+
     g_assert_true(satfire_pixels_overlap(&pxl3, &pxl2, 1.0e-6));
     g_assert_true(satfire_pixels_overlap(&pxl2, &pxl3, 1.0e-6));
+
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl3, &pxl2, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl2, &pxl3, 1.0e-6));
 
     // Test the case where a vertex lies on the boundary.
     g_assert_true(satfire_pixels_overlap(&pxl1, &pxl4, 1.0e-6));
     g_assert_true(satfire_pixels_overlap(&pxl4, &pxl1, 1.0e-6));
+
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl1, &pxl4, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl4, &pxl1, 1.0e-6));
 }
 
 static void
@@ -236,6 +253,16 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_false(satfire_pixels_are_adjacent(&pxl_ss, &pxl_ss, 1.0e-6));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_se, &pxl_se, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_nw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_nn, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_ne, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_ww, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_ee, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_sw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_ss, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_se, 1.0e-6));
+
     // Check west-to-east (order shouldn't matter!)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_nw, &pxl_nn, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_nn, &pxl_ne, 1.0e-6));
@@ -246,6 +273,16 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_sw, &pxl_ss, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ss, &pxl_se, 1.0e-6));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_sw, &pxl_se, 1.0e-6));
+
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_nn, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_ne, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_ne, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_ee, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_ee, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_ss, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_se, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_se, 1.0e-6));
 
     // Check east-to-west (order shouldn't matter!)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ne, &pxl_nn, 1.0e-6));
@@ -258,6 +295,16 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ss, &pxl_sw, 1.0e-6));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_se, &pxl_sw, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_nn, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_nw, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_nw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_ww, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_ww, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_ss, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_sw, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_sw, 1.0e-6));
+
     // Check north-to-south (order shouldn't matter!)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_nw, &pxl_ww, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ww, &pxl_sw, 1.0e-6));
@@ -269,6 +316,16 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ee, &pxl_se, 1.0e-6));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_ne, &pxl_se, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_ww, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_sw, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_sw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_ss, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_ss, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_ee, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_se, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_se, 1.0e-6));
+
     // Check south-to-north (order shouldn't matter!)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_sw, &pxl_ww, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ww, &pxl_nw, 1.0e-6));
@@ -279,6 +336,16 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_se, &pxl_ee, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ee, &pxl_ne, 1.0e-6));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_se, &pxl_ne, 1.0e-6));
+
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_ww, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_nw, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_nw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_nn, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_nn, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_ee, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_ne, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_ne, 1.0e-6));
 
     // Check southwest-to-northeast and southeast-to-northwest (order shouldn't matter!)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_sw, &pxl_00, 1.0e-6));
@@ -292,6 +359,17 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ss, &pxl_ww, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ee, &pxl_nn, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_ne, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_sw, &pxl_ne, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_nw, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_se, &pxl_nw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_nn, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_ee, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ss, &pxl_ww, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_nn, 1.0e-6));
+
     // Check northwest-to-southeast and northeast-to-southwest (order shouldn't matter!)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_nw, &pxl_00, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_00, &pxl_se, 1.0e-6));
@@ -304,6 +382,17 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_ww, &pxl_ss, 1.0e-6));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_nn, &pxl_ee, 1.0e-6));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_se, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_se, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_00, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_sw, 1.0e-6));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_ne, &pxl_sw, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_ww, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ee, &pxl_ss, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_ss, 1.0e-6));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_ee, 1.0e-6));
+
     //
     // Check to make sure eps is working.
     //
@@ -311,9 +400,14 @@ test_satfire_pixels_are_adjacent(void)
     g_assert_true(satfire_pixels_are_adjacent(&pxl_nn, &pxl_ne, 1.0e-8));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_nw, &pxl_ne, 1.0e-8));
 
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_nn, 1.0e-8));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_nn, &pxl_ne, 1.0e-8));
+    g_assert_false(satfire_pixels_are_adjacent_or_overlap(&pxl_nw, &pxl_ne, 1.0e-8));
+
     // should overlap - but not adjacent
     g_assert_false(satfire_pixels_are_adjacent(&pxl_ww, &pxl_00, 1.0e-8));
     g_assert_true(satfire_pixels_overlap(&pxl_ww, &pxl_00, 1.0e-8));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_ww, &pxl_00, 1.0e-8));
 
     g_assert_true(satfire_pixels_are_adjacent(&pxl_00, &pxl_ee, 1.0e-8));
     g_assert_false(satfire_pixels_are_adjacent(&pxl_ww, &pxl_ee, 1.0e-8));
@@ -328,6 +422,7 @@ test_satfire_pixels_are_adjacent(void)
     // should overlap
     g_assert_false(satfire_pixels_are_adjacent(&pxl_00, &pxl_ww, 1.0e-8));
     g_assert_true(satfire_pixels_overlap(&pxl_00, &pxl_ww, 1.0e-8));
+    g_assert_true(satfire_pixels_are_adjacent_or_overlap(&pxl_00, &pxl_ww, 1.0e-8));
 
     g_assert_false(satfire_pixels_are_adjacent(&pxl_ee, &pxl_ww, 1.0e-8));
     g_assert_true(satfire_pixels_are_adjacent(&pxl_se, &pxl_ss, 1.0e-8));

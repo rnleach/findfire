@@ -154,6 +154,26 @@ satfire_bounding_box_contains_coord(struct SFBoundingBox const box, struct SFCoo
     return lon_in_range && lat_in_range;
 }
 
+bool
+satfire_bounding_boxes_overlap(struct SFBoundingBox const *left, struct SFBoundingBox const *right,
+                               double eps)
+{
+    assert(left);
+    assert(right);
+
+    if (satfire_bounding_box_contains_coord(*left, right->ll, eps) ||
+        satfire_bounding_box_contains_coord(*left, right->ur, eps)) {
+        return true;
+    }
+
+    if (satfire_bounding_box_contains_coord(*right, left->ll, eps) ||
+        satfire_bounding_box_contains_coord(*right, left->ur, eps)) {
+        return true;
+    }
+
+    return false;
+}
+
 static bool
 bounding_boxes_overlap(struct SFBoundingBox const left, struct SFBoundingBox const right,
                        double eps)
@@ -376,6 +396,54 @@ satfire_pixels_overlap(struct SFPixel const left[static 1], struct SFPixel const
     // No intersecting lines and no corners of one pixel contained in the other, so there
     // is no overlap.
     return false;
+}
+
+bool
+satfire_pixels_are_adjacent_or_overlap(struct SFPixel const left[static 1],
+                                       struct SFPixel const right[static 1], double eps)
+{
+    //
+    // Try some shortcuts first
+    //
+
+    if (!satfire_pixels_bounding_boxes_overlap(left, right, eps)) {
+        return false;
+    }
+
+    struct SFCoord left_coords[4] = {left->ul, left->ur, left->lr, left->ll};
+    struct SFCoord right_coords[4] = {right->ul, right->ur, right->lr, right->ll};
+
+    // Count the number of close coords
+    unsigned int num_close_coords = 0;
+    for (unsigned int i = 0; i < 4; ++i) {
+        for (unsigned int j = 0; j < 4; ++j) {
+            if (satfire_coord_are_close(left_coords[i], right_coords[j], eps)) {
+                ++num_close_coords;
+
+                // bail out early if we can
+                if (num_close_coords > 1) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Check if any points are contained in the other pixel
+    for (unsigned int i = 0; i < 4; ++i) {
+        if (satfire_pixel_contains_coord(right, left_coords[i], eps)) {
+            return true;
+        }
+
+        if (satfire_pixel_contains_coord(left, right_coords[i], eps)) {
+            return true;
+        }
+    }
+
+    //
+    // Fallback to the tested methods.
+    //
+    return satfire_pixels_overlap(left, right, eps) ||
+           satfire_pixels_are_adjacent(left, right, eps);
 }
 
 bool
@@ -638,11 +706,18 @@ satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
     assert(right);
     assert(right->len <= right->capacity);
 
+    struct SFBoundingBox lb = satfire_pixel_list_bounding_box(left);
+    struct SFBoundingBox rb = satfire_pixel_list_bounding_box(right);
+
+    if (!satfire_bounding_boxes_overlap(&lb, &rb, eps)) {
+        return false;
+    }
+
     for (unsigned int l = 0; l < left->len; ++l) {
         struct SFPixel const *lp = &left->pixels[l];
         for (unsigned int r = 0; r < right->len; ++r) {
             struct SFPixel const *rp = &right->pixels[r];
-            if (satfire_pixels_overlap(lp, rp, eps)) {
+            if (satfire_pixels_are_adjacent_or_overlap(lp, rp, eps)) {
                 return true;
             }
         }
@@ -650,6 +725,30 @@ satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
 
     return false;
 }
+
+struct SFBoundingBox
+satfire_pixel_list_bounding_box(struct SFPixelList const list[static 1])
+{
+
+    double min_lat = HUGE_VAL;
+    double max_lat = -HUGE_VAL;
+    double min_lon = HUGE_VAL;
+    double max_lon = -HUGE_VAL;
+
+    for (unsigned int l = 0; l < list->len; ++l) {
+        struct SFPixel const *lp = &list->pixels[l];
+        for (int i = 0; i < 4; ++i) {
+            min_lat = fmin(min_lat, lp->coords[i].lat);
+            min_lon = fmin(min_lon, lp->coords[i].lon);
+            max_lat = fmax(max_lat, lp->coords[i].lat);
+            max_lon = fmax(max_lon, lp->coords[i].lon);
+        }
+    }
+
+    return (struct SFBoundingBox){.ll = (struct SFCoord){.lat = min_lat, .lon = min_lon},
+                                  .ur = (struct SFCoord){.lat = max_lat, .lon = max_lon}};
+}
+
 /*-------------------------------------------------------------------------------------------------
  *                                         Binary Format
  *-----------------------------------------------------------------------------------------------*/
