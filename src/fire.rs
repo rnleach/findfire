@@ -1,3 +1,107 @@
+use crate::{geo::Coord, pixel::PixelList, satellite::Satellite};
+use chrono::NaiveDateTime;
+
+/**
+ * The aggregate properties of a temporally connected group of [Cluster] objects.
+ *
+ * While the [Cluster]s that make up a fire may come from any [Sector] of a satellite scan, they
+ * must come from the same [Satellite] because of the difficulty associated with the different map
+ * projections and parallax. Currently the geo-location of observed [Pixel]s does not take parallax
+ * into account. While this is a neglibible issue for low elevation locations considering the
+ * resolution of the satellites, for higher elevations it can cause a significant error. Also, for
+ * each satellite, the data was reprojected into the exact same projection each time. So every
+ * image from a given satellite has the exact same [Pixel] locations on the Earth's surface. As a
+ * result, aggregating values for maximum power, area, or temperature is straight forward. If we
+ * had to deal with [Pixel]s from different satellites that don't totally overlap, or only
+ * partially overlap, it's not straightforward at all how to combine the properties of those
+ * [Pixel]s into a common projection.
+ */
+pub struct Fire {
+    /// The scan start time of the first [Cluster] where this fire was detected.
+    first_observed: NaiveDateTime,
+    /// The scan end time of the last [Cluster] where this fire was detected.
+    last_observed: NaiveDateTime,
+    /// The centroid of all the combined [Cluster]s that contributed to this fire.
+    centroid: Coord,
+    /// The power of the most powerful [Cluster] that was associated with this fire. Note that
+    /// several clusters may be associated with a fire at any given scan time, but they might be
+    /// spatially separated (e.g. on different ends of the original fire). The powers of those
+    /// different [Cluster]s are NOT combined to come up with a total power for the time. This
+    /// represents the single most powerful [Cluster] aggregated into this fire.
+    max_power: f64,
+    /// The maximum temperature of any [Pixel] that was ever associated with this fire.
+    max_temperature: f64,
+    /// An unique ID number for this fire that will be used identify this fire in a database that
+    /// will also be used to associate this fire with [Cluster]s which are a part of it.
+    id: u64,
+    /// Each [Pixel] in this contains the maximum power, area, and temperature observed in it's
+    /// area during the fire. Since all the data for each satellite is projected to a common grid
+    /// before being published online, throughout the life of the fire the [Pixel]s will perfectly
+    /// overlap. This is kind of a composite of the properties of the fire over it's lifetime.
+    area: PixelList,
+    /// The satellite the [Cluster]s that were a part of this fire were observed with.
+    sat: Satellite,
+}
+
+/// A list of [Fire] objects.
+pub struct FireList(Vec<Fire>);
+
+/*
+
+/*-------------------------------------------------------------------------------------------------
+ *                                        Wildfire
+ *-----------------------------------------------------------------------------------------------*/
+
+/** Create a new wildfire.
+ *
+ * The \ref SFClusterRow \p initial is left in an invalid state after this function is called. The
+ * \ref SFPixelList member pointer is set to \c NULL as creating the new SFWildfire steals the
+ * pixels from the \ref SFClusterRow.
+ */
+struct SFWildfire *satfire_wildfire_new(unsigned int id, struct SFClusterRow *initial);
+
+/** Create a deep copy of this wildfire.
+ *
+ * If \p source is \c NULL, then \c NULL is returned.
+ */
+struct SFWildfire *satfire_wildfire_clone(struct SFWildfire const *src);
+
+/** Print out a wildfire to the terminal. */
+void satfire_wildfire_print(struct SFWildfire const *src);
+
+/** Cleanup a Wildfire. */
+void satfire_wildfire_destroy(struct SFWildfire *wildfire);
+
+/** Get the id number of the fire. */
+unsigned int satfire_wildfire_id(struct SFWildfire const *wildfire);
+
+/** Get the time the fire was first observed. */
+time_t satfire_wildfire_get_first_observed(struct SFWildfire const *wildfire);
+
+/** Get the time the fire was last observed. */
+time_t satfire_wildfire_get_last_observed(struct SFWildfire const *wildfire);
+
+/** Get the time in seconds between the first and last observed times. */
+double satfire_wildfire_duration(struct SFWildfire const *wildfire);
+
+/** Get the centroid of a wildfire. */
+struct SFCoord satfire_wildfire_centroid(struct SFWildfire const *wildfire);
+
+/** Get the maximum power observed for this fire, megawatts. */
+double satfire_wildfire_max_power(struct SFWildfire const *wildfire);
+
+/** Get the max fire temperature observed on this fire, Kelvin. */
+double satfire_wildfire_max_temperature(struct SFWildfire const *wildfire);
+
+/** Get access to the pixels in the wildfire. */
+struct SFPixelList const *satfire_wildfire_pixels(struct SFWildfire const *wildfire);
+
+/** Get the satellite this fire was observed from. */
+enum SFSatellite satfire_wildfire_satellite(struct SFWildfire const *wildfire);
+
+/** Update a wildfire by adding the information in this \ref SFClusterRow to it. */
+void satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow const *row);
+
 #include "satfire.h"
 
 #include <assert.h>
@@ -12,19 +116,115 @@
 extern char const *out_of_memory;
 
 /*-------------------------------------------------------------------------------------------------
+ *                                        Wildfire List
+ *-----------------------------------------------------------------------------------------------*/
+/**
+ * \struct SFWildfireList
+ * \brief A list of wildfires.
+ */
+struct SFWildfireList;
+
+/** Clean up the memory associated with this \ref SFWildfireList.
+ *
+ * \returns the updated pointer to the list, in this case it should be NULL.
+ */
+struct SFWildfireList *satfire_wildfirelist_destroy(struct SFWildfireList *list);
+
+/** Add a wildfire to the list.
+ *
+ * The pointer to the list may be reallocated, so the argument \p list should be assigned the return
+ * value. This ensures that it is not left dangling.
+ *
+ * \param list is the list to add the new fire to. If this is \c NULL, then a new list is created.
+ * \param new_fire is the fire to be added to the \p list, the \p list takes ownership of the fire.
+ *
+ * \returns a pointer to the (possibly new) location of \p list.
+ */
+struct SFWildfireList *satfire_wildfirelist_add_fire(struct SFWildfireList *list,
+                                                     struct SFWildfire *new_fire);
+
+/** Create a new wildfire and add it to the list.
+ *
+ * The pointer to the list may be reallocated, so the argument \p list should be assigned the return
+ * value. This ensures that it is not left dangling.
+ *
+ * The \ref SFClusterRow \p initial is left in an invalid state after this function is called. The
+ * \ref SFPixelList member pointer is set to \c NULL as creating the new SFWildfire steals the
+ * pixels from the \ref SFClusterRow.
+ *
+ * \param list is the list to add the new fire to. If this is \c NULL, then a new list is created.
+ * \param id is the id number to be forwarded to satfire_wildfire_new().
+ * \param initial is the initial \ref SFClusterRow to be forwarded to satfire_wildfire_new().
+ *
+ * \returns a pointer to the (possibly new) location of \p list.
+ *
+ * \see satfire_wildfire_new()
+ */
+struct SFWildfireList *satfire_wildfirelist_create_add_fire(struct SFWildfireList *list,
+                                                            unsigned int id,
+                                                            struct SFClusterRow *initial);
+
+/** Update the list with the provided cluster.
+ *
+ * Matches the cluster to a wildfire in the list and then updates that wildfire.
+ *
+ * \param list is the list to search and see if you can find a wildfire that matches this cluster.
+ * \param clust is the cluster you are trying to assign to the fire.
+ *
+ * \returns \c true if \p clust was matched to a wildfire and used to update it, returns \c false
+ * otherwise.
+ */
+bool satfire_wildfirelist_update(struct SFWildfireList *const list,
+                                 struct SFClusterRow const *clust);
+
+/** Extend a wildfire list using another wildfire list.
+ *
+ * Modifies \p list by moving the elements of \p src to it. The parameter \p list should have the
+ * return value assigned back to it in case there was a reallocation, and \p src will be left empty
+ * but with all of it's memory still allocated. So when you're finally done with it you'll need to
+ * call \ref satfire_wildfirelist_destroy() on it.
+ */
+struct SFWildfireList *satfire_wildfirelist_extend(struct SFWildfireList *list,
+                                                   struct SFWildfireList *const src);
+
+/** Detect overlaps in the wildfires in the list and merge them together into a single fire.
+ *
+ * Fires that are merged into another fire, and so they no longer exist are moved to the
+ * \p merged_away list. The return value of this list should be assigned to the \p merged_away list
+ * in case a reallocation occurred and the pointer moved.
+ *
+ * \param list is the list of wildfires to be checked for mergers.
+ * \param merged_away is a list that will be grown with the fires that are removed because they were
+ * merged into another fire. This pointer may be \c NULL if you want to start a new list.
+ *
+ * \returns the updated location of the \p merged_away list.
+ */
+struct SFWildfireList *satfire_wildfirelist_merge_fires(struct SFWildfireList *const list,
+                                                        struct SFWildfireList *merged_away);
+
+/** Remove fires from \p list that are likely no longer burning.
+ *
+ * \param list is the source list to drain fires from if they are older than \p older_than.
+ * \param tgt_list is the list to add the drained elements into. If this point is \c NULL, then a
+ * new list will be created. The return value of this function should be assigned to the variable
+ * that was passed into this argument in case it was moved for a reallocation.
+ * \param current_time is the current time of the clusters that are being processed.
+ *
+ * \returns an updated pointer to \p tgt_list.
+ */
+struct SFWildfireList *satfire_wildfirelist_drain_stale_fires(struct SFWildfireList *const list,
+                                                              struct SFWildfireList *tgt_list,
+                                                              time_t current_time);
+
+/** Get the number of fires in the list. */
+size_t satfire_wildfirelist_len(struct SFWildfireList const *list);
+
+/** Get a reference to an element at a given index. */
+struct SFWildfire const *satfire_wildfirelist_get(struct SFWildfireList const *list, size_t index);
+
+/*-------------------------------------------------------------------------------------------------
                                                Wildfire
 -------------------------------------------------------------------------------------------------*/
-struct SFWildfire {
-    time_t first_observed;
-    time_t last_observed;
-    struct SFCoord centroid;
-    double max_power;
-    double max_temperature;
-    unsigned int id;
-    struct SFPixelList *area;
-    enum SFSatellite sat;
-};
-
 static struct SFWildfire
 satfire_wildfire_initialize(unsigned int id, struct SFClusterRow *initial)
 {
@@ -257,12 +457,6 @@ satfire_wildfire_update(struct SFWildfire *wildfire, struct SFClusterRow const *
 /*-------------------------------------------------------------------------------------------------
  *                                        Wildfire List
  *-----------------------------------------------------------------------------------------------*/
-struct SFWildfireList {
-    size_t len;
-    size_t capacity;
-    struct SFWildfire *fires;
-};
-
 static struct SFWildfireList *
 expand_wildfirelist(struct SFWildfireList *list, size_t increase_by_at_least)
 {
@@ -555,3 +749,4 @@ satfire_wildfirelist_get(struct SFWildfireList const *list, size_t index)
 {
     return &list->fires[index];
 }
+*/

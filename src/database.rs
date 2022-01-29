@@ -1,3 +1,278 @@
+use crate::{
+    geo::Coord,
+    pixel::PixelList,
+    satellite::{Satellite, Sector},
+};
+use chrono::NaiveDateTime;
+
+pub struct FireDatabase {}
+
+pub struct FireDatabaseAddCluster<'a> {
+    db: &'a FireDatabase,
+}
+
+pub struct FireDatabaseQueryClusterPresent<'a> {
+    db: &'a FireDatabase,
+}
+
+pub struct FireDatabaseQueryClusters<'a> {
+    db: &'a FireDatabase,
+}
+
+pub struct FireDatabaseClusterRow {
+    start: NaiveDateTime,
+    end: NaiveDateTime,
+    power: f64,
+    max_temperature: f64,
+    area: f64,
+    scan_angle: f64,
+    centroid: Coord,
+    sector: Sector,
+    sat: Satellite,
+    pixels: PixelList,
+}
+
+pub struct FiresDatabaseAddFire<'a> {
+    db: &'a FireDatabase,
+}
+
+/*
+/*-------------------------------------------------------------------------------------------------
+ *                            Query general info about the database
+ *-----------------------------------------------------------------------------------------------*/
+/** \brief Initialize a database.
+ *
+ * Initialize a database to make sure it exists and is set up properly. This should be run in the
+ * main thread before any other threads open a connection to the database to ensure consistency.
+ *
+ * \returns 0 on success and non-zero if there is an error.
+ */
+int satfire_db_initialize(char const *path);
+
+/** A handle to a SFDatabase connection. */
+typedef struct SFDatabase *SFDatabaseH;
+
+/**
+ * \brief Open a connection to the database to store clusters, wildfires, and associations.
+ *
+ * \returns the database connect object or NULL if there is an error.
+ */
+SFDatabaseH satfire_db_connect(char const *path);
+
+/**
+ * \brief Close and finalize the connection to the database.
+ *
+ * The supplied handle will be zeroed out. If the database handle is already NULL, that's OK.
+ *
+ * \returns 0 if there is no error, otherwise it returns non-zero.
+ */
+int satfire_db_close(SFDatabaseH *db);
+
+/**
+ * \brief Find the latest valid time in the database so you can safely skip anything older.
+ *
+ * \returns 0 if there is an error or the database is empty, otherwise returns the scan start
+ * time of the latest path for that satellite and sector.
+ */
+time_t satfire_cluster_db_newest_scan_start(SFDatabaseH db, enum SFSatellite satellite,
+                                            enum SFSector sector);
+
+/*-------------------------------------------------------------------------------------------------
+ *                             Add Rows to the Cluster Database
+ *-----------------------------------------------------------------------------------------------*/
+/** A handle to an add transaction. */
+typedef struct SFClusterDatabaseAdd *SFClusterDatabaseAddH;
+
+/**
+ * \brief Prepare to add rows to the cluster database.
+ *
+ * \returns NULL or the 0 pointer on error.
+ */
+SFClusterDatabaseAddH satfire_cluster_db_prepare_to_add(SFDatabaseH db);
+
+/**
+ * \brief Finalize add transaction.
+ *
+ * \returns 0 if there is no error.
+ */
+int satfire_cluster_db_finalize_add(SFClusterDatabaseAddH *stmt);
+
+/**
+ * \brief Adds an entire ClusterList to the database.
+ *
+ * \returns the 0 on success and non-zero on error.
+ */
+int satfire_cluster_db_add(SFClusterDatabaseAddH stmt, struct SFClusterList *clist);
+
+
+/*-------------------------------------------------------------------------------------------------
+ *                 Query if data from a file is already in the Cluster Database
+ *-----------------------------------------------------------------------------------------------*/
+/** A handle to a query to check if a file is already in the database. */
+typedef struct SFClusterDatabaseQueryPresent *SFClusterDatabaseQueryPresentH;
+
+/**
+ * \brief Prepare to query the database if data from a satellite image is already in the database.
+ *
+ * \return NULL or the 0 pointer on error.
+ */
+SFClusterDatabaseQueryPresentH satfire_cluster_db_prepare_to_query_present(SFDatabaseH db);
+
+/**
+ * \brief Finalize the 'is present' query.
+ *
+ * \returns 0 if there is no error.
+ */
+int satfire_cluster_db_finalize_query_present(SFClusterDatabaseQueryPresentH *stmt);
+
+/**
+ * \brief Check to see if an entry for these values already exists in the database.
+ *
+ * \returns the number of items in the database with these values, -1 if there is nothing in the
+ * database concerning this satellite, sector, time combination.
+ */
+int satfire_cluster_db_present(SFClusterDatabaseQueryPresentH query, enum SFSatellite satellite,
+                               enum SFSector sector, time_t start, time_t end);
+
+/*-------------------------------------------------------------------------------------------------
+ *                            Query rows from the Cluster Database
+ *-----------------------------------------------------------------------------------------------*/
+/** A handle to a query to get rows from the database. */
+typedef struct SFClusterDatabaseQueryRows *SFClusterDatabaseQueryRowsH;
+
+/** Query rows from the database.
+ *
+ * \param db is a handle to the database file and may not be \c NULL.
+ * \param sat - limit results to this satellite only. If this is equal to SATFIRE_SATELLITE_NONE,
+ *              then don't limit by satellite.
+ * \param sector - limit results to this sector only. If this is equal to SATFIRE_SECTOR_NONE, then
+ *                 don't limit by sector.
+ * \param start - limit results to ones with a scan start time AFTER this time.
+ * \param end - limit results to ones with a scan start time BEFORE this time.
+ * \param area - limit results to clusters that have their centroid within the BoundingBox area.
+ *
+ * \returns a handle to the query object. If there is an error such as a non-existent database, it
+ * returns \c NULL.
+ */
+SFClusterDatabaseQueryRowsH satfire_cluster_db_query_rows(SFDatabaseH db,
+                                                          enum SFSatellite const sat,
+                                                          enum SFSector const sector,
+                                                          time_t const start, time_t const end,
+                                                          struct SFBoundingBox const area);
+
+/** \brief Close out and clean up from the query.
+ *
+ * This will also zero out the handle.
+ *
+ * \returns 0 if there is no error.
+ */
+int satfire_cluster_db_query_rows_finalize(SFClusterDatabaseQueryRowsH *query);
+
+/** \struct SFClusterRow
+ * \brief A row describing a \ref SFCluster that has been retrieved from the database.
+ *
+ * A result row from a SFClusterDatabaseQueryRowsH. This includes more information than the
+ * \ref SFCluster type does. This also includes valid times and satellite metadata.
+ */
+struct SFClusterRow;
+
+/** Get the next row.
+ *
+ * \param query is the handle for the query you want to get the next row on.
+ * \param row may be \c NULL, and if so a new row will be allocated. If a non \c NULL pointer is
+ *        passed in, then the space it points to will be reused for the next row. If you pass a
+ *        pointer in for row, always reassign the result of this function to that variable, as it
+ *        may call \c realloc() and move the location of the row in memory.
+ *
+ * \returns a pointer to the next row, or \c NULL if there is nothing left.
+ */
+struct SFClusterRow *satfire_cluster_db_query_rows_next(SFClusterDatabaseQueryRowsH query,
+                                                        struct SFClusterRow *row);
+
+/** Get the start time of the scan that produced this Cluster. */
+time_t satfire_cluster_db_satfire_cluster_row_start(struct SFClusterRow const *row);
+
+/** Get the end time of the scan that produced this Cluster. */
+time_t satfire_cluster_db_satfire_cluster_row_end(struct SFClusterRow const *row);
+
+/** Get the fire power in megawatts of this Cluster. */
+double satfire_cluster_db_satfire_cluster_row_power(struct SFClusterRow const *row);
+
+/** Get the maximum pixel temperature in Kelvin of this Cluster. */
+double satfire_cluster_db_satfire_cluster_row_max_temperature(struct SFClusterRow const *row);
+
+/** Get the fire area in square meters of this Cluster. */
+double satfire_cluster_db_satfire_cluster_row_area(struct SFClusterRow const *row);
+
+/** Get the scan angle of this Cluster. */
+double satfire_cluster_db_satfire_cluster_row_scan_angle(struct SFClusterRow const *row);
+
+/** Get the centroid of the cluster. */
+struct SFCoord satfire_cluster_db_satfire_cluster_row_centroid(struct SFClusterRow const *row);
+
+/** Get the satellite that detected this Cluster. */
+enum SFSatellite satfire_cluster_db_satfire_cluster_row_satellite(struct SFClusterRow const *row);
+
+/** Get the scan sector the satellite was using when it detected this Cluster. */
+enum SFSector satfire_cluster_db_satfire_cluster_row_sector(struct SFClusterRow const *row);
+
+/** Get view of the SFPixels that make up this Cluster. */
+const struct SFPixelList *
+satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row);
+
+/** Call this on a SFClusterRow if you're done using it.
+ *
+ * It's not necessary to call this if you will reuse this SFClusterRow in another call to
+ * satfire_cluster_db_query_rows_next(). If \a row is \c NULL, that's also fine.
+ *
+ * The satfire_cluster_db_query_rows_next() function will deallocate the SFClusterRow object
+ * and return \c NULL if there are no more rows, in which case a call to this function is a harmless
+ * no-op, but also unnecessary. If you are done using a SFClusterRow object before
+ * satfire_cluster_db_query_rows_next() returns \c NULL, then you will need to use this
+ * function to clean up the associated allocated memory.
+ *
+ */
+void satfire_cluster_db_satfire_cluster_row_finalize(struct SFClusterRow *row);
+
+/*-------------------------------------------------------------------------------------------------
+ *                             Wildfire Database Query Metadata
+ *-----------------------------------------------------------------------------------------------*/
+/**
+ * \brief Get the next id number for a wildfire.
+ */
+unsigned int satfire_fires_db_next_wildfire_id(SFDatabaseH db);
+
+/*-------------------------------------------------------------------------------------------------
+ *                             Add Rows to the Fires Database
+ *-----------------------------------------------------------------------------------------------*/
+/** A handle to an add transaction. */
+typedef struct SFFiresDatabaseAdd *SFFiresDatabaseAddH;
+
+/**
+ * \brief Prepare to add rows to the fires database.
+ *
+ * \returns NULL or the 0 pointer on error.
+ */
+SFFiresDatabaseAddH satfire_fires_db_prepare_to_add(SFDatabaseH db);
+
+/**
+ * \brief Finalize add transaction.
+ *
+ * \returns 0 if there is no error.
+ */
+int satfire_fires_db_finalize_add(SFFiresDatabaseAddH *stmt);
+
+/**
+ * \brief Adds or updates a fire to the database.
+ *
+ * \returns the 0 on success and non-zero on error.
+ */
+int satfire_fires_db_add(SFFiresDatabaseAddH stmt, struct SFWildfire *fire);
+
+
+
+
+
 #include "satfire.h"
 
 #include <assert.h>
@@ -125,10 +400,6 @@ satfire_db_initialize(char const *path)
     return rc;
 }
 
-struct SFDatabase {
-    sqlite3 *ptr;
-};
-
 struct SFDatabase *
 satfire_db_connect(char const *path)
 {
@@ -203,12 +474,6 @@ CLEAN_UP:
 /*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Cluster Database
  *-----------------------------------------------------------------------------------------------*/
-struct SFClusterDatabaseAdd {
-    sqlite3 *db;
-    sqlite3_stmt *add_ptr;
-    sqlite3_stmt *no_fire_ptr;
-};
-
 struct SFClusterDatabaseAdd *
 satfire_cluster_db_prepare_to_add(struct SFDatabase *db)
 {
@@ -439,12 +704,6 @@ satfire_cluster_db_add(struct SFClusterDatabaseAdd *stmt, struct SFClusterList *
 /*-------------------------------------------------------------------------------------------------
  *                 Query if data from a file is already in the Cluster Database
  *-----------------------------------------------------------------------------------------------*/
-struct SFClusterDatabaseQueryPresent {
-    sqlite3 *db;
-    sqlite3_stmt *count_stmt;
-    sqlite3_stmt *no_fire_stmt;
-};
-
 struct SFClusterDatabaseQueryPresent *
 satfire_cluster_db_prepare_to_query_present(struct SFDatabase *db)
 {
@@ -582,24 +841,6 @@ ERR_CLEANUP:
 /*-------------------------------------------------------------------------------------------------
  *                            Query rows from the Cluster Database
  *-----------------------------------------------------------------------------------------------*/
-struct SFClusterDatabaseQueryRows {
-    sqlite3 *db;
-    sqlite3_stmt *row_stmt;
-};
-
-struct SFClusterRow {
-    time_t start;
-    time_t end;
-    double power;
-    double max_temperature;
-    double area;
-    double scan_angle;
-    struct SFCoord centroid;
-    enum SFSector sector;
-    enum SFSatellite sat;
-    struct SFPixelList *pixels;
-};
-
 struct SFClusterDatabaseQueryRows *
 satfire_cluster_db_query_rows(struct SFDatabase *db, enum SFSatellite const sat,
                               enum SFSector const sector, time_t const start, time_t const end,
@@ -851,9 +1092,6 @@ CLEAN_UP:
 /*-------------------------------------------------------------------------------------------------
  *                             Add Rows to the Fires Database
  *-----------------------------------------------------------------------------------------------*/
-struct SFFiresDatabaseAdd {
-};
-
 SFFiresDatabaseAddH
 satfire_fires_db_prepare_to_add(SFDatabaseH db)
 {
@@ -877,3 +1115,4 @@ satfire_fires_db_add(SFFiresDatabaseAddH stmt, struct SFWildfire *fire)
     assert(false);
     return 0;
 }
+*/

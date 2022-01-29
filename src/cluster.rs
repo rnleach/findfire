@@ -1,3 +1,88 @@
+use crate::{
+    pixel::PixelList,
+    satellite::{Satellite, Sector},
+};
+use chrono::NaiveDateTime;
+
+/** Represents a spatially contiguous cluster of [Pixel] objects.
+ *
+ * This also contains the aggregate properties of the cluster such as the total power of all the
+ * constituent [Pixel]s, the total area, and the temperature of the hottest [Pixel] in the cluster.
+ *
+ * It should be noted that a power, area, and temperature are not analyzed for every [Pixel], so
+ * the aggregate properties only aggregate these paramters for the [Pixel]s that report values.
+ */
+pub struct Cluster {
+    /// Total (sum) of the fire power of the points in the cluster in megawatts.
+    power: f64,
+    /// Total (sum) of the fire area of the points in the cluster with area in square meters.
+    area: f64,
+    /// Maximum temperature of all the pixels in the cluster in Kelvin.
+    max_temp: f64,
+    /// The maximum scan angle of any point in this cluster
+    max_scan_angle: f64,
+    /// Pixels making up the cluster.
+    pixels: PixelList,
+}
+
+/** A collection of [Cluster]s.
+ *
+ * This collection stores a list of [Cluster]s that are related. Specifically, they all come from
+ * the same scan, or image. That means they share common scan start and end times, they come from
+ * the same satellite, and they come from the same scan sector.
+ */
+pub struct ClusterList {
+    satellite: Satellite,
+    sector: Sector,
+    /// Start time of the scan.
+    start: NaiveDateTime,
+    /// End time of the scan
+    end: NaiveDateTime,
+    /// List of [Cluster] objects associated with the above metadata.
+    clusters: Vec<Cluster>,
+}
+
+/*
+
+
+/*-------------------------------------------------------------------------------------------------
+                                                 Cluster
+-------------------------------------------------------------------------------------------------*/
+/** Create a new Cluster. */
+struct SFCluster *satfire_cluster_new(void);
+
+/** Cleanup a Cluster. */
+void satfire_cluster_destroy(struct SFCluster **cluster);
+
+/** Create a deep copy of a Cluster. */
+struct SFCluster *satfire_cluster_copy(struct SFCluster const *cluster);
+
+/** Get the total power of all pixels in the Cluster, megawatts. */
+double satfire_cluster_total_power(struct SFCluster const *cluster);
+
+/** Get the total fire area of all pixels in the Cluster that had an area in the file, square
+ * meters. */
+double satfire_cluster_total_area(struct SFCluster const *cluster);
+
+/** Get the max fire temperature of all pixels in the Cluster that had a temperature in the file,
+ * Kelvin. */
+double satfire_cluster_max_temperature(struct SFCluster const *cluster);
+
+/** Get the max scan angle of any pixel in this cluster. */
+double satfire_cluster_max_scan_angle(struct SFCluster const *cluster);
+
+/** Get the number of SFPixels in a Cluster. */
+unsigned int satfire_cluster_pixel_count(struct SFCluster const *cluster);
+
+/** Get access to the pixels in the cluster. */
+const struct SFPixelList *satfire_cluster_pixels(struct SFCluster const *cluster);
+
+/** Get the centroid of a cluster. */
+struct SFCoord satfire_cluster_centroid(struct SFCluster const *cluster);
+
+/** Compare Cluster objects for sorting in descending order of power. */
+int satfire_cluster_descending_power_compare(const void *ap, const void *bp);
+
 #include "satfire.h"
 
 #include <assert.h>
@@ -10,21 +95,111 @@
 extern char const *out_of_memory;
 
 /*-------------------------------------------------------------------------------------------------
+                                               ClusterList
+-------------------------------------------------------------------------------------------------*/
+/**
+ * \struct SFClusterList
+ * \brief Keep a cluster list with metadata about the file it was derived from.
+ */
+struct SFClusterList;
+
+/**
+ * \brief Analyze a file and return a ClusterList.
+ *
+ * The metadata is gleaned from the file name, so this program relies on the current naming
+ * conventions of the NOAA big data program.
+ *
+ *  \param full_path is the path to the file to analyze.
+ */
+struct SFClusterList *satfire_cluster_list_from_file(char const *full_path);
+
+/**
+ * \brief Clean up a ClusterList object.
+ *
+ * After this function, the value pointed to by \a list will be set to \c 0 or \c NULL.
+ */
+void satfire_cluster_list_destroy(struct SFClusterList **list);
+
+/** \brief Get the satellite sector.  */
+enum SFSector satfire_cluster_list_sector(struct SFClusterList *list);
+
+/** \brief Get the name of the satellite. */
+enum SFSatellite satfire_cluster_list_satellite(struct SFClusterList *list);
+
+/** Get the start time of the scan. */
+time_t satfire_cluster_list_scan_start(struct SFClusterList *list);
+
+/** Get the end time of the scan. */
+time_t satfire_cluster_list_scan_end(struct SFClusterList *list);
+
+/** Error status from creating the ClusterList.
+ *
+ * This will always be false unless there was an error creating the ClusterList. In that case the
+ * satfire_cluster_list_clusters() function will return \c 0 or \c NULL and the
+ * satfire_cluster_list_error_msg() function will return a message as to the source of the error.
+ */
+bool satfire_cluster_list_error(struct SFClusterList *list);
+
+/** The error message associated with the ClusterList.
+ *
+ * This is a static string determined at compile time and should not be freed.
+ */
+const char *satfire_cluster_list_error_msg(struct SFClusterList *list);
+
+/** Get the Clusters.
+ *
+ * The \c GArray holds pointers to the Cluster objects.
+ */
+GArray *satfire_cluster_list_clusters(struct SFClusterList *list);
+
+/** \brief Filter the ClusterList to only include fires with their centroid in the BoundingBox.
+ *
+ * \returns NULL on error or a reference to the same \a list that was passed in.
+ */
+struct SFClusterList *satfire_cluster_list_filter_box(struct SFClusterList *list,
+                                                      struct SFBoundingBox box);
+
+/** \brief Filter the ClusterList to only include fires with their maximum scan angle below a
+ * threshold value.
+ *
+ * \returns NULL on error or a reference to the same \a list that was passed in.
+ */
+struct SFClusterList *satfire_cluster_list_filter_scan_angle(struct SFClusterList *list,
+                                                             double max_scan_angle);
+
+/** \brief Filter the ClusterList to only include fires for which the provided filter function
+ * returns \c true.
+ *
+ * \returns NULL on error or a reference to the same \a list that was passed in. It is important to
+ * reassign the provided \a list to the return value of this function in case a reallocation moves
+ * the pointer.
+ */
+struct SFClusterList *satfire_cluster_list_filter(struct SFClusterList *list,
+                                                  bool (*filter)(struct SFCluster *clust));
+
+/**
+ * \brief Parse the file name and find the scan start time.
+ */
+char const *satfire_cluster_find_start_time(char const *fname);
+
+/**
+ * \brief Parse the file name and find the scan end time.
+ */
+char const *satfire_cluster_find_end_time(char const *fname);
+
+/**
+ * \brief Get the number of items in the ClusterList.
+ */
+unsigned int satfire_cluster_list_length(struct SFClusterList *list);
+
+/**
+ * \brief Get the total fire power of all the clusters in this list.
+ */
+double satfire_cluster_list_total_power(struct SFClusterList *list);
+
+/*-------------------------------------------------------------------------------------------------
                                                  Cluster
 -------------------------------------------------------------------------------------------------*/
-struct SFCluster {
-    /// Total (sum) of the fire power of the points in the cluster in megawatts.
-    double power;
-    /// Total (sum) of the fire area of the points in the cluster with area in square meters.
-    double area;
-    /// Maximum temperature of all the pixels in the cluster in Kelvin.
-    double max_temp;
-    /// The maximum scan angle of any point in this cluster
-    double max_scan_angle;
-    /// Pixels making up the cluster.
-    struct SFPixelList *pixels;
-};
-
 struct SFCluster *
 satfire_cluster_new(void)
 {
@@ -151,16 +326,6 @@ satfire_cluster_descending_power_compare(const void *ap, const void *bp)
 /*-------------------------------------------------------------------------------------------------
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/
-struct SFClusterList {
-    enum SFSector sector;
-    enum SFSatellite satellite;
-    time_t start;     /**< Start time of the scan. */
-    time_t end;       /**< End time of the scan*/
-    GArray *clusters; /**< List of struct SFCluster objects associated with the above metadata. */
-    char *err_msg;    /**< Error message. */
-    bool error;       /**< Error flag. False indicates no error. */
-};
-
 void
 satfire_cluster_list_destroy(struct SFClusterList **list)
 {
@@ -468,3 +633,4 @@ satfire_cluster_list_total_power(struct SFClusterList *list)
 
     return sum;
 }
+*/
