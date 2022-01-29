@@ -1,3 +1,10 @@
+
+fn main() {
+    println!("Hello world.");
+}
+
+
+/*
 /** \file connectfire.c
  * \brief Create several time series of fires by temporally connecting clusters (from findfire.c).
  *
@@ -394,3 +401,4 @@ main(int argc, char *argv[argc + 1])
 
     return EXIT_SUCCESS;
 }
+*/

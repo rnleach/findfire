@@ -1,3 +1,9 @@
+
+fn main() {
+    println!("Hello world.");
+}
+
+/*
 /** \file showfire.c
  * \brief Export clusters into a KML file.
  *
@@ -299,3 +305,4 @@ main(int argc, char *argv[argc + 1])
 
     return EXIT_SUCCESS;
 }
+*/

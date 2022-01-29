@@ -1,3 +1,9 @@
+
+fn main() {
+    println!("Hello world.");
+}
+
+/*
 /** \file findfire.c
  * \brief Group individual satellite pixels showing wildfire into connected clusters.
  *
@@ -1032,3 +1038,4 @@ CLEANUP_AND_EXIT:
 
     return rc;
 }
+*/
