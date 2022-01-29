@@ -16,6 +16,7 @@ pub use satellite::{Satellite, Sector};
 mod cluster;
 mod database;
 mod fire;
+mod firesatimage;
 mod geo;
 mod pixel;
 mod satellite;
