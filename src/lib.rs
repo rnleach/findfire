@@ -18,5 +18,6 @@ mod database;
 mod fire;
 mod firesatimage;
 mod geo;
+mod kml;
 mod pixel;
 mod satellite;
