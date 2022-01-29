@@ -1,215 +1,194 @@
-#include "sf_util.h"
+use crate::geo::Coord;
 
-#include <assert.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <tgmath.h>
+/// The coordinates describing the area of a pixel viewed from a GOES satellite.
+pub struct Pixel {
+    /// The upper left (northwest) corner point of the pixel
+    ul: Coord,
+    /// The lower left (southwest) corner point of the pixel
+    ll: Coord,
+    /// The lower right (southeast) corner point of the pixel.
+    lr: Coord,
+    /// The upper right (northeast) corner point of the pixel.
+    ur: Coord,
+    /// The radiative power in MegaWatts in this pixel.
+    power: f64,
+    /// The estimated area of the pixel covered by the fire in square meters.
+    area: f64,
+    /// The estimated temperature of the fire in K
+    temperature: f64,
+    /// This is the scan angle as measured in the coordinate system of the satellite. The satellite
+    /// measures the x and y positions of a pixel on a grid by the angle each makes with the central
+    /// point which looks at nadir on the Earth. There are two values, an x scan angle and a y scan
+    /// angle. They are combined via the Euclidian norm sqrt(x^2 + y^2) to form the scan_angle.
+    ///
+    /// Constant values of the scan angle form concentric circles around the nadir point on the
+    /// Earth's surface. All points along that line have a very similar (equal if the Earth was a
+    /// sphere) angle between the satellites view and the local zenith. This is a good proxy for
+    /// how much of an edge on vs straight down view, which can be useful for quality control.
+    scan_angle: f64,
+    /// Mask is a code that describes the outcome of the algorithms that characterize a fire point.
+    ///
+    /// See the satfire_satellite_mask_code_to_string() function for reference.
+    mask_flag: i16,
+    /// Data Quality Flag
+    ///
+    /// See the satfire_satellite_dqf_code_to_string() function for reference.
+    data_quality_flag: i16,
+}
 
-#include "satfire.h"
+/// A pixel list stores a list of Pixel objects.
+pub struct PixelList(Vec<Pixel>);
 
-#include "kamel.h"
+/*
+/*-------------------------------------------------------------------------------------------------
+ *                                          SFPixel
+ *-----------------------------------------------------------------------------------------------*/
+/** Calculate the centroid of a SFPixel.
+ *
+ * This function uses an algorithm that assumes the pixel is a quadrilateral, which is enforced
+ * by the definition of the SFPixel type.
+ */
+struct SFCoord satfire_pixel_centroid(struct SFPixel const pxl[static 1]);
+
+/** Tests if these pixels are basically the same pixel in a geographic sense (not including power).
+ *
+ * This compares the four corners of the pixel using the satfire_coord_are_close() function.
+ */
+bool satfire_pixels_approx_equal(struct SFPixel const left[static 1],
+                                 struct SFPixel const right[static 1], double eps);
+
+/** Determine if a coordinate is interior to a pixel.
+ *
+ * Interior means that it is NOT on the boundary. The eps parameter is used by an interanl line
+ * intersection function to detect if the intersection point is very close to an end point.
+ */
+bool satfire_pixel_contains_coord(struct SFPixel const pxl[static 1], struct SFCoord coord,
+                                  double eps);
+
+/** Determine if satellite pixels overlap.
+ *
+ * Overlapping is defined as one pixel having a vertex / corner that is interior to the other one
+ * or as pixels having edges that intersect.
+ *
+ * The eps parameter is used as a parameter for any cases where floating point values need to be
+ * compared. There are a few places in the algorithm where that happens, and if they are within
+ * eps units of each other, they are considered equal.
+ */
+bool satfire_pixels_overlap(struct SFPixel const left[static 1],
+                            struct SFPixel const right[static 1], double eps);
+
+/** Determine if satellite pixels are adjacent.
+ *
+ * Adjacent is defined as having at least one corner that is 'eps' close to a coordinate in the
+ * other. Adjacent pixels may overlap also because satfire_pixels_overlap() uses the eps variable in
+ * determining overlap. However, if there is a large overlap, the pixels aren't adjacent.
+ *
+ * \param left a satellite pixel to check.
+ * \param right the pixel to check against.
+ * \param eps The scale to use for comparison in the same units as the lat and lon.
+ **/
+bool satfire_pixels_are_adjacent(struct SFPixel const left[static 1],
+                                 struct SFPixel const right[static 1], double eps);
+
+/** Determine if satellite pixels are adjacent or overlapping.
+ *
+ * \param left a satellite pixel to check.
+ * \param right the pixel to check against.
+ * \param eps The scale to use for comparison in the same units as the lat and lon.
+ **/
+bool satfire_pixels_are_adjacent_or_overlap(struct SFPixel const left[static 1],
+                                            struct SFPixel const right[static 1], double eps);
 
 /*-------------------------------------------------------------------------------------------------
- *                                    Helper types and functions
+ *                                         SFPixelList
  *-----------------------------------------------------------------------------------------------*/
-struct Line {
-    struct SFCoord start;
-    struct SFCoord end;
-};
+/** Create a new SFPixelList. */
+struct SFPixelList *satfire_pixel_list_new();
 
-struct IntersectResult {
-    struct SFCoord intersection;
-    char const *msg;
-    bool does_intersect;
-    bool intersect_is_endpoints;
-};
+/** Create a new SFPixelList with a given capacity. */
+struct SFPixelList *satfire_pixel_list_new_with_capacity(size_t capacity);
 
-static bool
-line_coord_is_close(struct Line const line, struct SFCoord const coord, double eps)
-{
-    struct SFCoord p0 = coord;
-    struct SFCoord p1 = line.start;
-    struct SFCoord p2 = line.end;
-    double eps2 = eps * eps;
+/** Destroy a SFPixelList.  */
+struct SFPixelList *satfire_pixel_list_destroy(struct SFPixelList plist[static 1]);
 
-    double num = (p2.lon - p1.lon) * (p1.lat - p0.lat) - (p1.lon - p0.lon) * (p2.lat - p1.lat);
-    double denom2 = (p2.lon - p1.lon) * (p2.lon - p1.lon) + (p2.lat - p1.lat) * (p2.lat - p1.lat);
+/** Create a deep copy of the SFPixelList. */
+struct SFPixelList *satfire_pixel_list_copy(struct SFPixelList const *plist);
 
-    return (num * num / denom2) <= eps2;
-}
+/** Append a SFPixel to the list.
+ *
+ * Reallocates the backing array if necessary and returns the new pointer, so always use the return
+ * value as the new list. If the system is running out of memory and the allocation fails, it
+ * aborts the program.
+ *
+ * \return A (potentially new) pointer to the list \param plist.
+ */
+struct SFPixelList *satfire_pixel_list_append(struct SFPixelList list[static 1],
+                                              struct SFPixel const apix[static 1]);
 
-static struct IntersectResult
-lines_intersection(struct Line l1, struct Line l2, double eps)
-{
-    struct IntersectResult result = {.intersection = (struct SFCoord){.lat = NAN, .lon = NAN},
-                                     .does_intersect = false,
-                                     .intersect_is_endpoints = false,
-                                     .msg = "nothing to report"};
+/** Clear the list but keep the memory intact.
+ *
+ * After this call the list is basically in the same state as after calling
+ * satfire_pixel_list_new().
+ */
+struct SFPixelList *satfire_pixel_list_clear(struct SFPixelList list[static 1]);
 
-    // Check if they are nearly co-linear
-    unsigned int num_close = 0;
-    if (line_coord_is_close(l1, l2.start, eps)) {
-        ++num_close;
-    }
-    if (line_coord_is_close(l1, l2.end, eps)) {
-        ++num_close;
-    }
-    if (line_coord_is_close(l2, l1.start, eps)) {
-        ++num_close;
-    }
-    if (line_coord_is_close(l2, l1.end, eps)) {
-        ++num_close;
-    }
-    if (num_close > 1) {
-        result.does_intersect = false;
-        result.msg = "colinear";
-        return result;
-    }
+/** Calculate the centroid of a SFPixelList. */
+struct SFCoord satfire_pixel_list_centroid(struct SFPixelList const list[static 1]);
 
-    double m1 = (l1.end.lat - l1.start.lat) / (l1.end.lon - l1.start.lon);
-    double m2 = (l2.end.lat - l2.start.lat) / (l2.end.lon - l2.start.lon);
+/** Calculate the total power in a SFPixelList, megawatts. */
+double satfire_pixel_list_total_power(struct SFPixelList const list[static 1]);
 
-    double x1 = l1.start.lon;
-    double y1 = l1.start.lat;
-    double x2 = l2.start.lon;
-    double y2 = l2.start.lat;
+/** Calculate the total area in a SFPixelList, square meters. */
+double satfire_pixel_list_total_area(struct SFPixelList const list[static 1]);
 
-    if (m1 == m2 || (isinf(m1) && isinf(m2))) {
-        // NOTE: This also captures colinear cases.
-        result.does_intersect = false;
-        result.msg = "parallel lines";
-        return result;
-    }
+/** Calculate the maximum temperature in a SFPixelList, kelvin. */
+double satfire_pixel_list_max_temperature(struct SFPixelList const list[static 1]);
 
-    double x0 = NAN;
-    double y0 = NAN;
-    if (isinf(m1)) {
-        // l1 is vertical
-        x0 = l1.start.lon;
-        y0 = m2 * (x0 - x2) + y2;
-    } else if (isinf(m2)) {
-        // l2 is vertical
-        x0 = l2.start.lon;
-        y0 = m1 * (x0 - x1) + y1;
-    } else {
-        x0 = (y2 - y1 + m1 * x1 - m2 * x2) / (m1 - m2);
-        y0 = m1 * (x0 - x1) + y1;
-    }
+/** Calculate the maximum scan angle in a SFPixelList, degrees. */
+double satfire_pixel_list_max_scan_angle(struct SFPixelList const list[static 1]);
 
-    result.intersection = (struct SFCoord){.lat = y0, .lon = x0};
-    struct SFCoord intersect = result.intersection; // short-hand
+/** Check to see if these two \ref SFPixelList are adjacent or overlapping. */
+bool satfire_pixel_lists_adjacent_or_overlap(struct SFPixelList const left[static 1],
+                                             struct SFPixelList const right[static 1], double eps);
 
-    if (y0 - fmax(l1.start.lat, l1.end.lat) > eps || fmin(l1.start.lat, l1.end.lat) - y0 > eps ||
-        x0 - fmax(l1.start.lon, l1.end.lon) > eps || fmin(l1.start.lon, l1.end.lon) - x0 > eps) {
-        // Test to make sure we are within the limits of l1
+/** Get a bounding box for this list of pixels. */
+struct SFBoundingBox satfire_pixel_list_bounding_box(struct SFPixelList const list[static 1]);
+/*-------------------------------------------------------------------------------------------------
+ *                                  Pixel List Binary Format
+ *-----------------------------------------------------------------------------------------------*/
+// The binary formatting is for storing or retrieving from a database.
 
-        result.does_intersect = false;
-        result.msg = "intersection point outside line segment";
-    } else if (y0 - fmax(l2.start.lat, l2.end.lat) > eps ||
-               fmin(l2.start.lat, l2.end.lat) - y0 > eps ||
-               x0 - fmax(l2.start.lon, l2.end.lon) > eps ||
-               fmin(l2.start.lon, l2.end.lon) - x0 > eps) {
-        // Test to make sure we are within the limits of l2
+/** Calculate the amount of space needed in a buffer to encode a SFPixelList into binary. */
+size_t satfire_pixel_list_binary_serialize_buffer_size(struct SFPixelList const plist[static 1]);
 
-        result.does_intersect = false;
-        result.msg = "intersection point outside line segment";
-    } else {
-        result.does_intersect = true;
+/** Encode the SFPixelList into a binary format suitable for storing in a database.
+ *
+ * At this time it doesn't support a portable format, meaning no corrections are made for
+ * endianness or any padding in the array.
+ *
+ * \return The number of bytes written.
+ */
+size_t satfire_pixel_list_binary_serialize(struct SFPixelList const plist[static 1],
+                                           size_t buf_size, unsigned char buffer[buf_size]);
 
-        bool is_l1_endpoint = satfire_coord_are_close(intersect, l1.start, eps) ||
-                              satfire_coord_are_close(intersect, l1.end, eps);
-
-        bool is_l2_endpoint = satfire_coord_are_close(intersect, l2.start, eps) ||
-                              satfire_coord_are_close(intersect, l2.end, eps);
-
-        if (is_l1_endpoint && is_l2_endpoint) {
-            result.intersect_is_endpoints = true;
-        }
-    }
-
-    return result;
-}
-
-static struct SFCoord
-triangle_centroid(struct SFCoord v1, struct SFCoord v2, struct SFCoord v3)
-{
-    double avg_lat = (v1.lat + v2.lat + v3.lat) / 3.0;
-    double avg_lon = (v1.lon + v2.lon + v3.lon) / 3.0;
-
-    return (struct SFCoord){.lat = avg_lat, .lon = avg_lon};
-}
+/** Deserialize an array of bytes into a SFPixelList.
+ *
+ * \return an allocated SFPixelList that should be cleaned up with satfire_pixel_list_destroy(). In
+ * the event of an error, it returns NULL.
+ */
+struct SFPixelList *
+satfire_pixel_list_binary_deserialize(unsigned char const buffer[static sizeof(size_t)]);
 
 /*-------------------------------------------------------------------------------------------------
- *                                       BoundingBox
+ *                                         KML Export
  *-----------------------------------------------------------------------------------------------*/
-bool
-satfire_bounding_box_contains_coord(struct SFBoundingBox const box, struct SFCoord const coord,
-                                    double eps)
-{
-    bool lon_in_range = (coord.lon - box.ur.lon) < eps && (coord.lon - box.ll.lon) > -eps;
-    bool lat_in_range = (coord.lat - box.ur.lat) < eps && (coord.lat - box.ll.lat) > -eps;
-
-    return lon_in_range && lat_in_range;
-}
-
-bool
-satfire_bounding_boxes_overlap(struct SFBoundingBox const *left, struct SFBoundingBox const *right,
-                               double eps)
-{
-    assert(left);
-    assert(right);
-
-    if (satfire_bounding_box_contains_coord(*left, right->ll, eps) ||
-        satfire_bounding_box_contains_coord(*left, right->ur, eps)) {
-        return true;
-    }
-
-    if (satfire_bounding_box_contains_coord(*right, left->ll, eps) ||
-        satfire_bounding_box_contains_coord(*right, left->ur, eps)) {
-        return true;
-    }
-
-    return false;
-}
-
-static bool
-bounding_boxes_overlap(struct SFBoundingBox const left, struct SFBoundingBox const right,
-                       double eps)
-{
-    struct SFCoord right_coords[4] = {right.ll, right.ur,
-                                      (struct SFCoord){.lat = right.ll.lat, .lon = right.ur.lon},
-                                      (struct SFCoord){.lat = right.ur.lat, .lon = right.ll.lon}};
-
-    struct SFCoord left_coords[4] = {left.ll, left.ur,
-                                     (struct SFCoord){.lat = left.ll.lat, .lon = left.ur.lon},
-                                     (struct SFCoord){.lat = left.ur.lat, .lon = left.ll.lon}};
-
-    for (unsigned int i = 0; i < 4; ++i) {
-        if (satfire_bounding_box_contains_coord(left, right_coords[i], eps)) {
-            return true;
-        }
-
-        if (satfire_bounding_box_contains_coord(right, left_coords[i], eps)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-/*-------------------------------------------------------------------------------------------------
- *                                         Coordinates
- *-----------------------------------------------------------------------------------------------*/
-bool
-satfire_coord_are_close(struct SFCoord left, struct SFCoord right, double eps)
-{
-    double lat_diff = left.lat - right.lat;
-    double lon_diff = left.lon - right.lon;
-    double distance_squared = lat_diff * lat_diff + lon_diff * lon_diff;
-
-    return distance_squared <= (eps * eps);
-}
+/** Write out a pixel list in KML format.
+ *
+ * This will print out a multigeometry KML element. It should be composed as part of a function
+ * that outputs a KML file where that higher function adds style information and the rest of the
+ * document.
+ */
+void satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1]);
 
 /*-------------------------------------------------------------------------------------------------
  *                                         SatPixels
@@ -878,3 +857,4 @@ satfire_pixel_list_kml_write(FILE *strm, struct SFPixelList const plist[static 1
 
     return;
 }
+*/

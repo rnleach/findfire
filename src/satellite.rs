@@ -1,10 +1,25 @@
-#include "satfire.h"
+/** The GOES satellites this library works with. */
+pub enum Satellite {
+    /// GOES-16 (formerly GOES-R), or commonly known as GOES East
+    G16,
+    /// GOES-17 (formerly GOES-S), or commonly known as GOES West
+    G17,
+}
 
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+/** The satellite scan sectors this library recognizes. */
+pub enum Sector {
+    /// This is the full disk sector that includes the full viewable disk of the Earth.
+    FULL,
+    /// The Continental U.S. sector, which actually includes much of the U.S on both satellites.
+    CONUS,
+    /// Meso-sector 1, a floating sector with 1 minute imagery updates.
+    MESO1,
+    /// Meso-sector 2, a floating sector with 1 minute imagery updates.
+    MESO2,
+}
 
+/*
+/** \brief Get a string representing the name of the satellite. */
 char const *
 satfire_satellite_name(enum SFSatellite const sat)
 {
@@ -23,6 +38,11 @@ satfire_satellite_name(enum SFSatellite const sat)
     }
 }
 
+/** \brief Scan the string for the occurrence of a satellite name and return the first one found.
+ *
+ * \returns SFSatellite that corresponds to the first satellite name found, or
+ * SATFIRE_SATELLITE_NONE if none was found.
+ */
 enum SFSatellite
 satfire_satellite_string_contains_satellite(char const *str)
 {
@@ -39,6 +59,7 @@ satfire_satellite_string_contains_satellite(char const *str)
     return SATFIRE_SATELLITE_NONE;
 }
 
+/** \brief Get the earliest operational date for the satellite. */
 time_t
 satfire_satellite_operational(enum SFSatellite const sat)
 {
@@ -72,6 +93,7 @@ satfire_satellite_operational(enum SFSatellite const sat)
     return timegm(target);
 }
 
+/** \brief Get a string representing the sector. */
 char const *
 satfire_sector_name(enum SFSector const sector)
 {
@@ -95,6 +117,11 @@ satfire_sector_name(enum SFSector const sector)
     }
 }
 
+/** \brief Scan the string for the occurrence of a sector name and return the first one found.
+ *
+ * \returnsSFSector that corresponds to the first sector name found, or SATFIRE_SECTOR_NONE
+ * if none was found.
+ */
 enum SFSector
 satfire_sector_string_contains_sector(char const *str)
 {
@@ -125,6 +152,12 @@ satfire_sector_string_contains_sector(char const *str)
     return SATFIRE_SECTOR_NONE;
 }
 
+/** \brief Translate a mask code to a string.
+ *
+ * Mask codes are a form of metadata that describe each pixel's quality control characteristics.
+ * These codes were taken from table 5.19.6.1-1 of the GOES-R SERIES PRODUCT DEFINITION AND USERS’
+ * GUIDE retrieved December 10th, 2021 from https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
+ */
 char const *
 satfire_satellite_mask_code_to_string(short code)
 {
@@ -230,6 +263,13 @@ satfire_satellite_mask_code_to_string(short code)
     return 0;
 }
 
+/** \brief Translate a data quality flag (DQF) code to a string.
+ *
+ * DQF codes are a simplified version of the mask codes described above that only tell the result
+ * of the quality control analysis.  These codes were taken from table 5.19.6.1-2 of the GOES-R
+ * SERIES PRODUCT DEFINITION AND USERS’ GUIDE retrieved December 10th, 2021 from
+ * https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
+ */
 char const *
 satfire_satellite_dqf_code_to_string(signed short code)
 {
@@ -254,3 +294,4 @@ satfire_satellite_dqf_code_to_string(signed short code)
         return "unknown";
     }
 }
+*/
