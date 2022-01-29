@@ -1,3 +1,4 @@
+/*
 #include "../src/satfire.h"
 
 #include <float.h>
@@ -648,3 +649,4 @@ main(int argc, char *argv[static 1])
     //
     return g_test_run();
 }
+*/
