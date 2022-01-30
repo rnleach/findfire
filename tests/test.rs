@@ -1,32 +1,4 @@
 /*
-#include "../src/satfire.h"
-
-#include <float.h>
-#include <locale.h>
-#include <stdbool.h>
-
-#include <glib.h>
-
-/*-------------------------------------------------------------------------------------------------
- *
- *                                      Tests for geo.c
- *
- *-----------------------------------------------------------------------------------------------*/
-
-// ------------------------------- Tests for the Coord type ---------------------------------------
-static void
-test_satfire_coord_are_close(void)
-{
-    struct SFCoord left = {.lat = 45.5, .lon = -120.0};
-    struct SFCoord right = {.lat = 45.5000002, .lon = -120.0000002};
-
-    g_assert_true(satfire_coord_are_close(left, left, 1.0e-6));
-    g_assert_true(satfire_coord_are_close(right, right, 1.0e-6));
-    g_assert_true(satfire_coord_are_close(left, right, 1.0e-6));
-
-    g_assert_false(satfire_coord_are_close(left, right, 1.0e-8));
-}
-
 // ----------------------------- Tests for the SatPixel type --------------------------------------
 
 static void
@@ -611,42 +583,5 @@ satfire_pixel_list_test_binary_round_trip(struct SFPixelListFixture fixture[stat
 
     free(buffer);
     decoded = satfire_pixel_list_destroy(decoded);
-}
-/*-------------------------------------------------------------------------------------------------
- *
- *                                      Main Test Runner
- *
- *-----------------------------------------------------------------------------------------------*/
-int
-main(int argc, char *argv[static 1])
-{
-    setlocale(LC_ALL, "");
-
-    g_test_init(&argc, &argv, NULL);
-
-    //
-    // geo.c
-    //
-
-    // Coord
-    g_test_add_func("/geo/coordinates/satfire_coord_are_close", test_satfire_coord_are_close);
-
-    // SatPixel
-    g_test_add_func("/geo/sat_pixel/satfire_pixel_centroid", test_satfire_pixel_centroid);
-    g_test_add_func("/geo/sat_pixel/satfire_pixels_approx_equal", test_satfire_pixels_approx_equal);
-    g_test_add_func("/geo/sat_pixel/satfire_pixel_contains_coord",
-                    test_satfire_pixel_contains_coord);
-    g_test_add_func("/geo/sat_pixel/satfire_pixels_overlap", test_satfire_pixels_overlap);
-    g_test_add_func("/geo/sat_pixel/satfire_pixels_are_adjacent", test_satfire_pixels_are_adjacent);
-
-    // PixelList
-    g_test_add("/geo/pixel_list/satfire_pixel_list_test_binary_round_trip",
-               struct SFPixelListFixture, 0, satfire_pixel_list_test_setup,
-               satfire_pixel_list_test_binary_round_trip, satfire_pixel_list_test_teaddown);
-
-    //
-    // Run tests
-    //
-    return g_test_run();
 }
 */

@@ -237,3 +237,24 @@ pub(crate) struct IntersectResult {
     intersection: Coord,
     intersect_is_endpoints: bool,
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_coord_are_close()
+    {
+        let left = Coord{lat : 45.5, lon : -120.0};
+        let right = Coord{lat : 45.5000002, lon : -120.0000002};
+
+        assert!(left.is_close(left, 1.0e-6));
+        assert!(right.is_close(right, 1.0e-6));
+        assert!(left.is_close(right, 1.0e-6));
+        assert!(right.is_close(left, 1.0e-6));
+
+        assert!(!left.is_close(right, 1.0e-8));
+    }
+
+
+}
