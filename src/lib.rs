@@ -10,7 +10,7 @@ pub use database::{
 pub use fire::{Fire, FireList};
 pub use geo::{BoundingBox, Coord, Geo};
 pub use pixel::{Pixel, PixelList};
-pub use satellite::{Satellite, Sector};
+pub use satellite::{DataQualityFlagCode, MaskCode, Satellite, Sector};
 
 // Private API
 mod cluster;

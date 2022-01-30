@@ -1,4 +1,9 @@
+/*! Contains all the information about satellites. */
+
+use chrono::{NaiveDate, NaiveDateTime};
+
 /** The GOES satellites this library works with. */
+#[derive(Debug, Clone, Copy)]
 pub enum Satellite {
     /// GOES-16 (formerly GOES-R), or commonly known as GOES East
     G16,
@@ -6,7 +11,48 @@ pub enum Satellite {
     G17,
 }
 
+impl Satellite {
+    /// Get a string representing the name of the satellite.
+    pub fn name(&self) -> &'static str {
+        use Satellite::*;
+
+        match self {
+            G16 => "G16",
+            G17 => "G17",
+        }
+    }
+
+    /// Scan the string for the occurence of a satellite name.
+    pub fn string_contains_satellite(string: &str) -> Option<Satellite> {
+        use Satellite::*;
+
+        let all_sats = [G16, G17];
+        for sat in &all_sats {
+            if string.contains(sat.name()) {
+                return Some(*sat);
+            }
+        }
+
+        None
+    }
+
+    /// Get the date and time (in UTC) that the satellite became operational.
+    ///
+    /// This is the time that the satellite was officially declared operational after all checkouts
+    /// and operational testing. It may have started sending data before this date, but it may not
+    /// be trustworthy data.
+    pub fn operational(&self) -> NaiveDateTime {
+        use Satellite::*;
+
+        match self {
+            G16 => NaiveDate::from_ymd(2017, 12, 18).and_hms(12, 0, 0),
+            G17 => NaiveDate::from_ymd(2019, 2, 12).and_hms(12, 0, 0),
+        }
+    }
+}
+
 /** The satellite scan sectors this library recognizes. */
+#[derive(Debug, Clone, Copy)]
 pub enum Sector {
     /// This is the full disk sector that includes the full viewable disk of the Earth.
     FULL,
@@ -18,280 +64,133 @@ pub enum Sector {
     MESO2,
 }
 
-/*
-/** \brief Get a string representing the name of the satellite. */
-char const *
-satfire_satellite_name(enum SFSatellite const sat)
-{
-    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17 ||
-           sat == SATFIRE_SATELLITE_NONE);
+impl Sector {
+    /// Get a string representing the name of the sector.
+    ///
+    /// This is also the abbreviation used for the sector in the NOAA Big Data file naming scheme
+    /// for GOES data.
+    pub fn name(&self) -> &'static str {
+        use Sector::*;
 
-    switch (sat) {
-    case SATFIRE_SATELLITE_G16:
-        return "G16";
-    case SATFIRE_SATELLITE_G17:
-        return "G17";
-    case SATFIRE_SATELLITE_NONE:
-        return "NONE";
-    default:
-        exit(EXIT_FAILURE);
+        match self {
+            FULL => "FDCF",
+            CONUS => "FDCC",
+            MESO1 => "FDCM1",
+            MESO2 => "FDCM2",
+        }
+    }
+
+    /// Scan the string for the occurrence of a sector name and return first one found.
+    ///
+    /// Note that in some cases either of the meso-sectors can be represented by "FDCM", such as in
+    /// the directory structure where both meso-sector files are stored in the same directory. So
+    /// "FDCM" is the last string that the function will try to match and it will just return
+    /// Sector::FDCM1 in that case.
+    pub fn string_contains_sector(string: &str) -> Option<Sector> {
+        use Sector::*;
+
+        let all_sectors = [FULL, CONUS, MESO1, MESO2];
+        for sector in all_sectors {
+            if string.contains(sector.name()) {
+                return Some(sector);
+            }
+        }
+
+        if string.contains("FDCM") {
+            Some(MESO1)
+        } else {
+            None
+        }
     }
 }
 
-/** \brief Scan the string for the occurrence of a satellite name and return the first one found.
- *
- * \returns SFSatellite that corresponds to the first satellite name found, or
- * SATFIRE_SATELLITE_NONE if none was found.
- */
-enum SFSatellite
-satfire_satellite_string_contains_satellite(char const *str)
-{
-    assert(str);
+/// Represents a code from the Mask field of the NetCDF files.
+#[derive(Debug, Clone, Copy)]
+pub struct MaskCode(i16);
 
-    if (strstr(str, satfire_satellite_name(SATFIRE_SATELLITE_G16))) {
-        return SATFIRE_SATELLITE_G16;
-    }
-
-    if (strstr(str, satfire_satellite_name(SATFIRE_SATELLITE_G17))) {
-        return SATFIRE_SATELLITE_G17;
-    }
-
-    return SATFIRE_SATELLITE_NONE;
-}
-
-/** \brief Get the earliest operational date for the satellite. */
-time_t
-satfire_satellite_operational(enum SFSatellite const sat)
-{
-    assert(sat == SATFIRE_SATELLITE_G16 || sat == SATFIRE_SATELLITE_G17);
-
-    static struct tm G16_Oper = {.tm_sec = 0,
-                                 .tm_min = 0,
-                                 .tm_hour = 12,
-                                 .tm_mday = 18,
-                                 .tm_mon = 11,
-                                 .tm_year = 2017 - 1900};
-
-    static struct tm G17_Oper = {.tm_sec = 0,
-                                 .tm_min = 0,
-                                 .tm_hour = 12,
-                                 .tm_mday = 12,
-                                 .tm_mon = 1,
-                                 .tm_year = 2019 - 1900};
-    struct tm *target = 0;
-    switch (sat) {
-    case SATFIRE_SATELLITE_G16:
-        target = &G16_Oper;
-        break;
-    case SATFIRE_SATELLITE_G17:
-        target = &G17_Oper;
-        break;
-    default:
-        exit(EXIT_FAILURE);
-    }
-
-    return timegm(target);
-}
-
-/** \brief Get a string representing the sector. */
-char const *
-satfire_sector_name(enum SFSector const sector)
-{
-    assert(sector == SATFIRE_SECTOR_FULL || sector == SATFIRE_SECTOR_CONUS ||
-           sector == SATFIRE_SECTOR_MESO1 || sector == SATFIRE_SECTOR_MESO2 ||
-           sector == SATFIRE_SECTOR_NONE);
-
-    switch (sector) {
-    case SATFIRE_SECTOR_FULL:
-        return "FDCF";
-    case SATFIRE_SECTOR_CONUS:
-        return "FDCC";
-    case SATFIRE_SECTOR_MESO1:
-        return "FDCM1";
-    case SATFIRE_SECTOR_MESO2:
-        return "FDCM2";
-    case SATFIRE_SECTOR_NONE:
-        return "NONE";
-    default:
-        exit(EXIT_FAILURE);
+impl MaskCode {
+    /// Translate a mask code to a string.
+    ///
+    /// Mask codes are a form of metadata that describe each pixel's quality control characteristics.
+    /// These codes were taken from table 5.19.6.1-1 of the
+    /// [GOES-R SERIES PRODUCT DEFINITION AND USERS’ GUIDE][doc_url] retrieved December 10th, 2021.
+    ///
+    /// [doc_url]: https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
+    pub fn as_str(self) -> &'static str {
+        match self.0 {
+            -99 => "missing",
+            0 => "unprocessed_pixel",
+            10 => "good_fire_pixel",
+            11 => "saturated_fire_pixel",
+            12 => "cloud_contaminated_fire_pixel",
+            13 => "high_probability_fire_pixel",
+            14 => "medium_probability_fire_pixel",
+            15 => "low_probability_fire_pixel",
+            30 => "temporally_filtered_good_fire_pixel",
+            31 => "temporally_filtered_saturated_fire_pixel",
+            32 => "temporally_filtered_cloud_contaminated_fire_pixel",
+            33 => "temporally_filtered_high_probability_fire_pixel",
+            34 => "temporally_filtered_medium_probability_fire_pixel",
+            35 => "temporally_filtered_low_probability_fire_pixel",
+            40 => "off_earth_pixel",
+            50 => "LZA_block_out_zone",
+            60 => "SZA_or_glint_angle_block_out_zone",
+            100 => "processed_no_fire_pixel",
+            120 => "missing_input_3.89um_pixel",
+            121 => "missing_input_11.19um_pixel",
+            123 => "saturated_input_3.89um_pixel",
+            124 => "saturated_input_11.19um_pixel",
+            125 => "invalid_input_radiance_value",
+            126 => "below_threshold_input_3.89um_pixel",
+            127 => "below_threshold_input_11.19um_pixel",
+            150 => "invalid_ecosystem_UMD_land_cover_type_sea_water_or_MODIS_land_mask_types_or_framework_desert_mask_type_bright_desert",
+            151 => "invalid_ecosystem_USGS_type_sea_water",
+            152 => "invalid_ecosystem_USGS_types_coastline_fringe_or_compound_coastlines",
+            153 => "invalid_ecosystem_USGS_types_inland_water_or_water_and_island_fringe_or_land_and_water_shore_or_land_and_water_rivers",
+            170 => "no_background_value_could_be_computed",
+            180 => "conversion_error_between_BT_and_radiance",
+            182 => "conversion_error_radiance_to_adjusted_BT",
+            185 => "modified_Dozier_technique_bisection_method_invalid_computed_BT",
+            186 => "modifed_Dozier_technique_Newton_method_invalid_computed_radiance",
+            187 => "modifed_Dozier_technique_Newton_method_invalid_computed_fire_brighness_temp",
+            188 => "modifed_Dozier_technique_Newton_method_invalid_computed_fire_area",
+            200 => "cloud_pixel_detected_by_11.19um_threshold_test",
+            201 => "cloud_pixel_detected_by_3.89um_minus_11.19um_threshold_and_freezing_test",
+            205 => "cloud_pixel_detected_by_negative_difference_3.89um_minus_11.19um_threshold_test",
+            210 => "cloud_pixel_detected_by_positive_difference_3.89um_minus_11.19um_threshold_test",
+            215 => "cloud_pixel_detected_by_albedo_threshold_test",
+            220 => "cloud_pixel_detected_by_12.27um_threshold_test",
+            225 => "cloud_pixel_detected_by_negative_difference_11.19um_minus_12.27um_threshold_test",
+            230 => "cloud_pixel_detected_by_positive_difference_11.19um_minus_12.27um_threshold_test",
+            240 => "cloud_edge_pixel_detected_by_along_scan_reflectivity_and_3.89um_threshold_test",
+            245 => "cloud_edge_pixel_detected_by_along_scan_reflectivity_and_albedo_threshold_test",
+            _ => "unknown code",
+        }
     }
 }
 
-/** \brief Scan the string for the occurrence of a sector name and return the first one found.
- *
- * \returnsSFSector that corresponds to the first sector name found, or SATFIRE_SECTOR_NONE
- * if none was found.
- */
-enum SFSector
-satfire_sector_string_contains_sector(char const *str)
-{
-    assert(str);
+/// Represents a code from the DQF (Data Quality Flag) field of the NetCDF file.
+///
+/// DQF codes are a simplified version of the mask codes described above that only tell the result
+/// of the quality control analysis.  These codes were taken from table 5.19.6.1-2 of the
+/// [GOES-R SERIES PRODUCT DEFINITION AND USERS’ GUIDE][doc_url] retrieved December 10th, 2021.
+///
+/// [doc_url]: (https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf)
+#[derive(Debug, Clone, Copy)]
+pub struct DataQualityFlagCode(i16);
 
-    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_FULL))) {
-        return SATFIRE_SECTOR_FULL;
-    }
-
-    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_CONUS))) {
-        return SATFIRE_SECTOR_CONUS;
-    }
-
-    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_MESO1))) {
-        return SATFIRE_SECTOR_MESO1;
-    }
-
-    if (strstr(str, satfire_sector_name(SATFIRE_SECTOR_MESO2))) {
-        return SATFIRE_SECTOR_MESO2;
-    }
-
-    // The directory name for mesosector data does not differentiate between mesosector 1 and
-    // mesosector 2, so just assume it contains mesosector one data.
-    if (strstr(str, "FDCM")) {
-        return SATFIRE_SECTOR_MESO1;
-    }
-
-    return SATFIRE_SECTOR_NONE;
-}
-
-/** \brief Translate a mask code to a string.
- *
- * Mask codes are a form of metadata that describe each pixel's quality control characteristics.
- * These codes were taken from table 5.19.6.1-1 of the GOES-R SERIES PRODUCT DEFINITION AND USERS’
- * GUIDE retrieved December 10th, 2021 from https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
- */
-char const *
-satfire_satellite_mask_code_to_string(short code)
-{
-    switch (code) {
-    case -99:
-        return "missing";
-    case 0:
-        return "unprocessed_pixel";
-    case 10:
-        return "good_fire_pixel";
-    case 11:
-        return "saturated_fire_pixel";
-    case 12:
-        return "cloud_contaminated_fire_pixel";
-    case 13:
-        return "high_probability_fire_pixel";
-    case 14:
-        return "medium_probability_fire_pixel";
-    case 15:
-        return "low_probability_fire_pixel";
-    case 30:
-        return "temporally_filtered_good_fire_pixel";
-    case 31:
-        return "temporally_filtered_saturated_fire_pixel";
-    case 32:
-        return "temporally_filtered_cloud_contaminated_fire_pixel";
-    case 33:
-        return "temporally_filtered_high_probability_fire_pixel";
-    case 34:
-        return "temporally_filtered_medium_probability_fire_pixel";
-    case 35:
-        return "temporally_filtered_low_probability_fire_pixel";
-    case 40:
-        return "off_earth_pixel";
-    case 50:
-        return "LZA_block_out_zone";
-    case 60:
-        return "SZA_or_glint_angle_block_out_zone";
-    case 100:
-        return "processed_no_fire_pixel";
-    case 120:
-        return "missing_input_3.89um_pixel";
-    case 121:
-        return "missing_input_11.19um_pixel";
-    case 123:
-        return "saturated_input_3.89um_pixel";
-    case 124:
-        return "saturated_input_11.19um_pixel";
-    case 125:
-        return "invalid_input_radiance_value";
-    case 126:
-        return "below_threshold_input_3.89um_pixel";
-    case 127:
-        return "below_threshold_input_11.19um_pixel";
-    case 150:
-        return "invalid_ecosystem_UMD_land_cover_type_sea_water_or_MODIS_land_mask_types_or_"
-               "framework_desert_mask_type_bright_desert";
-    case 151:
-        return "invalid_ecosystem_USGS_type_sea_water";
-    case 152:
-        return "invalid_ecosystem_USGS_types_coastline_fringe_or_compound_coastlines";
-    case 153:
-        return "invalid_ecosystem_USGS_types_inland_water_or_water_and_island_fringe_or_land_and_"
-               "water_shore_or_land_and_water_rivers";
-    case 170:
-        return "no_background_value_could_be_computed";
-    case 180:
-        return "conversion_error_between_BT_and_radiance";
-    case 182:
-        return "conversion_error_radiance_to_adjusted_BT";
-    case 185:
-        return "modified_Dozier_technique_bisection_method_invalid_computed_BT";
-    case 186:
-        return "modifed_Dozier_technique_Newton_method_invalid_computed_radiance";
-    case 187:
-        return "modifed_Dozier_technique_Newton_method_invalid_computed_fire_brighness_temp";
-    case 188:
-        return "modifed_Dozier_technique_Newton_method_invalid_computed_fire_area";
-    case 200:
-        return "cloud_pixel_detected_by_11.19um_threshold_test";
-    case 201:
-        return "cloud_pixel_detected_by_3.89um_minus_11.19um_threshold_and_freezing_test";
-    case 205:
-        return "cloud_pixel_detected_by_negative_difference_3.89um_minus_11.19um_threshold_test";
-    case 210:
-        return "cloud_pixel_detected_by_positive_difference_3.89um_minus_11.19um_threshold_test";
-    case 215:
-        return "cloud_pixel_detected_by_albedo_threshold_test";
-    case 220:
-        return "cloud_pixel_detected_by_12.27um_threshold_test";
-    case 225:
-        return "cloud_pixel_detected_by_negative_difference_11.19um_minus_12.27um_threshold_test";
-    case 230:
-        return "cloud_pixel_detected_by_positive_difference_11.19um_minus_12.27um_threshold_test";
-    case 240:
-        return "cloud_edge_pixel_detected_by_along_scan_reflectivity_and_3.89um_threshold_test";
-    case 245:
-        return "cloud_edge_pixel_detected_by_along_scan_reflectivity_and_albedo_threshold_test";
-    default:
-        return "unknown code";
-    }
-
-    return 0;
-}
-
-/** \brief Translate a data quality flag (DQF) code to a string.
- *
- * DQF codes are a simplified version of the mask codes described above that only tell the result
- * of the quality control analysis.  These codes were taken from table 5.19.6.1-2 of the GOES-R
- * SERIES PRODUCT DEFINITION AND USERS’ GUIDE retrieved December 10th, 2021 from
- * https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf
- */
-char const *
-satfire_satellite_dqf_code_to_string(signed short code)
-{
-    switch (code) {
-    case 0:
-        return "good_quality_fire_pixel_qf ";
-    case 1:
-        return "good_quality_fire_free_land_pixel_qf ";
-    case 2:
-        return "invalid_due_to_opaque_cloud_pixel_qf ";
-    case 3:
-        return "invalid_due_to_surface_type_or_sunglint_or_LZA_threshold_exceeded_or_off_earth_or_"
-               "missing_input_data_qf ";
-    case 4:
-        return "invalid_due_to_bad_input_data_qf ";
-    case 5:
-        return "invalid_due_to_algorithm_failure_qf";
-    case 255: // Intentional fall through.
-    case -1:
-        return "missing";
-    default:
-        return "unknown";
+impl DataQualityFlagCode {
+    /// Translate a DQF code to a string.
+    pub fn as_str(self) -> &'static str {
+        match self.0 {
+            0 => "good_quality_fire_pixel_qf ",
+            1 => "good_quality_fire_free_land_pixel_qf ",
+            2 => "invalid_due_to_opaque_cloud_pixel_qf ",
+            3 => "invalid_due_to_surface_type_or_sunglint_or_LZA_threshold_exceeded_or_off_earth_or_missing_input_data_qf ",
+            4 => "invalid_due_to_bad_input_data_qf ",
+            5 => "invalid_due_to_algorithm_failure_qf",
+            255 | -1 => "missing",
+            _ => "unknown",
+        }
     }
 }
-*/
