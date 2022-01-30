@@ -2,44 +2,44 @@ use crate::{geo::Coord, pixel::PixelList, satellite::Satellite};
 use chrono::NaiveDateTime;
 
 /**
- * The aggregate properties of a temporally connected group of [Cluster] objects.
+ * The aggregate properties of a temporally connected group of [Cluster](crate::Cluster) objects.
  *
- * While the [Cluster]s that make up a fire may come from any [Sector] of a satellite scan, they
- * must come from the same [Satellite] because of the difficulty associated with the different map
- * projections and parallax. Currently the geo-location of observed [Pixel]s does not take parallax
- * into account. While this is a neglibible issue for low elevation locations considering the
- * resolution of the satellites, for higher elevations it can cause a significant error. Also, for
- * each satellite, the data was reprojected into the exact same projection each time. So every
- * image from a given satellite has the exact same [Pixel] locations on the Earth's surface. As a
- * result, aggregating values for maximum power, area, or temperature is straight forward. If we
- * had to deal with [Pixel]s from different satellites that don't totally overlap, or only
- * partially overlap, it's not straightforward at all how to combine the properties of those
- * [Pixel]s into a common projection.
+ * While the Clusters that make up a fire may come from any [Sector](crate::Sector) of a satellite
+ * scan, they must come from the same [Satellite](crate::Satellite) because of the difficulty 
+ * associated with the different map projections and parallax. Currently the geo-location of an
+ * observed [Pixel](crate::Pixel) does not take parallax into account. While this is a neglibible 
+ * issue for low elevation locations considering the resolution of the satellites, for higher 
+ * elevations it can cause a significant error. Also, for each satellite, the data was reprojected
+ * into the exact same projection each time. So every image from a given satellite has the exact 
+ * same Pixel locations on the Earth's surface. As a result, aggregating values for maximum power, 
+ * area, or temperature is straight forward. If we had to deal with Pixels from different satellites 
+ * that don't totally overlap, or only partially overlap, it's not straightforward at all how to 
+ * combine the properties of those Pixels into a common projection.
  */
 pub struct Fire {
-    /// The scan start time of the first [Cluster] where this fire was detected.
+    /// The scan start time of the first Cluster where this fire was detected.
     first_observed: NaiveDateTime,
-    /// The scan end time of the last [Cluster] where this fire was detected.
+    /// The scan end time of the last Cluster where this fire was detected.
     last_observed: NaiveDateTime,
-    /// The centroid of all the combined [Cluster]s that contributed to this fire.
+    /// The centroid of all the combined Clusters that contributed to this fire.
     centroid: Coord,
-    /// The power of the most powerful [Cluster] that was associated with this fire. Note that
+    /// The power of the most powerful Cluster that was associated with this fire. Note that
     /// several clusters may be associated with a fire at any given scan time, but they might be
     /// spatially separated (e.g. on different ends of the original fire). The powers of those
-    /// different [Cluster]s are NOT combined to come up with a total power for the time. This
-    /// represents the single most powerful [Cluster] aggregated into this fire.
+    /// different Clusters are NOT combined to come up with a total power for the time. This
+    /// represents the single most powerful Cluster aggregated into this fire.
     max_power: f64,
-    /// The maximum temperature of any [Pixel] that was ever associated with this fire.
+    /// The maximum temperature of any Pixel that was ever associated with this fire.
     max_temperature: f64,
     /// An unique ID number for this fire that will be used identify this fire in a database that
-    /// will also be used to associate this fire with [Cluster]s which are a part of it.
+    /// will also be used to associate this fire with Clusters which are a part of it.
     id: u64,
-    /// Each [Pixel] in this contains the maximum power, area, and temperature observed in it's
+    /// Each Pixel in this contains the maximum power, area, and temperature observed in it's
     /// area during the fire. Since all the data for each satellite is projected to a common grid
-    /// before being published online, throughout the life of the fire the [Pixel]s will perfectly
+    /// before being published online, throughout the life of the fire the Pixels will perfectly
     /// overlap. This is kind of a composite of the properties of the fire over it's lifetime.
     area: PixelList,
-    /// The satellite the [Cluster]s that were a part of this fire were observed with.
+    /// The satellite the Clusters that were a part of this fire were observed with.
     sat: Satellite,
 }
 

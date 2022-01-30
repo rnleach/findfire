@@ -4,13 +4,13 @@ use crate::{
 };
 use chrono::NaiveDateTime;
 
-/** Represents a spatially contiguous cluster of [Pixel] objects.
+/** Represents a spatially contiguous cluster of [Pixel](crate::Pixel) objects.
  *
  * This also contains the aggregate properties of the cluster such as the total power of all the
- * constituent [Pixel]s, the total area, and the temperature of the hottest [Pixel] in the cluster.
+ * constituent Pixels, the total area, and the temperature of the hottest Pixel in the cluster.
  *
- * It should be noted that a power, area, and temperature are not analyzed for every [Pixel], so
- * the aggregate properties only aggregate these paramters for the [Pixel]s that report values.
+ * It should be noted that a power, area, and temperature are not analyzed for every Pixel, so
+ * the aggregate properties only aggregate these paramters for the Pixels that report values.
  */
 pub struct Cluster {
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
@@ -25,9 +25,9 @@ pub struct Cluster {
     pixels: PixelList,
 }
 
-/** A collection of [Cluster]s.
+/** A collection of [Cluster](crate::Cluster) objects.
  *
- * This collection stores a list of [Cluster]s that are related. Specifically, they all come from
+ * This collection stores a list of Clusters that are related. Specifically, they all come from
  * the same scan, or image. That means they share common scan start and end times, they come from
  * the same satellite, and they come from the same scan sector.
  */
