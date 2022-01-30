@@ -5,15 +5,15 @@ use chrono::NaiveDateTime;
  * The aggregate properties of a temporally connected group of [Cluster](crate::Cluster) objects.
  *
  * While the Clusters that make up a fire may come from any [Sector](crate::Sector) of a satellite
- * scan, they must come from the same [Satellite](crate::Satellite) because of the difficulty 
+ * scan, they must come from the same [Satellite](crate::Satellite) because of the difficulty
  * associated with the different map projections and parallax. Currently the geo-location of an
- * observed [Pixel](crate::Pixel) does not take parallax into account. While this is a neglibible 
- * issue for low elevation locations considering the resolution of the satellites, for higher 
+ * observed [Pixel](crate::Pixel) does not take parallax into account. While this is a neglibible
+ * issue for low elevation locations considering the resolution of the satellites, for higher
  * elevations it can cause a significant error. Also, for each satellite, the data was reprojected
- * into the exact same projection each time. So every image from a given satellite has the exact 
- * same Pixel locations on the Earth's surface. As a result, aggregating values for maximum power, 
- * area, or temperature is straight forward. If we had to deal with Pixels from different satellites 
- * that don't totally overlap, or only partially overlap, it's not straightforward at all how to 
+ * into the exact same projection each time. So every image from a given satellite has the exact
+ * same Pixel locations on the Earth's surface. As a result, aggregating values for maximum power,
+ * area, or temperature is straight forward. If we had to deal with Pixels from different satellites
+ * that don't totally overlap, or only partially overlap, it's not straightforward at all how to
  * combine the properties of those Pixels into a common projection.
  */
 pub struct Fire {
