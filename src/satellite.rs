@@ -106,7 +106,7 @@ impl Sector {
 
 /// Represents a code from the Mask field of the NetCDF files.
 #[derive(Debug, Clone, Copy)]
-pub struct MaskCode(i16);
+pub struct MaskCode(pub i16);
 
 impl MaskCode {
     /// Translate a mask code to a string.
@@ -177,7 +177,7 @@ impl MaskCode {
 ///
 /// [doc_url]: (https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf)
 #[derive(Debug, Clone, Copy)]
-pub struct DataQualityFlagCode(i16);
+pub struct DataQualityFlagCode(pub i16);
 
 impl DataQualityFlagCode {
     /// Translate a DQF code to a string.
