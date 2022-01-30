@@ -1,423 +1,308 @@
-pub(crate) struct KmlFile {}
+//! Very simple functions for producing KML files specifcally suited to this crate and the programs
+//! that use it.
+//!
+//! This is not a general solution at all, but I opted to create it instead of pulling another
+//! potentially large dependency. I actually did test using the [KML](https://github.com/georust/kml)
+//! crate. However, when generating large KML files, it crashed because it took too much memory. So
+//! for this implementation I'm only implementing the parts I need with a focus on a more streaming
+//! type API. That means the user is responsible for closing all tags.
 
-/*
+use chrono::NaiveDateTime;
+use std::{
+    error::Error,
+    fs::File,
+    io::{BufWriter, Write},
+    path::Path,
+};
 
-/** \file kamel.h
- * \brief Small library for producing KML files.
- *
- * This library is extremely incomplete as it only implements the parts of KML I need to use in my
- * projects. To use this library, copy the kamel.h and kamel.c files into the source directory of
- * your project.
- */
+pub(crate) struct KmlFile(BufWriter<File>);
 
-#include <assert.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <time.h>
+impl KmlFile {
+    /// Open a file for output and start by putting the header out.
+    pub fn start_document<P: AsRef<Path>>(pth: P) -> Result<Self, Box<dyn Error>> {
+        let p = pth.as_ref();
 
-/*-------------------------------------------------------------------------------------------------
- *                            Documents, Folders, Organization.
- *-----------------------------------------------------------------------------------------------*/
-/** \brief Write out a KML header for a file opening the Document element. */
-void kamel_start_document(FILE *output);
+        let f = std::fs::File::open(p)?;
+        let mut buf = BufWriter::new(f);
 
-/** \brief Write out a KML footer for a file closing the Document element. */
-void kamel_end_document(FILE *output);
+        const HEADER: &str = concat!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            r#"<kml xmlns="http://www.opengis.net/kml/2.2">"#,
+            r#"<Document>\n"#
+        );
 
-/** \brief Start a KML folder. */
-void kamel_start_folder(FILE *output, char const *name, char const *description, bool is_open);
+        buf.write_all(HEADER.as_bytes())?;
 
-/** \brief Close a folder element. */
-void kamel_end_folder(FILE *output);
-
-/** \brief Start a Placemark. */
-void kamel_start_placemark(FILE *output, char const *name, char const *description,
-                           char const *style_url);
-
-/** \brief Finish a Placemark. */
-void kamel_end_placemark(FILE *output);
-
-/*-------------------------------------------------------------------------------------------------
- *                                          Style
- *-----------------------------------------------------------------------------------------------*/
-/** Start a style definition. */
-void kamel_start_style(FILE *output, char const *style_id);
-
-/** End a style definition. */
-void kamel_end_style(FILE *output);
-
-/** Create a PolyStyle element.
- *
- * This should only go inside a style element.
- */
-void kamel_poly_style(FILE *output, char const *color, bool filled, bool outlined);
-
-/** Create a IconStyle element.
- *
- * This should only go inside a style element.
- */
-void kamel_icon_style(FILE *output, char const *icon_url, double scale);
-
-/*-------------------------------------------------------------------------------------------------
- *                                          Time
- *-----------------------------------------------------------------------------------------------*/
-/** Create a TimeSpan element. */
-void kamel_timespan(FILE *output, time_t start, time_t end);
-
-/*-------------------------------------------------------------------------------------------------
- *                                       Geometry
- *-----------------------------------------------------------------------------------------------*/
-/** Start a MultiGeometry. */
-void kamel_start_multigeometry(FILE *output);
-
-/** End a MultiGeometry. */
-void kamel_end_multigeometry(FILE *output);
-
-/** Start a Polygon. */
-void kamel_start_polygon(FILE *output, bool extrude, bool tessellate, char const *altitudeMode);
-
-/** End a Polygon. */
-void kamel_end_polygon(FILE *output);
-
-/** Start the polygon outer ring.
- *
- * This should only be used inside a Polygon element.
- */
-void kamel_polygon_start_outer_ring(FILE *output);
-
-/** End the polygon outer ring.
- *
- * This should only be used inside a Polygon element.
- */
-void kamel_polygon_end_outer_ring(FILE *output);
-
-/** Start a LinearRing. */
-void kamel_start_linear_ring(FILE *output);
-
-/** End a LinearRing. */
-void kamel_end_linear_ring(FILE *output);
-
-/** Add a vertex to the LinearRing.  */
-void kamel_linear_ring_add_vertex(FILE *output, double lat, double lon, double z);
-
-/** Write out a KML Point. */
-void kamel_point(FILE *output, double lat, double lon, double z);
-#include "kamel.h"
-
-#include <string.h>
-
-/*
- * Copyright (c) 2021 Ryan Leach
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- */
-
-/*-------------------------------------------------------------------------------------------------
- *                                  Utility Routines
- *-----------------------------------------------------------------------------------------------*/
-static void
-kamel_write_description(FILE *output, char const *description)
-{
-    assert(description);
-    fprintf(output, "<description><![CDATA[%s]]></description>\n", description);
-}
-
-/*-------------------------------------------------------------------------------------------------
- *                            Documents, Folders, Organization.
- *-----------------------------------------------------------------------------------------------*/
-void
-kamel_start_document(FILE *output)
-{
-    assert(output);
-    static char const *header = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n"
-                                "<Document>\n";
-    fputs(header, output);
-    return;
-}
-
-void
-kamel_end_document(FILE *output)
-{
-    assert(output);
-    static char const *footer = "</Document>\n</kml>\n";
-    fputs(footer, output);
-    return;
-}
-
-void
-kamel_start_folder(FILE *output, char const *name, char const *description, bool is_open)
-{
-    assert(output);
-
-    fputs("<Folder>\n", output);
-
-    if (name) {
-        fprintf(output, "<name>%s</name>\n", name);
+        Ok(KmlFile(buf))
     }
 
-    if (description) {
-        kamel_write_description(output, description);
+    /// End the document and close the file.
+    pub fn finish_document(mut self) -> Result<(), Box<dyn Error>> {
+        const FOOTER: &str = r#"</Document>\n</kml>\n"#;
+
+        self.0.write_all(FOOTER.as_bytes())?;
+
+        Ok(())
     }
 
-    if (is_open) {
-        fputs("<open>1</open>\n", output);
+    /// Write a description element to the file.
+    pub fn write_description(&mut self, description: &str) -> Result<(), Box<dyn Error>> {
+        writeln!(
+            self.0,
+            "<description><![CDATA[{}]]></description>",
+            description
+        )?;
+        Ok(())
     }
 
-    return;
-}
+    /// Start a KML folder.
+    pub fn start_folder(
+        &mut self,
+        name: Option<&str>,
+        description: Option<&str>,
+        is_open: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("<Folder>\n".as_bytes())?;
 
-void
-kamel_end_folder(FILE *output)
-{
-    assert(output);
+        if let Some(name) = name {
+            writeln!(self.0, "<name>{}</name>", name)?;
+        }
 
-    fputs("</Folder>\n", output);
+        if let Some(description) = description {
+            self.write_description(description)?;
+        }
 
-    return;
-}
+        if is_open {
+            self.0.write_all("<open>1</open>\n".as_bytes())?;
+        }
 
-void
-kamel_start_placemark(FILE *output, char const *name, char const *description,
-                      char const *style_url)
-{
-    assert(output);
-
-    fprintf(output, "<Placemark>\n");
-
-    if (name) {
-        fprintf(output, "<name>%s</name>\n", name);
+        Ok(())
     }
 
-    if (description) {
-        kamel_write_description(output, description);
+    /// Close out a folder element
+    pub fn finish_folder(&mut self) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "</Folder>")?;
+        Ok(())
     }
 
-    if (style_url) {
-        fprintf(output, "<styleUrl>%s</styleUrl>\n", style_url);
+    /// Start a placemark element.
+    pub fn start_placemark(
+        &mut self,
+        name: Option<&str>,
+        description: Option<&str>,
+        style_url: Option<&str>,
+    ) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "<Placemark>")?;
+
+        if let Some(name) = name {
+            writeln!(self.0, "<name>{}</name>", name)?;
+        }
+
+        if let Some(description) = description {
+            self.write_description(description)?;
+        }
+
+        if let Some(style_url) = style_url {
+            writeln!(self.0, "<styleUrl>{}</styleUrl>", style_url)?;
+        }
+
+        Ok(())
     }
 
-    return;
-}
-
-void
-kamel_end_placemark(FILE *output)
-{
-    assert(output);
-    fputs("</Placemark>\n", output);
-    return;
-}
-
-/*-------------------------------------------------------------------------------------------------
- *                                          Style
- *-----------------------------------------------------------------------------------------------*/
-void
-kamel_start_style(FILE *output, char const *style_id)
-{
-    assert(output);
-
-    if (style_id) {
-        fprintf(output, "<Style id=\"%s\">\n", style_id);
-    } else {
-        fputs("<Style>\n", output);
-    }
-    return;
-}
-
-void
-kamel_end_style(FILE *output)
-{
-    assert(output);
-    fputs("</Style>\n", output);
-    return;
-}
-
-void
-kamel_poly_style(FILE *output, char const *color, bool filled, bool outlined)
-{
-    assert(output);
-    fputs("<PolyStyle>\n", output);
-
-    if (color) {
-        fprintf(output, "<color>%s</color>\n", color);
-        fputs("<colorMode>normal</colorMode>\n", output);
-    } else {
-        fputs("<colorMode>random</colorMode>\n", output);
+    /// Close out a placemark element.
+    pub fn finish_placemark(&mut self) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "</Placemark>")?;
+        Ok(())
     }
 
-    fprintf(output, "<fill>%d</fill>\n", filled ? 1 : 0);
-    fprintf(output, "<outline>%d</outline>\n", outlined ? 1 : 0);
-
-    fputs("</PolyStyle>\n", output);
-
-    return;
-}
-
-void
-kamel_icon_style(FILE *output, char const *icon_url, double scale)
-{
-    assert(output);
-
-    fputs("<IconStyle>\n", output);
-
-    if (scale > 0.0) {
-        fprintf(output, "<scale>%lf</scale>\n", scale);
-    } else {
-        fputs("<scale>1</scale>\n", output);
+    /// Start a style definition.
+    pub fn start_style(&mut self, style_id: Option<&str>) -> Result<(), Box<dyn Error>> {
+        if let Some(style_id) = style_id {
+            writeln!(self.0, "<Style id=\"{}\">", style_id)?;
+        } else {
+            writeln!(self.0, "<Style>")?;
+        }
+        Ok(())
     }
 
-    if (icon_url) {
-        fprintf(output, "<Icon><href>%s</href></Icon>\n", icon_url);
+    /// Close out a style definition.
+    pub fn finish_style(&mut self) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "</Style>")?;
+        Ok(())
     }
 
-    fputs("</IconStyle>\n", output);
-    return;
-}
+    /// Create a PolyStyle element.
+    ///
+    /// These should ONLY go inside a style element.
+    pub fn create_poly_style(
+        &mut self,
+        color: Option<&str>,
+        filled: bool,
+        outlined: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "<PolyStyle>")?;
 
-/*-------------------------------------------------------------------------------------------------
- *                                          Time
- *-----------------------------------------------------------------------------------------------*/
-void
-kamel_timespan(FILE *output, time_t start, time_t end)
-{
-    assert(output);
-    struct tm start_tm = {0};
-    struct tm end_tm = {0};
+        if let Some(color) = color {
+            writeln!(self.0, "<color>{}</color>", color)?;
+            writeln!(self.0, "<colorMode>normal</colorMode>")?;
+        } else {
+            writeln!(self.0, "<colorMode>random</colorMode>")?;
+        }
 
-    gmtime_r(&start, &start_tm);
-    gmtime_r(&end, &end_tm);
+        let filled = if filled { 1 } else { 0 };
+        let outlined = if outlined { 1 } else { 0 };
 
-    char start_str[25] = {0};
-    char end_str[25] = {0};
+        writeln!(self.0, "<fill>{}</fill>", filled)?;
+        writeln!(self.0, "<outline>{}</outline>", outlined)?;
 
-    strftime(start_str, sizeof(start_str), "%Y-%m-%dT%H:%M:%S.000Z", &start_tm);
-    strftime(end_str, sizeof(end_str), "%Y-%m-%dT%H:%M:%S.000Z", &end_tm);
-
-    fputs("<TimeSpan>\n", output);
-    fprintf(output, "<begin>%s</begin>\n", start_str);
-    fprintf(output, "<end>%s</end>\n", end_str);
-    fputs("</TimeSpan>\n", output);
-
-    return;
-}
-
-/*-------------------------------------------------------------------------------------------------
- *                                       Geometry
- *-----------------------------------------------------------------------------------------------*/
-void
-kamel_start_multigeometry(FILE *output)
-{
-    assert(output);
-    fputs("<MultiGeometry>\n", output);
-    return;
-}
-
-void
-kamel_end_multigeometry(FILE *output)
-{
-    assert(output);
-    fputs("</MultiGeometry>\n", output);
-    return;
-}
-
-void
-kamel_start_polygon(FILE *output, bool extrude, bool tessellate, char const *altitudeMode)
-{
-    assert(output);
-
-    fputs("<Polygon>\n", output);
-
-    if (altitudeMode) {
-        assert(strcmp(altitudeMode, "clampToGround") == 0 ||
-               strcmp(altitudeMode, "relativeToGround") == 0 ||
-               strcmp(altitudeMode, "absolute") == 0);
-
-        fprintf(output, "<altitudeMode>%s</altitudeMode>\n", altitudeMode);
+        writeln!(self.0, "</PolyStyle>")?;
+        Ok(())
     }
 
-    if (extrude) {
-        fputs("<extrude>1</extrude>\n", output);
+    /// Create an IconStyle element.
+    pub fn create_icon_style(
+        &mut self,
+        icon_url: Option<&str>,
+        scale: f64,
+    ) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "<IconStyle>")?;
+
+        if scale > 0.0 {
+            writeln!(self.0, "<scale>{}</scale>", scale)?;
+        } else {
+            writeln!(self.0, "<scale>1</scale>")?;
+        }
+
+        if let Some(icon_url) = icon_url {
+            writeln!(self.0, "<Icon><href>{}</href></Icon>", icon_url)?;
+        }
+
+        writeln!(self.0, "</IconStyle>")?;
+        Ok(())
     }
 
-    if (tessellate) {
-        fputs("<tessellate>1</tessellate>\n", output);
+    /// Write out a TimeSpan element.
+    pub fn timespan(
+        &mut self,
+        start: NaiveDateTime,
+        end: NaiveDateTime,
+    ) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("<TimeSpan>\n".as_bytes())?;
+        writeln!(
+            self.0,
+            "<begin>{}</begin>",
+            start.format("%Y-%m-%dT%H:%M:%S.000Z")
+        )?;
+        writeln!(
+            self.0,
+            "<end>{}</end>n",
+            end.format("%Y-%m-%dT%H:%M:%S.000Z")
+        )?;
+        self.0.write_all("</TimeSpan>\n".as_bytes())?;
+        Ok(())
     }
 
-    return;
-}
+    /// Start a MultiGeometry
+    pub fn start_multi_geometry(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("<MultiGeometry>\n".as_bytes())?;
+        Ok(())
+    }
 
-void
-kamel_end_polygon(FILE *output)
-{
-    assert(output);
-    fputs("</Polygon>\n", output);
-    return;
-}
+    /// Close out a MultiGeometry
+    pub fn finish_multi_geometry(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("</MultiGeometry>\n".as_bytes())?;
+        Ok(())
+    }
 
-void
-kamel_polygon_start_outer_ring(FILE *output)
-{
-    assert(output);
-    fputs("<outerBoundaryIs>\n", output);
-    return;
-}
+    /// Start a Polygon element.
+    pub fn start_polygon(
+        &mut self,
+        extrude: bool,
+        tessellate: bool,
+        altitude_mode: Option<&str>,
+    ) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("<Polygon>\n".as_bytes())?;
 
-void
-kamel_polygon_end_outer_ring(FILE *output)
-{
-    assert(output);
-    fputs("</outerBoundaryIs>\n", output);
-    return;
-}
+        if let Some(altitude_mode) = altitude_mode {
+            debug_assert!(
+                altitude_mode == "clampToGround"
+                    || altitude_mode == "relativeToGround"
+                    || altitude_mode == "absolute"
+            );
 
-void
-kamel_start_linear_ring(FILE *output)
-{
-    assert(output);
-    fputs("<LinearRing>\n", output);
-    fputs("<coordinates>\n", output);
-    return;
-}
+            writeln!(self.0, "<altitudeMode>{}</altitudeMode>", altitude_mode)?;
+        }
 
-void
-kamel_end_linear_ring(FILE *output)
-{
-    assert(output);
-    fputs("</coordinates>\n", output);
-    fputs("</LinearRing>\n", output);
-    return;
-}
+        if extrude {
+            self.0.write_all("<extrude>1</extrude>\n".as_bytes())?;
+        }
 
-void
-kamel_linear_ring_add_vertex(FILE *output, double lat, double lon, double z)
-{
-    assert(output);
-    fprintf(output, "%lf,%lf,%lf\n", lon, lat, z);
-    return;
-}
+        if tessellate {
+            self.0
+                .write_all("<tessellate>1</tessellate>\n".as_bytes())?;
+        }
 
-void
-kamel_point(FILE *output, double lat, double lon, double z)
-{
-    assert(output);
-    fprintf(output, "<Point>\n<coordinates>%lf,%lf,%lf</coordinates>\n</Point>\n", lon, lat, z);
-    return;
+        Ok(())
+    }
+
+    /// Close out a Polygon element.
+    pub fn finish_polygon(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("</Polygon>\n".as_bytes())?;
+        Ok(())
+    }
+
+    /// Start the polygon outer ring.
+    ///
+    /// This should only be used inside a Polygon element.
+    ///
+    pub fn polygon_start_outer_ring(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("<outerBoundaryIs>\n".as_bytes())?;
+        Ok(())
+    }
+
+    /// End the polygon outer ring.
+    ///
+    ///  This should only be used inside a Polygon element.
+    ///
+    pub fn polygon_finish_outer_ring(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0.write_all("</outerBoundaryIs>\n".as_bytes())?;
+        Ok(())
+    }
+
+    /// Start a LinearRing.
+    pub fn start_linear_ring(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0
+            .write_all("<LinearRing>\n<coordinates>\n".as_bytes())?;
+        Ok(())
+    }
+
+    /// End a LinearRing.
+    pub fn finish_linear_ring(&mut self) -> Result<(), Box<dyn Error>> {
+        self.0
+            .write_all("</coordinates>\n</LinearRing>\n".as_bytes())?;
+        Ok(())
+    }
+
+    /// Add a vertex to the LinearRing
+    ///
+    /// Must be used inside a linear ring element.
+    pub fn linear_ring_add_vertex(
+        &mut self,
+        lat: f64,
+        lon: f64,
+        z: f64,
+    ) -> Result<(), Box<dyn Error>> {
+        writeln!(self.0, "{},{},{}", lon, lat, z)?;
+        Ok(())
+    }
+
+    /// Write out a KML Point element
+    pub fn create_point(&mut self, lat: f64, lon: f64, z: f64) -> Result<(), Box<dyn Error>> {
+        writeln!(
+            self.0,
+            "<Point>\n<coordinates>{},{},{}</coordinates>\n</Point>\n",
+            lon, lat, z
+        )?;
+        Ok(())
+    }
 }
-*/
