@@ -1,8 +1,6 @@
-
 fn main() {
     println!("Hello world.");
 }
-
 
 /*
 /** \file connectfire.c
@@ -45,15 +43,15 @@ static struct ConnectFireOptions {
 } options = {0};
 
 // clang-format off
-static GOptionEntry option_entries[] = 
+static GOptionEntry option_entries[] =
 {
     {
-        "verbose", 
-        'v', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_NONE, 
-        &options.verbose, 
-        "Show verbose output.", 
+        "verbose",
+        'v',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE,
+        &options.verbose,
+        "Show verbose output.",
         0
     },
 

@@ -1,4 +1,3 @@
-
 fn main() {
     println!("Hello world.");
 }
@@ -85,43 +84,43 @@ ERR_RETURN:
 }
 
 // clang-format off
-static GOptionEntry option_entries[] = 
+static GOptionEntry option_entries[] =
 {
     {
-        "output", 
-        'o', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_FILENAME, 
-        &options.kml_file, 
-        "Output KML file path, FILE_NAME.", 
+        "output",
+        'o',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_FILENAME,
+        &options.kml_file,
+        "Output KML file path, FILE_NAME.",
         "FILE_NAME"
     },
     {
-        "satellite", 
-        's', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_CALLBACK, 
-        parse_satellite, 
-        "The satellite SAT to select the latest data from. Must be 'G16' or 'G17'. Default 'G17'.", 
+        "satellite",
+        's',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_CALLBACK,
+        parse_satellite,
+        "The satellite SAT to select the latest data from. Must be 'G16' or 'G17'. Default 'G17'.",
         "SAT"
     },
     {
-        "sector", 
-        'r', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_CALLBACK, 
-        parse_sector, 
+        "sector",
+        'r',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_CALLBACK,
+        parse_sector,
         "The satellite sector SECT to select the latest data from. Must be 'FDCF' (Full Disk), "
-            "'FDCC' (CONUS), 'FDCM1' (Meso-sector 1), or 'FDCM2' (Meso-sector 2). Default 'FDCF'.", 
+            "'FDCC' (CONUS), 'FDCM1' (Meso-sector 1), or 'FDCM2' (Meso-sector 2). Default 'FDCF'.",
         "SECT"
     },
     {
-        "verbose", 
-        'v', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_NONE, 
-        &options.verbose, 
-        "Show verbose output.", 
+        "verbose",
+        'v',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE,
+        &options.verbose,
+        "Show verbose output.",
         0
     },
 

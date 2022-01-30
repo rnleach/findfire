@@ -1,4 +1,3 @@
-
 fn main() {
     println!("Hello world.");
 }
@@ -118,51 +117,51 @@ ERR_RETURN:
 }
 
 // clang-format off
-static GOptionEntry option_entries[] = 
+static GOptionEntry option_entries[] =
 {
     {
-        "output", 
-        'o', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_FILENAME, 
-        &options.kml_file, 
-        "Output KML file path, FILE_NAME.", 
+        "output",
+        'o',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_FILENAME,
+        &options.kml_file,
+        "Output KML file path, FILE_NAME.",
         "FILE_NAME"
     },
     {
-        "start", 
-        's', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_CALLBACK, 
-        parse_start_end, 
-        "The start time in UTC, format YYYY-MM-DD-HH.", 
+        "start",
+        's',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_CALLBACK,
+        parse_start_end,
+        "The start time in UTC, format YYYY-MM-DD-HH.",
         "YYYY-MM-DD-HH"
     },
     {
-        "end", 
-        'e', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_CALLBACK, 
-        parse_start_end, 
-        "The end time in UTC, format YYYY-MM-DD-HH.", 
+        "end",
+        'e',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_CALLBACK,
+        parse_start_end,
+        "The end time in UTC, format YYYY-MM-DD-HH.",
         "YYYY-MM-DD-HH"
     },
     {
-        "region", 
-        'r', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_CALLBACK, 
-        parse_bounding_box, 
-        "The region as a bounding box for which to extract data.", 
+        "region",
+        'r',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_CALLBACK,
+        parse_bounding_box,
+        "The region as a bounding box for which to extract data.",
         "MIN_LAT,MIN_LON,MAX_LAT,MAX_LON"
     },
     {
-        "verbose", 
-        'v', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_NONE, 
-        &options.verbose, 
-        "Show verbose output.", 
+        "verbose",
+        'v',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE,
+        &options.verbose,
+        "Show verbose output.",
         0
     },
 

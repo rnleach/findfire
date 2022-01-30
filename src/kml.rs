@@ -1,8 +1,7 @@
-
 pub(crate) struct KmlFile {}
 
 /*
- 
+
 /** \file kamel.h
  * \brief Small library for producing KML files.
  *

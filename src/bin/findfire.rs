@@ -1,4 +1,3 @@
-
 fn main() {
     println!("Hello world.");
 }
@@ -63,25 +62,25 @@ static struct FindFireOptions {
 } options = {0};
 
 // clang-format off
-static GOptionEntry option_entries[] = 
+static GOptionEntry option_entries[] =
 {
     {
-        "new", 
-        'n', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_NONE, 
-        &options.only_new, 
+        "new",
+        'n',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE,
+        &options.only_new,
         "Only try to find data newer than what's already in the database for each "
-            "satellite and sector.", 
+            "satellite and sector.",
         0
     },
     {
-        "verbose", 
-        'v', 
-        G_OPTION_FLAG_NONE, 
-        G_OPTION_ARG_NONE, 
-        &options.verbose, 
-        "Show verbose output.", 
+        "verbose",
+        'v',
+        G_OPTION_FLAG_NONE,
+        G_OPTION_ARG_NONE,
+        &options.verbose,
+        "Show verbose output.",
         0
     },
 
