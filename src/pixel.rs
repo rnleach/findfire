@@ -242,7 +242,7 @@ satfire_pixel_centroid(struct SFPixel const pxl[static 1])
     struct SFCoord t4_c = triangle_centroid(pxl->lr, pxl->ur, pxl->ll);
     struct Line diag2_centroids = {.start = t3_c, .end = t4_c};
 
-    struct IntersectResult res = lines_intersection(diag1_centroids, diag2_centroids, 1.0e-30);
+    struct IntersectResult res = diag1_centroids.intersect(diag2_centroids, 1.0e-30);
 
     assert(res.does_intersect);
 
@@ -293,7 +293,7 @@ satfire_pixel_contains_coord(struct SFPixel const pxl[static 1], struct SFCoord 
 
     for (unsigned int i = 0; i < 4; ++i) {
         for (unsigned int j = 0; j < 4; ++j) {
-            struct IntersectResult res = lines_intersection(pxl_lines[i], coord_lines[j], eps);
+            struct IntersectResult res = pxl_lines[i].intersect(coord_lines[j], eps);
 
             if (res.does_intersect && !res.intersect_is_endpoints) {
                 return false;
@@ -348,7 +348,7 @@ satfire_pixels_overlap(struct SFPixel const left[static 1], struct SFPixel const
         for (unsigned j = 0; j < 4; ++j) {
             struct Line right = right_pxl_lines[j];
 
-            struct IntersectResult res = lines_intersection(left, right, eps);
+            struct IntersectResult res = left.intersect(right, eps);
 
             if (res.does_intersect && !res.intersect_is_endpoints) {
                 return true;
