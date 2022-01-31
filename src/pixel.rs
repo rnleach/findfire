@@ -188,7 +188,7 @@ impl Pixel {
 
         // Check if it's outside the bounding box first. This is easy, and if it is,
         // then we already know the answer.
-        if self.bounding_box().contains_coord(coord, eps) {
+        if !self.bounding_box().contains_coord(coord, eps) {
             return false;
         }
 
@@ -679,4 +679,249 @@ impl PixelList {
             let _ = kml.finish_placemark();
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_satfire_pixel_centroid() {
+        let pxl = Pixel { 
+            ul: Coord {lat: 45.0, lon: -120.0},
+            ll: Coord {lat: 44.0, lon: -120.0},
+            lr: Coord {lat: 44.0, lon: -119.0},
+            ur: Coord {lat: 45.0, lon: -119.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let centroid = Coord {lat: 44.5, lon: -119.5};
+        let centroid_calc = pxl.centroid();
+
+        assert!(centroid.is_close(centroid_calc, 1.0e-12));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_satfire_pixels_approx_equal() {
+        let pxl1 = Pixel {
+            ul: Coord {lat: 45.0, lon: -120.0},
+            ll: Coord {lat: 44.0, lon: -120.0},
+            lr: Coord {lat: 44.0, lon: -119.0},
+            ur: Coord {lat: 45.0, lon: -119.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let pxl2 = Pixel {
+            ul: Coord {lat: 45.0000002, lon: -120.0000002},
+            ll: Coord {lat: 44.0000002, lon: -119.9999998},
+            lr: Coord {lat: 43.9999998, lon: -119.0000002},
+            ur: Coord {lat: 44.9999998, lon: -118.9999998},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        assert!(pxl1.approx_equal(&pxl1, 1.0e-6));
+        assert!(pxl2.approx_equal(&pxl2, 1.0e-6));
+        assert!(pxl1.approx_equal(&pxl2, 1.0e-6));
+
+        assert!(!pxl1.approx_equal(&pxl2, 1.0e-8));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_satfire_pixel_contains_coord() {
+        // This is a simple square of width & height 1 degree of latitude & longitude
+        let pxl1 = Pixel {
+            ul: Coord{lat: 45.0, lon: -120.0},
+            ll: Coord{lat: 44.0, lon: -120.0},
+            lr: Coord{lat: 44.0, lon: -119.0},
+            ur: Coord{lat: 45.0, lon: -119.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let inside1 = Coord {lat: 44.5, lon: -119.5};
+
+        let outside1 = Coord {lat: 45.5, lon: -119.5};
+        let outside2 = Coord {lat: 44.5, lon: -120.5};
+        let outside3 = Coord {lat: 43.5, lon: -119.5};
+        let outside4 = Coord {lat: 44.5, lon: -118.5};
+        let outside5 = Coord {lat: 43.5, lon: -118.5};
+        let outside6 = Coord {lat: 45.5, lon: -120.5};
+
+        let boundary1 = Coord {lat: 45.0, lon: -119.5};
+        let boundary2 = Coord {lat: 44.0, lon: -119.5};
+        let boundary3 = Coord {lat: 44.5, lon: -119.0};
+        let boundary4 = Coord {lat: 44.5, lon: -120.0};
+
+        // Make sure what's inside is in
+        assert!(pxl1.contains_coord(inside1, 1.0e-6));
+
+        // Make sure what's outside is out
+        assert!(!pxl1.contains_coord(outside1, 1.0e-6));
+        assert!(!pxl1.contains_coord(outside2, 1.0e-6));
+        assert!(!pxl1.contains_coord(outside3, 1.0e-6));
+        assert!(!pxl1.contains_coord(outside4, 1.0e-6));
+        assert!(!pxl1.contains_coord(outside5, 1.0e-6));
+        assert!(!pxl1.contains_coord(outside6, 1.0e-6));
+
+        // Make sure what lies on the boundary is NOT contained in the polygon.
+        assert!(!pxl1.contains_coord(boundary1, 1.0e-6));
+        assert!(!pxl1.contains_coord(boundary2, 1.0e-6));
+        assert!(!pxl1.contains_coord(boundary3, 1.0e-6));
+        assert!(!pxl1.contains_coord(boundary4, 1.0e-6));
+
+        // This is a very skewed quadrilateral
+        let pxl2 = Pixel {
+            ul: Coord{lat: 3.0, lon: 2.0},
+            ll: Coord{lat: 0.0, lon: 0.0},
+            lr: Coord{lat: 2.0, lon: 2.0},
+            ur: Coord{lat: 5.0, lon: 4.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let inside1 = Coord {lat: 2.5, lon: 2.0};
+
+        let outside1 = Coord {lat: 2.0, lon: 1.0};
+        let outside2 = Coord {lat: 1.0, lon: 2.0};
+        let outside3 = Coord {lat: -1.5, lon: -119.5};
+
+        let boundary1 = Coord {lat: 1.0, lon: 1.0};
+        let boundary2 = Coord {lat: 4.0, lon: 3.0};
+
+        // Make sure what's inside is in
+        assert!(pxl2.contains_coord(inside1, 1.0e-6));
+
+        // Make sure what's outside is out
+        assert!(!pxl2.contains_coord(outside1, 1.0e-6));
+        assert!(!pxl2.contains_coord(outside2, 1.0e-6));
+        assert!(!pxl2.contains_coord(outside3, 1.0e-6));
+
+        // Make sure what lies on the boundary is NOT contained in the polygon.
+        assert!(!pxl2.contains_coord(boundary1, 1.0e-6));
+        assert!(!pxl2.contains_coord(boundary2, 1.0e-6));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_satfire_pixels_overlap() {
+        let pxl1 = Pixel {
+            ul: Coord{lat: 45.0, lon: -120.0},
+            ll: Coord{lat: 44.0, lon: -120.0},
+            lr: Coord{lat: 44.0, lon: -119.0},
+            ur: Coord{lat: 45.0, lon: -119.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let pxl2 = Pixel {
+            ul: Coord{lat: 45.5, lon: -120.5},
+            ll: Coord{lat: 44.5, lon: -120.5},
+            lr: Coord{lat: 44.5, lon: -119.5},
+            ur: Coord{lat: 45.5, lon: -119.5},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let pxl3 = Pixel {
+            ul: Coord{lat: 46.0, lon: -120.0},
+            ll: Coord{lat: 45.0, lon: -120.0},
+            lr: Coord{lat: 45.0, lon: -119.0},
+            ur: Coord{lat: 46.0, lon: -119.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        // The corners of pxl4 lie along the mid-points of pxl1. So they overlap.
+        let pxl4 = Pixel {
+            ul: Coord{lat: 45.0, lon: -119.5},
+            ll: Coord{lat: 44.5, lon: -120.0},
+            lr: Coord{lat: 44.0, lon: -119.5},
+            ur: Coord{lat: 44.5, lon: -119.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        // pixels are always overlapping themselves.
+        assert!(pxl1.overlap(&pxl1, 1.0e-6));
+        assert!(pxl2.overlap(&pxl2, 1.0e-6));
+        assert!(pxl3.overlap(&pxl3, 1.0e-6));
+        assert!(pxl4.overlap(&pxl4, 1.0e-6));
+
+        assert!(pxl1.is_adjacent_to_or_overlaps(&pxl1, 1.0e-6));
+        assert!(pxl2.is_adjacent_to_or_overlaps(&pxl2, 1.0e-6));
+        assert!(pxl3.is_adjacent_to_or_overlaps(&pxl3, 1.0e-6));
+        assert!(pxl4.is_adjacent_to_or_overlaps(&pxl4, 1.0e-6));
+
+        // pxl1 and pxl3 are adjacent, but they do not overlap. However, the corners are close
+        // enough that with the `eps`, they do overlap.
+        assert!(pxl1.overlap(&pxl3, 1.0e-6));
+        assert!(pxl3.overlap(&pxl1, 1.0e-6));
+
+        assert!(pxl1.is_adjacent_to_or_overlaps(&pxl3, 1.0e-6));
+        assert!(pxl3.is_adjacent_to_or_overlaps(&pxl1, 1.0e-6));
+
+        // pxl2 overlaps pxl1 and pxl3 - order doesn't matter
+        assert!(pxl1.overlap(&pxl2, 1.0e-6));
+        assert!(pxl2.overlap(&pxl1, 1.0e-6));
+
+        assert!(pxl1.is_adjacent_to_or_overlaps(&pxl2, 1.0e-6));
+        assert!(pxl2.is_adjacent_to_or_overlaps(&pxl1, 1.0e-6));
+
+        assert!(pxl3.overlap(&pxl2, 1.0e-6));
+        assert!(pxl2.overlap(&pxl3, 1.0e-6));
+
+        assert!(pxl3.is_adjacent_to_or_overlaps(&pxl2, 1.0e-6));
+        assert!(pxl2.is_adjacent_to_or_overlaps(&pxl3, 1.0e-6));
+
+        // Test the case where a vertex lies on the boundary.
+        assert!(pxl1.overlap(&pxl4, 1.0e-6));
+        assert!(pxl4.overlap(&pxl1, 1.0e-6));
+
+        assert!(pxl1.is_adjacent_to_or_overlaps(&pxl4, 1.0e-6));
+        assert!(pxl4.is_adjacent_to_or_overlaps(&pxl1, 1.0e-6));
+    }
+
+
 }

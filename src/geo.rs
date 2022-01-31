@@ -181,7 +181,15 @@ impl Line {
 
         let x0;
         let y0;
-        if m1.is_infinite() {
+        if m1.is_nan() {
+            // self is a single point
+            x0 = self.start.lon;
+            y0 = self.start.lat;
+        } else if m2.is_nan() {
+            // other is a single point
+            x0 = other.start.lon;
+            y0 = other.start.lat;
+        } else if m1.is_infinite() {
             // l1 is vertical
             x0 = self.start.lon;
             y0 = m2 * (x0 - x2) + y2;
