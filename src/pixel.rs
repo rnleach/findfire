@@ -746,18 +746,26 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_satfire_pixel_contains_coord() {
-        // This is a simple square of width & height 1 degree of latitude & longitude
-        let pxl1 = Pixel {
-            ul: Coord{lat: 45.0, lon: -120.0},
-            ll: Coord{lat: 44.0, lon: -120.0},
-            lr: Coord{lat: 44.0, lon: -119.0},
-            ur: Coord{lat: 45.0, lon: -119.0},
+        let base = Pixel {
+            ul: Coord {lat: 0.0, lon: 0.0},
+            ll: Coord {lat: 0.0, lon: 0.0},
+            lr: Coord {lat: 0.0, lon: 0.0},
+            ur: Coord {lat: 0.0, lon: 0.0},
             power: 0.0,
             area: 0.0,
             temperature: 0.0,
             scan_angle: 0.0,
             mask_flag: MaskCode(0),
             data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        // This is a simple square of width & height 1 degree of latitude & longitude
+        let pxl1 = Pixel {
+            ul: Coord{lat: 45.0, lon: -120.0},
+            ll: Coord{lat: 44.0, lon: -120.0},
+            lr: Coord{lat: 44.0, lon: -119.0},
+            ur: Coord{lat: 45.0, lon: -119.0},
+            ..base
         };
 
         let inside1 = Coord {lat: 44.5, lon: -119.5};
@@ -797,12 +805,7 @@ mod test {
             ll: Coord{lat: 0.0, lon: 0.0},
             lr: Coord{lat: 2.0, lon: 2.0},
             ur: Coord{lat: 5.0, lon: 4.0},
-            power: 0.0,
-            area: 0.0,
-            temperature: 0.0,
-            scan_angle: 0.0,
-            mask_flag: MaskCode(0),
-            data_quality_flag: DataQualityFlagCode(0),
+            ..base
         };
 
         let inside1 = Coord {lat: 2.5, lon: 2.0};
@@ -830,17 +833,25 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_satfire_pixels_overlap() {
-        let pxl1 = Pixel {
-            ul: Coord{lat: 45.0, lon: -120.0},
-            ll: Coord{lat: 44.0, lon: -120.0},
-            lr: Coord{lat: 44.0, lon: -119.0},
-            ur: Coord{lat: 45.0, lon: -119.0},
+        let base = Pixel {
+            ul: Coord {lat: 0.0, lon: 0.0},
+            ll: Coord {lat: 0.0, lon: 0.0},
+            lr: Coord {lat: 0.0, lon: 0.0},
+            ur: Coord {lat: 0.0, lon: 0.0},
             power: 0.0,
             area: 0.0,
             temperature: 0.0,
             scan_angle: 0.0,
             mask_flag: MaskCode(0),
             data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let pxl1 = Pixel {
+            ul: Coord{lat: 45.0, lon: -120.0},
+            ll: Coord{lat: 44.0, lon: -120.0},
+            lr: Coord{lat: 44.0, lon: -119.0},
+            ur: Coord{lat: 45.0, lon: -119.0},
+            ..base
         };
 
         let pxl2 = Pixel {
@@ -848,12 +859,7 @@ mod test {
             ll: Coord{lat: 44.5, lon: -120.5},
             lr: Coord{lat: 44.5, lon: -119.5},
             ur: Coord{lat: 45.5, lon: -119.5},
-            power: 0.0,
-            area: 0.0,
-            temperature: 0.0,
-            scan_angle: 0.0,
-            mask_flag: MaskCode(0),
-            data_quality_flag: DataQualityFlagCode(0),
+            ..base
         };
 
         let pxl3 = Pixel {
@@ -861,12 +867,7 @@ mod test {
             ll: Coord{lat: 45.0, lon: -120.0},
             lr: Coord{lat: 45.0, lon: -119.0},
             ur: Coord{lat: 46.0, lon: -119.0},
-            power: 0.0,
-            area: 0.0,
-            temperature: 0.0,
-            scan_angle: 0.0,
-            mask_flag: MaskCode(0),
-            data_quality_flag: DataQualityFlagCode(0),
+            ..base
         };
 
         // The corners of pxl4 lie along the mid-points of pxl1. So they overlap.
@@ -875,12 +876,7 @@ mod test {
             ll: Coord{lat: 44.5, lon: -120.0},
             lr: Coord{lat: 44.0, lon: -119.5},
             ur: Coord{lat: 44.5, lon: -119.0},
-            power: 0.0,
-            area: 0.0,
-            temperature: 0.0,
-            scan_angle: 0.0,
-            mask_flag: MaskCode(0),
-            data_quality_flag: DataQualityFlagCode(0),
+            ..base
         };
 
         // pixels are always overlapping themselves.
@@ -923,5 +919,485 @@ mod test {
         assert!(pxl4.is_adjacent_to_or_overlaps(&pxl1, 1.0e-6));
     }
 
+    #[test]
+    #[rustfmt::skip]
+    fn test_satfire_pixels_are_adjacent()
+    {
+        let base = Pixel {
+            ul: Coord {lat: 0.0, lon: 0.0},
+            ll: Coord {lat: 0.0, lon: 0.0},
+            lr: Coord {lat: 0.0, lon: 0.0},
+            ur: Coord {lat: 0.0, lon: 0.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
 
+        let pxl_nw = Pixel {
+            ul: Coord {lat: 46.0, lon: -121.0},
+            ll: Coord {lat: 45.0, lon: -121.0},
+            lr: Coord {lat: 45.0, lon: -120.0},
+            ur: Coord {lat: 46.0, lon: -120.0},
+            ..base
+        };
+
+        let pxl_nn = Pixel {
+            ul: Coord {lat: 46.0, lon: -120.0},
+            ll: Coord {lat: 45.0, lon: -120.0},
+            lr: Coord {lat: 45.0, lon: -119.0},
+            ur: Coord {lat: 46.0, lon: -119.0},
+            ..base
+        };
+
+        let pxl_ne = Pixel {
+            ul: Coord {lat: 46.0, lon: -119.0},
+            ll: Coord {lat: 45.0, lon: -119.0},
+            lr: Coord {lat: 45.0, lon: -118.0},
+            ur: Coord {lat: 46.0, lon: -118.0},
+            ..base
+        };
+
+        let pxl_ww = Pixel {
+            ul: Coord {lat: 45.0000002, lon: -121.0000002},
+            ll: Coord {lat: 44.0000002, lon: -120.9999998},
+            lr: Coord {lat: 43.9999998, lon: -120.0000002},
+            ur: Coord {lat: 44.9999998, lon: -119.9999998},
+            ..base
+        };
+
+        let pxl_00 = Pixel {
+            ul: Coord {lat: 45.0, lon: -120.0},
+            ll: Coord {lat: 44.0, lon: -120.0},
+            lr: Coord {lat: 44.0, lon: -119.0},
+            ur: Coord {lat: 45.0, lon: -119.0},
+            ..base
+        };
+
+        let pxl_ee = Pixel {
+            ul: Coord {lat: 45.0, lon: -119.0},
+            ll: Coord {lat: 44.0, lon: -119.0},
+            lr: Coord {lat: 44.0, lon: -118.0},
+            ur: Coord {lat: 45.0, lon: -118.0},
+            ..base
+        };
+
+        let pxl_sw = Pixel {
+            ul: Coord {lat: 44.0, lon: -121.0},
+            ll: Coord {lat: 43.0, lon: -121.0},
+            lr: Coord {lat: 43.0, lon: -120.0},
+            ur: Coord {lat: 44.0, lon: -120.0},
+            ..base
+        };
+
+        let pxl_ss = Pixel {
+            ul: Coord {lat: 44.0, lon: -120.0},
+            ll: Coord {lat: 43.0, lon: -120.0},
+            lr: Coord {lat: 43.0, lon: -119.0},
+            ur: Coord {lat: 44.0, lon: -119.0},
+            ..base
+        };
+
+        let pxl_se = Pixel {
+            ul: Coord {lat: 44.0, lon: -119.0},
+            ll: Coord {lat: 43.0, lon: -119.0},
+            lr: Coord {lat: 43.0, lon: -118.0},
+            ur: Coord {lat: 44.0, lon: -118.0},
+            ..base
+        };
+
+        // Pixels are not adjacent to themselves.
+        assert!(!pxl_nw.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(!pxl_nn.is_adjacent_to(&pxl_nn, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_ne, 1.0e-6));
+        assert!(!pxl_ww.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(!pxl_00.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(!pxl_ee.is_adjacent_to(&pxl_ee, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to(&pxl_sw, 1.0e-6));
+        assert!(!pxl_ss.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to(&pxl_se, 1.0e-6));
+
+        assert!(pxl_nw.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+        assert!(pxl_ne.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+        assert!(pxl_sw.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+
+        // Check west-to-east (order shouldn't matter!)
+        assert!(pxl_nw.is_adjacent_to(&pxl_nn, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to(&pxl_ne, 1.0e-6));
+        assert!(!pxl_nw.is_adjacent_to(&pxl_ne, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_ee, 1.0e-6));
+        assert!(!pxl_ww.is_adjacent_to(&pxl_ee, 1.0e-6));
+        assert!(pxl_sw.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to(&pxl_se, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to(&pxl_se, 1.0e-6));
+
+        assert!(pxl_nw.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+        assert!(!pxl_nw.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+        assert!(!pxl_ww.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+        assert!(pxl_sw.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+
+        // Check east-to-west (order shouldn't matter!)
+        assert!(pxl_ne.is_adjacent_to(&pxl_nn, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(!pxl_ee.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to(&pxl_sw, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to(&pxl_sw, 1.0e-6));
+
+        assert!(pxl_ne.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(!pxl_ee.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+
+        // Check north-to-south (order shouldn't matter!)
+        assert!(pxl_nw.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to(&pxl_sw, 1.0e-6));
+        assert!(!pxl_nw.is_adjacent_to(&pxl_sw, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(!pxl_nn.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(pxl_ne.is_adjacent_to(&pxl_ee, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to(&pxl_se, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_se, 1.0e-6));
+
+        assert!(pxl_nw.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+        assert!(!pxl_nw.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(!pxl_nn.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(pxl_ne.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+
+        // Check south-to-north (order shouldn't matter!)
+        assert!(pxl_sw.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_nn, 1.0e-6));
+        assert!(!pxl_ss.is_adjacent_to(&pxl_nn, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to(&pxl_ee, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to(&pxl_ne, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to(&pxl_ne, 1.0e-6));
+
+        assert!(pxl_sw.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+        assert!(!pxl_ss.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+
+        // Check southwest-to-northeast and southeast-to-northwest (order shouldn't matter!)
+        assert!(pxl_sw.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_ne, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to(&pxl_ne, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to(&pxl_nw, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to(&pxl_nn, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to(&pxl_ee, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to(&pxl_nn, 1.0e-6));
+
+        assert!(pxl_sw.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+        assert!(!pxl_sw.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-6));
+        assert!(pxl_se.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(!pxl_se.is_adjacent_to_or_overlaps(&pxl_nw, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+        assert!(pxl_ss.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-6));
+
+        // Check northwest-to-southeast and northeast-to-southwest (order shouldn't matter!)
+        assert!(pxl_nw.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_se, 1.0e-6));
+        assert!(!pxl_nw.is_adjacent_to(&pxl_se, 1.0e-6));
+        assert!(pxl_ne.is_adjacent_to(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to(&pxl_sw, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_sw, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to(&pxl_ww, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to(&pxl_ss, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to(&pxl_ee, 1.0e-6));
+
+        assert!(pxl_nw.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+        assert!(!pxl_nw.is_adjacent_to_or_overlaps(&pxl_se, 1.0e-6));
+        assert!(pxl_ne.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-6));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+        assert!(!pxl_ne.is_adjacent_to_or_overlaps(&pxl_sw, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-6));
+        assert!(pxl_ee.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_ss, 1.0e-6));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_ee, 1.0e-6));
+
+        //
+        // Check to make sure eps is working.
+        //
+        assert!(pxl_nw.is_adjacent_to(&pxl_nn, 1.0e-8));
+        assert!(pxl_nn.is_adjacent_to(&pxl_ne, 1.0e-8));
+        assert!(!pxl_nw.is_adjacent_to(&pxl_ne, 1.0e-8));
+
+        assert!(pxl_nw.is_adjacent_to_or_overlaps(&pxl_nn, 1.0e-8));
+        assert!(pxl_nn.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-8));
+        assert!(!pxl_nw.is_adjacent_to_or_overlaps(&pxl_ne, 1.0e-8));
+
+        // should overlap - but not adjacent
+        assert!(!pxl_ww.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_ww.overlap(&pxl_00, 1.0e-8));
+        assert!(pxl_ww.is_adjacent_to_or_overlaps(&pxl_00, 1.0e-8));
+
+        assert!(pxl_00.is_adjacent_to(&pxl_ee, 1.0e-8));
+        assert!(!pxl_ww.is_adjacent_to(&pxl_ee, 1.0e-8));
+        assert!(pxl_sw.is_adjacent_to(&pxl_ss, 1.0e-8));
+        assert!(pxl_ss.is_adjacent_to(&pxl_se, 1.0e-8));
+        assert!(!pxl_sw.is_adjacent_to(&pxl_se, 1.0e-8));
+        assert!(pxl_ne.is_adjacent_to(&pxl_nn, 1.0e-8));
+        assert!(pxl_nn.is_adjacent_to(&pxl_nw, 1.0e-8));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_nw, 1.0e-8));
+        assert!(pxl_ee.is_adjacent_to(&pxl_00, 1.0e-8));
+
+        // should overlap
+        assert!(!pxl_00.is_adjacent_to(&pxl_ww, 1.0e-8));
+        assert!(pxl_00.overlap(&pxl_ww, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to_or_overlaps(&pxl_ww, 1.0e-8));
+
+        assert!(!pxl_ee.is_adjacent_to(&pxl_ww, 1.0e-8));
+        assert!(pxl_se.is_adjacent_to(&pxl_ss, 1.0e-8));
+        assert!(pxl_ss.is_adjacent_to(&pxl_sw, 1.0e-8));
+        assert!(!pxl_se.is_adjacent_to(&pxl_sw, 1.0e-8));
+
+        // should overlap
+        assert!(!pxl_nw.is_adjacent_to(&pxl_ww, 1.0e-8));
+        assert!(pxl_nw.overlap(&pxl_ww, 1.0e-8));
+
+        // should overlap
+        assert!(!pxl_ww.is_adjacent_to(&pxl_sw, 1.0e-8));
+        assert!(pxl_ww.overlap(&pxl_sw, 1.0e-8));
+
+        assert!(!pxl_nw.is_adjacent_to(&pxl_sw, 1.0e-8));
+        assert!(pxl_nn.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to(&pxl_ss, 1.0e-8));
+        assert!(!pxl_nn.is_adjacent_to(&pxl_ss, 1.0e-8));
+        assert!(pxl_ne.is_adjacent_to(&pxl_ee, 1.0e-8));
+        assert!(pxl_ee.is_adjacent_to(&pxl_se, 1.0e-8));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_se, 1.0e-8));
+
+        // should overlap
+        assert!(!pxl_sw.is_adjacent_to(&pxl_ww, 1.0e-8));
+        assert!(pxl_sw.overlap(&pxl_ww, 1.0e-8));
+
+        // should overlap
+        assert!(!pxl_ww.is_adjacent_to(&pxl_nw, 1.0e-8));
+        assert!(pxl_ww.overlap(&pxl_sw, 1.0e-8));
+
+        assert!(!pxl_sw.is_adjacent_to(&pxl_nw, 1.0e-8));
+        assert!(pxl_ss.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to(&pxl_nn, 1.0e-8));
+        assert!(!pxl_ss.is_adjacent_to(&pxl_nn, 1.0e-8));
+        assert!(pxl_se.is_adjacent_to(&pxl_ee, 1.0e-8));
+        assert!(pxl_ee.is_adjacent_to(&pxl_ne, 1.0e-8));
+        assert!(!pxl_se.is_adjacent_to(&pxl_ne, 1.0e-8));
+        assert!(pxl_sw.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to(&pxl_ne, 1.0e-8));
+        assert!(!pxl_sw.is_adjacent_to(&pxl_ne, 1.0e-8));
+        assert!(pxl_se.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to(&pxl_nw, 1.0e-8));
+        assert!(!pxl_se.is_adjacent_to(&pxl_nw, 1.0e-8));
+        assert!(pxl_nw.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to(&pxl_se, 1.0e-8));
+        assert!(!pxl_nw.is_adjacent_to(&pxl_se, 1.0e-8));
+        assert!(pxl_ne.is_adjacent_to(&pxl_00, 1.0e-8));
+        assert!(pxl_00.is_adjacent_to(&pxl_sw, 1.0e-8));
+        assert!(!pxl_ne.is_adjacent_to(&pxl_sw, 1.0e-8));
+
+        // should be false
+        assert!(!pxl_ww.is_adjacent_to(&pxl_nn, 1.0e-8));
+
+        assert!(pxl_ss.is_adjacent_to(&pxl_ee, 1.0e-8));
+
+        // should be false
+        assert!(!pxl_ss.is_adjacent_to(&pxl_ww, 1.0e-8));
+
+        assert!(pxl_ee.is_adjacent_to(&pxl_nn, 1.0e-8));
+
+        // should be false
+        assert!(!pxl_nn.is_adjacent_to(&pxl_ww, 1.0e-8));
+
+        assert!(pxl_ee.is_adjacent_to(&pxl_ss, 1.0e-8));
+
+        // should be false
+        assert!(!pxl_ww.is_adjacent_to(&pxl_ss, 1.0e-8));
+
+        assert!(pxl_nn.is_adjacent_to(&pxl_ee, 1.0e-8));
+
+        // Checking that there is no overlap is not good enough since there may be some overlap due to
+        // using the eps variable to make the matching fuzzy. We should also check to make sure that
+        // any vertices that aren't close aren't contained inside the other pixel.
+
+        // This pixel is inside pxl_00, but it shares a common lower right corner
+        let sub_pxl_01 = Pixel {
+            ul: Coord {lat: 44.5, lon: -119.5},
+            ll: Coord {lat: 44.0, lon: -119.5},
+            lr: Coord {lat: 44.0, lon: -119.0},
+            ur: Coord {lat: 44.5, lon: -119.0},
+            ..base
+        };
+
+        assert!(!pxl_00.is_adjacent_to(&sub_pxl_01, 1.0e-6));
+        assert!(!sub_pxl_01.is_adjacent_to(&pxl_00, 1.0e-6));
+
+        // This pixel overlaps pxl_00 and shares a right edge. These overlap, but aren't adjacent.
+        let sub_pxl_02 = Pixel {
+            ul: Coord {lat: 45.0, lon: -119.5},
+            ll: Coord {lat: 44.0, lon: -119.5},
+            lr: Coord {lat: 44.0, lon: -119.0},
+            ur: Coord {lat: 45.0, lon: -119.0},
+            ..base
+        };
+
+        assert!(!pxl_00.is_adjacent_to(&sub_pxl_02, 1.0e-6));
+        assert!(!sub_pxl_02.is_adjacent_to(&pxl_00, 1.0e-6));
+    }
+
+    #[rustfmt::skip]
+    fn pixel_list_test_setup() -> PixelList {
+
+        let base = Pixel {
+            ul: Coord {lat: 0.0, lon: 0.0},
+            ll: Coord {lat: 0.0, lon: 0.0},
+            lr: Coord {lat: 0.0, lon: 0.0},
+            ur: Coord {lat: 0.0, lon: 0.0},
+            power: 0.0,
+            area: 0.0,
+            temperature: 0.0,
+            scan_angle: 0.0,
+            mask_flag: MaskCode(0),
+            data_quality_flag: DataQualityFlagCode(0),
+        };
+
+        let pixels = [
+            Pixel {
+             ul: Coord {lat: 46.0, lon: -121.0},
+             ll: Coord {lat: 45.0, lon: -121.0},
+             lr: Coord {lat: 45.0, lon: -120.0},
+             ur: Coord {lat: 46.0, lon: -120.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 46.0, lon: -120.0},
+             ll: Coord {lat: 45.0, lon: -120.0},
+             lr: Coord {lat: 45.0, lon: -119.0},
+             ur: Coord {lat: 46.0, lon: -119.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 46.0, lon: -119.0},
+             ll: Coord {lat: 45.0, lon: -119.0},
+             lr: Coord {lat: 45.0, lon: -118.0},
+             ur: Coord {lat: 46.0, lon: -118.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 45.0000002, lon: -121.0000002},
+             ll: Coord {lat: 44.0000002, lon: -120.9999998},
+             lr: Coord {lat: 43.9999998, lon: -120.0000002},
+             ur: Coord {lat: 44.9999998, lon: -119.9999998},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 45.0, lon: -120.0},
+             ll: Coord {lat: 44.0, lon: -120.0},
+             lr: Coord {lat: 44.0, lon: -119.0},
+             ur: Coord {lat: 45.0, lon: -119.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 45.0, lon: -119.0},
+             ll: Coord {lat: 44.0, lon: -119.0},
+             lr: Coord {lat: 44.0, lon: -118.0},
+             ur: Coord {lat: 45.0, lon: -118.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 44.0, lon: -121.0},
+             ll: Coord {lat: 43.0, lon: -121.0},
+             lr: Coord {lat: 43.0, lon: -120.0},
+             ur: Coord {lat: 44.0, lon: -120.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 44.0, lon: -120.0},
+             ll: Coord {lat: 43.0, lon: -120.0},
+             lr: Coord {lat: 43.0, lon: -119.0},
+             ur: Coord {lat: 44.0, lon: -119.0},
+             ..base
+            },
+
+            Pixel {
+             ul: Coord {lat: 44.0, lon: -119.0},
+             ll: Coord {lat: 43.0, lon: -119.0},
+             lr: Coord {lat: 43.0, lon: -118.0},
+             ur: Coord {lat: 44.0, lon: -118.0},
+             ..base
+            },
+        ];
+
+        let mut plist = PixelList::with_capacity(9);
+        for p in pixels {
+            plist.push(p);
+        }
+
+        plist
+    }
+
+    #[test]
+    fn satfire_pixel_list_test_binary_round_trip() {
+        let plist = pixel_list_test_setup();
+        assert_eq!(plist.0.len(), 9);
+
+        let buf = plist.binary_serialize();
+        let mut cursor = std::io::Cursor::new(buf);
+
+        let plist2 = PixelList::binary_deserialize(&mut cursor);
+
+        for (p1, p2) in plist.0.into_iter().zip(plist2.0.into_iter()) {
+            assert!(p1.approx_equal(&p2, f64::MIN));
+        }
+    }
 }
