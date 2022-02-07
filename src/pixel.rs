@@ -10,19 +10,19 @@ use std::io::{Read, Write};
 #[repr(C)]
 pub struct Pixel {
     /// The upper left (northwest) corner point of the pixel
-    ul: Coord,
+    pub ul: Coord,
     /// The lower left (southwest) corner point of the pixel
-    ll: Coord,
+    pub ll: Coord,
     /// The lower right (southeast) corner point of the pixel.
-    lr: Coord,
+    pub lr: Coord,
     /// The upper right (northeast) corner point of the pixel.
-    ur: Coord,
+    pub ur: Coord,
     /// The radiative power in MegaWatts in this pixel.
-    power: f64,
+    pub power: f64,
     /// The estimated area of the pixel covered by the fire in square meters.
-    area: f64,
+    pub area: f64,
     /// The estimated temperature of the fire in K
-    temperature: f64,
+    pub temperature: f64,
     /// This is the scan angle as measured in the coordinate system of the satellite. The satellite
     /// measures the x and y positions of a pixel on a grid by the angle each makes with the central
     /// point which looks at nadir on the Earth. There are two values, an x scan angle and a y scan
@@ -32,15 +32,15 @@ pub struct Pixel {
     /// Earth's surface. All points along that line have a very similar (equal if the Earth was a
     /// sphere) angle between the satellites view and the local zenith. This is a good proxy for
     /// how much of an edge on vs straight down view, which can be useful for quality control.
-    scan_angle: f64,
+    pub scan_angle: f64,
     /// Mask is a code that describes the outcome of the algorithms that characterize a fire point.
     ///
     /// See the satfire_satellite_mask_code_to_string() function for reference.
-    mask_flag: MaskCode,
+    pub mask_flag: MaskCode,
     /// Data Quality Flag
     ///
     /// See the satfire_satellite_dqf_code_to_string() function for reference.
-    data_quality_flag: DataQualityFlagCode,
+    pub data_quality_flag: DataQualityFlagCode,
 }
 
 impl Pixel {
@@ -472,6 +472,11 @@ impl PixelList {
     /// Create a new PixelList with a given capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         PixelList(Vec::with_capacity(capacity))
+    }
+
+    /// Get the number of pixels in this list.
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
     /// Append a [Pixel] to the end of the list.

@@ -1,8 +1,25 @@
-use crate::pixel::Pixel;
+use crate::{
+    geo::Coord,
+    pixel::Pixel,
+    satellite::{DataQualityFlagCode, MaskCode},
+};
+use libc::{c_char, c_double, c_int, c_short, c_void, size_t};
+use once_cell::sync::OnceCell;
+use std::{
+    error::Error,
+    ffi::{CStr, CString},
+    io::Read,
+    path::Path,
+    sync::Mutex,
+};
+
+static_assertions::assert_eq_size!(c_short, i16);
+static_assertions::assert_eq_size!(c_double, f64);
 
 /**
  * Handle to a dataset for the Fire Detection Characteristics and some metadata.
  */
+#[derive(Debug, Clone)]
 pub(crate) struct SatFireImage {
     /// Image width in pixels
     xlen: usize,
@@ -10,20 +27,330 @@ pub(crate) struct SatFireImage {
     ylen: usize,
     /// All the information needed for transforming from row and column numbers to coordinates.
     tran: CoordTransform,
-    // In memory buffer if this is from a zip file
-    // unsigned char *memory;
-    // Size of the buffer;
-    // size_t memory_size;
-    // Handle to the NetCDF file
-    // int nc_file_id;
+    /// In memory buffer if this is from a zip file
+    buffer: Option<Vec<u8>>,
+    /// Handle to the NetCDF file
+    nc_file_id: c_int,
     /// Orignial file name the dataset was loaded from.
     fname: String,
+}
+
+impl SatFireImage {
+    /// Open a file containing GOES-R/S Fire Detection Characteristics.
+    pub(crate) fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+        let p: &Path = path.as_ref();
+        // FIXME change option into error
+        let fname: String = p
+            .file_name()
+            .map(|p| p.to_string_lossy())
+            .unwrap()
+            .to_string();
+
+        if let Some(ext) = p.extension() {
+            if ext == "zip" {
+                Self::open_zip(p, fname)
+            } else if ext == "nc" {
+                Self::open_nc(p, fname)
+            } else {
+                Err(std::io::Error::from(std::io::ErrorKind::Unsupported).into())
+            }
+        } else {
+            Err(std::io::Error::from(std::io::ErrorKind::InvalidInput).into())
+        }
+    }
+
+    fn open_zip(p: &Path, fname: String) -> Result<Self, Box<dyn Error>> {
+        let path_str = CString::new(p.to_string_lossy().as_bytes())?;
+
+        let file = std::fs::File::open(p)?;
+        let mut zip = zip::ZipArchive::new(file)?;
+        assert_eq!(zip.len(), 1);
+
+        let mut nc_file = zip.by_index(0)?;
+        let mut buf: Vec<u8> = Vec::with_capacity(nc_file.size() as usize + 10);
+        let _size_read = nc_file.read_to_end(&mut buf)?;
+
+        let lock = get_netcdf_lock().lock();
+        let mut file_id: c_int = -1;
+        unsafe {
+            let status = nc_open_mem(
+                path_str.as_ptr(),
+                NC_NOWRITE,
+                buf.len(),
+                buf.as_mut_ptr() as *mut c_void,
+                &mut file_id as *mut c_int,
+            );
+            if status != NC_NOERR {
+                return Err(format!(
+                    "Error opening netcdf: {:?}",
+                    CStr::from_ptr(nc_strerror(status)).to_str()
+                )
+                .into());
+            }
+        }
+
+        let res = Self::initialize_with_nc_file_handle(fname, file_id, Some(buf))?;
+
+        drop(lock);
+
+        Ok(res)
+    }
+
+    fn open_nc(p: &Path, fname: String) -> Result<Self, Box<dyn Error>> {
+        let path_str = CString::new(p.to_string_lossy().as_bytes())?;
+
+        let lock = get_netcdf_lock().lock();
+        let mut file_id: c_int = -1;
+        unsafe {
+            let status = nc_open(path_str.as_ptr(), NC_NOWRITE, &mut file_id as *mut c_int);
+            check_netcdf_error(status)?;
+        }
+
+        let res = Self::initialize_with_nc_file_handle(fname, file_id, None)?;
+
+        drop(lock);
+
+        Ok(res)
+    }
+
+    #[allow(non_snake_case)]
+    fn initialize_with_nc_file_handle(
+        fname: String,
+        handle: c_int,
+        in_memory_buffer: Option<Vec<u8>>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let mut xlen: usize = 0;
+        let mut ylen: usize = 0;
+
+        // Shorthand
+        let h = handle;
+
+        let mut xscale: f64 = f64::NAN;
+        let mut xoffset: f64 = f64::NAN;
+        let mut yscale: f64 = f64::NAN;
+        let mut yoffset: f64 = f64::NAN;
+        let mut req: f64 = f64::NAN;
+        let mut rpol: f64 = f64::NAN;
+        let mut H: f64 = f64::NAN;
+        let mut lon0: f64 = f64::NAN;
+
+        unsafe {
+            let mut status: c_int;
+
+            let mut xdimid: c_int = -1;
+            status = nc_inq_dimid(
+                h,
+                b"x\0".as_ptr() as *const c_char,
+                &mut xdimid as *mut c_int,
+            );
+            check_netcdf_error(status)?;
+            status = nc_inq_dimlen(h, xdimid, &mut xlen as *mut size_t);
+            check_netcdf_error(status)?;
+
+            let mut ydimid: c_int = -1;
+            status = nc_inq_dimid(
+                h,
+                b"y\0".as_ptr() as *const c_char,
+                &mut ydimid as *mut c_int,
+            );
+            check_netcdf_error(status)?;
+            status = nc_inq_dimlen(h, ydimid, &mut ylen as *mut size_t);
+            check_netcdf_error(status)?;
+
+            let mut x: c_int = -1;
+            let mut y: c_int = -1;
+            status = nc_inq_varid(h, b"x\0".as_ptr() as *const c_char, &mut x as *mut c_int);
+            check_netcdf_error(status)?;
+            status = nc_inq_varid(h, b"y\0".as_ptr() as *const c_char, &mut y as *mut c_int);
+            check_netcdf_error(status)?;
+
+            let scale_factor = b"scale_factor".as_ptr() as *const c_char;
+            status = nc_get_att_double(h, x, scale_factor, &mut xscale as *mut c_double);
+            check_netcdf_error(status)?;
+            status = nc_get_att_double(h, y, scale_factor, &mut yscale as *mut c_double);
+            check_netcdf_error(status)?;
+
+            let add_offset = b"add_offset".as_ptr() as *const c_char;
+            status = nc_get_att_double(h, x, add_offset, &mut xoffset as *mut c_double);
+            check_netcdf_error(status)?;
+            status = nc_get_att_double(h, y, add_offset, &mut yoffset as *mut c_double);
+            check_netcdf_error(status)?;
+
+            let mut proj_id: c_int = -1;
+            status = nc_inq_dimid(
+                h,
+                b"goes_imager_projection\0".as_ptr() as *const c_char,
+                &mut proj_id as *mut c_int,
+            );
+            check_netcdf_error(status)?;
+
+            let semi_major_axis = b"semi_major_axis\0".as_ptr() as *const c_char;
+            let semi_minor_axis = b"semi_minor_axis\0".as_ptr() as *const c_char;
+            let perp_point_h = b"perspective_point_height\0".as_ptr() as *const c_char;
+            let lon_origin = b"longitude_of_projection_origin\0".as_ptr() as *const c_char;
+            status = nc_get_att_double(h, proj_id, semi_major_axis, &mut req as *mut c_double);
+            check_netcdf_error(status)?;
+            status = nc_get_att_double(h, proj_id, semi_minor_axis, &mut rpol as *mut c_double);
+            check_netcdf_error(status)?;
+            status = nc_get_att_double(h, proj_id, perp_point_h, &mut H as *mut c_double);
+            check_netcdf_error(status)?;
+            status = nc_get_att_double(h, proj_id, lon_origin, &mut lon0 as *mut c_double);
+            check_netcdf_error(status)?;
+        }
+
+        Ok(SatFireImage {
+            xlen,
+            ylen,
+            tran: CoordTransform {
+                xscale,
+                xoffset,
+                yscale,
+                yoffset,
+                req,
+                rpol,
+                H,
+                lon0,
+            },
+            buffer: in_memory_buffer,
+            nc_file_id: handle,
+            fname,
+        })
+    }
+
+    pub(crate) fn extract_fire_points(&self) -> Result<Vec<FirePoint>, Box<dyn Error>> {
+        let mut points: Vec<FirePoint> = Vec::new();
+
+        let lock = get_netcdf_lock().lock();
+
+        let powers = self.extract_variable_double(b"Power\0".as_ptr() as *const c_char)?;
+        let areas = self.extract_variable_double(b"Area\0".as_ptr() as *const c_char)?;
+        let temperatures = self.extract_variable_double(b"Temp\0".as_ptr() as *const c_char)?;
+        let masks = self.extract_variable_short(b"Mask\0".as_ptr() as *const c_char)?;
+        let dqfs = self.extract_variable_short(b"DQF\0".as_ptr() as *const c_char)?;
+
+        drop(lock);
+
+        for j in 0..self.ylen {
+            for i in 0..self.xlen {
+                let index = i + j * self.xlen;
+
+                let power_mw;
+                let area;
+                let temperature;
+                let mask;
+                let dqf;
+
+                unsafe {
+                    power_mw = *powers.get_unchecked(index);
+                    area = *areas.get_unchecked(index);
+                    temperature = *temperatures.get_unchecked(index);
+                    mask = *masks.get_unchecked(index);
+                    dqf = *dqfs.get_unchecked(index);
+                }
+
+                // 0 for a data quality flag indicates a good quality fire detection
+                if dqf == 0 {
+                    let ii = i as f64;
+                    let jj = j as f64;
+
+                    let ips: [f64; 5] = [ii - 0.5, ii - 0.5, ii + 0.5, ii + 0.5, ii];
+                    let jps: [f64; 5] = [jj - 0.5, jj + 0.5, jj + 0.5, jj - 0.5, jj];
+
+                    let (scan_angle, coords) = self.tran.convert_row_cols_to_latlon(&jps, &ips);
+
+                    points.push(FirePoint {
+                        x: i as isize,
+                        y: j as isize,
+                        pixel: Pixel {
+                            ul: coords[0],
+                            ll: coords[1],
+                            lr: coords[2],
+                            ur: coords[3],
+                            power: power_mw,
+                            area,
+                            temperature,
+                            mask_flag: MaskCode(mask),
+                            data_quality_flag: DataQualityFlagCode(dqf),
+                            scan_angle,
+                        },
+                    });
+                }
+            }
+        }
+
+        Ok(points)
+    }
+
+    fn extract_variable_double(&self, vname: *const c_char) -> Result<Vec<f64>, Box<dyn Error>> {
+        let mut vals = Vec::with_capacity(self.xlen * self.ylen);
+
+        unsafe {
+            let mut varid: c_int = -1;
+            let mut status = nc_inq_varid(self.nc_file_id, vname, &mut varid as *mut c_int);
+            check_netcdf_error(status)?;
+
+            let start: [size_t; 2] = [0, 0];
+            let counts: [size_t; 2] = [self.ylen, self.xlen];
+
+            status = nc_get_vara_double(
+                self.nc_file_id,
+                varid,
+                start.as_ptr(),
+                counts.as_ptr(),
+                vals.as_mut_ptr(),
+            );
+            check_netcdf_error(status)?;
+
+            vals.set_len(self.ylen * self.xlen);
+        }
+
+        Ok(vals)
+    }
+
+    fn extract_variable_short(&self, vname: *const c_char) -> Result<Vec<i16>, Box<dyn Error>> {
+        let mut vals = Vec::with_capacity(self.xlen * self.ylen);
+
+        unsafe {
+            let mut varid: c_int = -1;
+            let mut status = nc_inq_varid(self.nc_file_id, vname, &mut varid as *mut c_int);
+            check_netcdf_error(status)?;
+
+            let start: [size_t; 2] = [0, 0];
+            let counts: [size_t; 2] = [self.ylen, self.xlen];
+
+            status = nc_get_vara_short(
+                self.nc_file_id,
+                varid,
+                start.as_ptr(),
+                counts.as_ptr(),
+                vals.as_mut_ptr(),
+            );
+            check_netcdf_error(status)?;
+
+            vals.set_len(self.ylen * self.xlen);
+        }
+
+        Ok(vals)
+    }
+}
+
+impl Drop for SatFireImage {
+    fn drop(&mut self) {
+        let lock = get_netcdf_lock().lock();
+
+        unsafe {
+            let _ = nc_close(self.nc_file_id);
+        }
+
+        drop(lock);
+    }
 }
 
 /**
  * Represents all the data associated with a single pixel in which the satellite has detected
  * a fire.
  */
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct FirePoint {
     /// The polygon describing the scanned area.
     pixel: Pixel,
@@ -35,6 +362,7 @@ pub(crate) struct FirePoint {
 
 /// Projection information required to convert from row/column number to scan angles and lat-lon.
 #[allow(non_snake_case)]
+#[derive(Debug, Clone, Copy)]
 struct CoordTransform {
     /// Scale factor for the column for converting indexes to scan angle coords.
     xscale: f64,
@@ -54,533 +382,109 @@ struct CoordTransform {
     lon0: f64,
 }
 
-/*
-
-/**
- * \brief Open a file containing GOES-R/S Fire Detection Characteristics.
- *
- * \param fname the path to the file name to open.
- * \param tgt the [FireDataSet] structure to initialize.
- *
- * \returns false if there is an error opening the data.
- */
-bool fire_sat_image_open(char const *fname, struct SatFireImage *tgt);
-
-/**
- * \brief Close the file and clear the pointers associated with  with this dataset.
- *
- * \param dataset is the structure to close/finalize.
- */
-void fire_sat_image_close(struct SatFireImage *dataset);
-
-/**
- * \brief Extract pixels/points from the image that have non-zero fire power.
- *
- * \returns GArray * of struct FirePoint objects.
- */
-GArray *fire_sat_image_extract_fire_points(struct SatFireImage const *fdata);
-
-/** Add a FirePoint to this Cluster. */
-void satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire_point);
-
-/** Steal the pixels from this row.
- *
- * This is very unsafe because it leaves the struct in an invalid state with a \c NULL pointer
- * in the row->pixels. Use carefully and finalize/destroy the object soon after calling this
- * function.
- *
- * An alternative would be to call satfire_pixel_list_copy() and get a deep copy of the
- * \ref SFPixelList. But in some cases that would be a wasteful copy if we are done using the
- * \ref SFClusterRow now.
- */
-struct SFPixelList *satfire_cluster_db_satfire_cluster_row_steal_pixels(struct SFClusterRow *row);
-#include <assert.h>
-#include <libgen.h>
-#include <netcdf.h>
-#include <netcdf_mem.h>
-#include <pthread.h>
-#include <string.h>
-#include <tgmath.h>
-#include <zip.h>
-
-#include "sf_private.h"
-#include "sf_util.h"
-
-/*
- * I'm not sure if libnetcdf is thread safe yet, however after a few quick internet searches it
- * appears that as recently as 2018, it was not. All access to libnetcdf needs to be protected
- * by a mutex.
- */
-pthread_mutex_t netcdf_mtx = PTHREAD_MUTEX_INITIALIZER;
-
-static bool
-fire_sat_image_initialize_with_nc_handle(int file_id, struct SatFireImage *tgt)
-{
-    assert(tgt);
-
-    bool success = false;
-
-    tgt->nc_file_id = file_id;
-
-    int xdimid = -1;
-    int ydimid = -1;
-    int status = nc_inq_dimid(file_id, "x", &xdimid);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension id x: %s",
-           nc_strerror(status));
-    status = nc_inq_dimid(file_id, "y", &ydimid);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension id y: %s",
-           nc_strerror(status));
-
-    status = nc_inq_dimlen(file_id, xdimid, &tgt->xlen);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension size x: %s",
-           nc_strerror(status));
-    status = nc_inq_dimlen(file_id, ydimid, &tgt->ylen);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving dimension size y: %s",
-           nc_strerror(status));
-
-    int xvarid = -1;
-    int yvarid = -1;
-    status = nc_inq_varid(file_id, "x", &xvarid);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving x variable id: %s",
-           nc_strerror(status));
-    status = nc_inq_varid(file_id, "y", &yvarid);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving y variable id: %s",
-           nc_strerror(status));
-
-    status = nc_get_att_double(file_id, xvarid, "scale_factor", &tgt->trans.xscale);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving x scale factor: %s",
-           nc_strerror(status));
-    status = nc_get_att_double(file_id, yvarid, "scale_factor", &tgt->trans.yscale);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving y scale factor: %s",
-           nc_strerror(status));
-    status = nc_get_att_double(file_id, xvarid, "add_offset", &tgt->trans.xoffset);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving x offset: %s", nc_strerror(status));
-    status = nc_get_att_double(file_id, yvarid, "add_offset", &tgt->trans.yoffset);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving y offset: %s", nc_strerror(status));
-
-    int projection_var_id = -1;
-    status = nc_inq_varid(file_id, "goes_imager_projection", &projection_var_id);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving projection variable: %s",
-           nc_strerror(status));
-
-    status = nc_get_att_double(file_id, projection_var_id, "semi_major_axis", &tgt->trans.req);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving semi_major_axis: %s",
-           nc_strerror(status));
-    status = nc_get_att_double(file_id, projection_var_id, "semi_minor_axis", &tgt->trans.rpol);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving semi_minor_axis: %s",
-           nc_strerror(status));
-    status =
-        nc_get_att_double(file_id, projection_var_id, "perspective_point_height", &tgt->trans.H);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving perspective_point_height: %s",
-           nc_strerror(status));
-    tgt->trans.H += tgt->trans.req;
-    status = nc_get_att_double(file_id, projection_var_id, "longitude_of_projection_origin",
-                               &tgt->trans.lon0);
-    Stopif(status != NC_NOERR, goto RETURN, "Error retrieving longitude_of_projection_origin: %s",
-           nc_strerror(status));
-
-    success = true;
-
-RETURN:
-    return success;
-}
-
-static bool
-fire_sat_image_open_nc(char const *fname, struct SatFireImage *tgt)
-{
-    assert(fname);
-    assert(tgt);
-
-    bool success = false;
-
-    int rc = pthread_mutex_lock(&netcdf_mtx);
-    Stopif(rc, return false, "Error acquiring mutex.");
-
-    int file_id = -1;
-    int status = nc_open(fname, NC_NOWRITE, &file_id);
-    Stopif(status != NC_NOERR, goto RETURN, "Error opening NetCDF %s: %s", fname,
-           nc_strerror(status));
-
-    success = fire_sat_image_initialize_with_nc_handle(file_id, tgt);
-
-RETURN:
-    rc = pthread_mutex_unlock(&netcdf_mtx);
-    Stopif(rc, return false, "Error unlocking mutex.");
-
-    return success;
-}
-
-static bool
-fire_sat_image_open_zip(char const *fname, struct SatFireImage *tgt)
-{
-    assert(fname);
-    assert(tgt);
-
-    bool success = false;
-    unsigned char *memory = 0;
-
-    zip_t *zfile = zip_open(fname, ZIP_RDONLY, 0);
-    Stopif(!zfile, goto RETURN, "Error opening file: %s", fname);
-
-    assert(zip_get_num_entries(zfile, 0) == 1);
-
-    struct zip_stat stat = {0};
-    zip_stat_init(&stat);
-    int rc = zip_stat_index(zfile, 0, 0, &stat);
-    Stopif(rc, goto CLOSE_ZIP, "Error getting zip stat for %s", fname);
-    Stopif(!(stat.valid && ZIP_STAT_SIZE), goto CLOSE_ZIP,
-           "No file size returned from zip_stat for %s", fname);
-
-    memory = malloc(stat.size + 10);
-    Stopif(!memory, goto CLOSE_ZIP, "Out of memory.");
-    tgt->memory = memory;
-    tgt->memory_size = stat.size;
-
-    zip_file_t *inner_zfile = zip_fopen_index(zfile, 0, 0);
-    Stopif(!inner_zfile, goto CLEAN_UP_MEM, "Error opening file inside zip %s", fname);
-
-    size_t num_bytes_read = zip_fread(inner_zfile, tgt->memory, tgt->memory_size);
-    Stopif(num_bytes_read != tgt->memory_size, goto CLOSE_ZIP_INNER,
-           "Error reading data from zip %s", fname);
-
-    rc = pthread_mutex_lock(&netcdf_mtx);
-    Stopif(rc, return false, "Error acquiring mutex.");
-
-    int file_id = -1;
-    int status = nc_open_mem(fname, NC_NOWRITE, tgt->memory_size, tgt->memory, &file_id);
-    Stopif(status != NC_NOERR, goto RETURN, "Error opening NetCDF %s: %s", fname,
-           nc_strerror(status));
-
-    success = fire_sat_image_initialize_with_nc_handle(file_id, tgt);
-
-    rc = pthread_mutex_unlock(&netcdf_mtx);
-
-    if (rc) {
-        fprintf(stderr, "Error unlocking mutex.\n");
-        success = false;
-    }
-
-CLOSE_ZIP_INNER:
-    zip_fclose(inner_zfile);
-
-CLEAN_UP_MEM:
-    if (!success) {
-        free(memory);
-        memset(tgt, 0, sizeof(*tgt));
-    }
-
-CLOSE_ZIP:
-    zip_close(zfile);
-
-RETURN:
-    return success;
-}
-
-bool
-fire_sat_image_open(char const *fname, struct SatFireImage *tgt)
-{
-    // Make sure the target is properly initialized
-    memset(tgt, 0, sizeof(*tgt));
-
-    bool success = false;
-
-    char fname_copy[1024] = {0};
-    int num_printed = snprintf(fname_copy, sizeof(fname_copy), "%s", fname);
-    Stopif(num_printed >= sizeof(fname_copy), return false, "File name too long: %s", fname);
-
-    char *bname = basename(fname_copy);
-    num_printed = snprintf(tgt->fname, sizeof(tgt->fname), "%s", bname);
-    Stopif(num_printed >= sizeof(tgt->fname), return false, "File name too long: %s", fname);
-
-    if (strstr(fname, ".zip") != 0) {
-        success = fire_sat_image_open_zip(fname, tgt);
-    } else {
-        success = fire_sat_image_open_nc(fname, tgt);
-    }
-
-    return success;
-}
-
-void
-fire_sat_image_close(struct SatFireImage *dataset)
-{
-    int rc = pthread_mutex_lock(&netcdf_mtx);
-    Stopif(rc, return, "Error acquiring mutex.");
-
-    int status = nc_close(dataset->nc_file_id);
-    Stopif(status != NC_NOERR, return, "Error closing NetCDF file %s: %s", dataset->fname,
-           nc_strerror(status));
-
-    rc = pthread_mutex_unlock(&netcdf_mtx);
-    if (rc) {
-        fprintf(stderr, "Error unlocking mutex.\n");
-    }
-
-    if (dataset->memory) {
-        free(dataset->memory);
-    }
-
-    memset(dataset, 0, sizeof(*dataset));
-}
-
-struct XYCoord {
-    double x;
-    double y;
-};
-
-static inline struct XYCoord
-satfire_convert_row_col_to_scan_angles(struct CoordTransform const *trans, double row, double col)
-{
-    double x = trans->xscale * col + trans->xoffset;
-    double y = trans->yscale * row + trans->yoffset;
-
-    return (struct XYCoord){.x = x, .y = y};
-}
-
-static inline struct SFCoord
-satfire_convert_xy_to_latlon(struct CoordTransform const *trans, struct XYCoord xy)
-{
-    double sinx = sin(xy.x);
-    double cosx = cos(xy.x);
-    double siny = sin(xy.y);
-    double cosy = cos(xy.y);
-    double req = trans->req;
-    double rpol = trans->rpol;
-    double H = trans->H;
-    double lon0 = trans->lon0;
-
-    double a = sinx * sinx + cosx * cosx * (cosy * cosy + req * req / (rpol * rpol) * siny * siny);
-    double b = -2.0 * H * cosx * cosy;
-    double c = H * H - req * req;
-
-    double rs = (-b - sqrt(b * b - 4.0 * a * c)) / (2.0 * a);
-
-    double sx = rs * cosx * cosy;
-    double sy = -rs * sinx;
-    double sz = rs * cosx * siny;
-
-    double lat =
-        atan2(req * req * sz, rpol * rpol * sqrt((H - sx) * (H - sx) + sy * sy)) * 180.0 / M_PI;
-    double lon = lon0 - atan2(sy, H - sx) * 180.0 / M_PI;
-
-    return (struct SFCoord){.lat = lat, .lon = lon};
-}
-
-static inline double *
-satfire_nc_extract_variable_double(struct SatFireImage const *fdata, char const *variable)
-{
-    double *vals = 0;
-
-    int var_id = -1;
-    int status = nc_inq_varid(fdata->nc_file_id, variable, &var_id);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading %s variable id: %s", variable,
-           nc_strerror(status));
-
-    size_t vals_len = fdata->xlen * fdata->ylen;
-    vals = malloc(vals_len * sizeof(double));
-    assert(vals);
-
-    size_t start[2] = {0, 0};
-    size_t counts[2] = {fdata->ylen, fdata->xlen};
-    status = nc_get_vara_double(fdata->nc_file_id, var_id, start, counts, vals);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading %s variable values: %s", variable,
-           nc_strerror(status));
-
-    double scale_factor = 1.0;
-    double add_offset = 0.0;
-    double fill_value = 65535.0;
-
-    status = nc_get_att_double(fdata->nc_file_id, var_id, "scale_factor", &scale_factor);
-    Stopif(status != NC_NOERR && status != NC_ENOTATT, goto ERR_RETURN,
-           "Error reading scale_factor attribute for %s: %s", variable, nc_strerror(status));
-    bool skip_transform = status == NC_ENOTATT;
-    status = nc_get_att_double(fdata->nc_file_id, var_id, "add_offset", &add_offset);
-    Stopif(status != NC_NOERR && status != NC_ENOTATT, goto ERR_RETURN,
-           "Error reading add_offset attribute for %s: %s", variable, nc_strerror(status));
-    skip_transform = skip_transform && (status == NC_ENOTATT);
-
-    status = nc_get_att_double(fdata->nc_file_id, var_id, "_FillValue", &fill_value);
-    Stopif(status != NC_NOERR && status != NC_ENOTATT, goto ERR_RETURN,
-           "Error reading _FillValue attribute for %s: %s", variable, nc_strerror(status));
-
-    if (!skip_transform) {
-        for (size_t i = 0; i < vals_len; ++i) {
-            if (vals[i] != fill_value) {
-                vals[i] = vals[i] * scale_factor + add_offset;
-            } else {
-                vals[i] = -INFINITY;
-            }
+impl CoordTransform {
+    #[allow(non_snake_case)]
+    fn convert_row_cols_to_latlon(&self, rows: &[f64; 5], cols: &[f64; 5]) -> (f64, [Coord; 5]) {
+        let mut coords = [Coord { lat: 0.0, lon: 0.0 }; 5];
+
+        let x = self.xscale * cols[4] + self.xoffset;
+        let y = self.yscale * rows[4] + self.yoffset;
+        let scan_angle = x.hypot(y);
+
+        for i in 0..5 {
+            let x = self.xscale * cols[i] + self.xoffset;
+            let y = self.yscale * rows[i] + self.yoffset;
+
+            let sinx = x.sin();
+            let cosx = x.cos();
+            let siny = y.sin();
+            let cosy = y.cos();
+            let req = self.req;
+            let rpol = self.rpol;
+            let H = self.H;
+            let lon0 = self.lon0;
+
+            let a =
+                sinx * sinx + cosx * cosx * (cosy * cosy + req * req / (rpol * rpol) * siny * siny);
+            let b = -2.0 * H * cosx * cosy;
+            let c = H * H - req * req;
+
+            let rs = (-b - (b * b - 4.0 * a * c).sqrt()) / (2.0 * a);
+
+            let sx = rs * cosx * cosy;
+            let sy = -rs * sinx;
+            let sz = rs * cosx * siny;
+
+            let lat = (req * req * sz)
+                .atan2(rpol * rpol * ((H - sx) * (H - sx) + sy * sy).sqrt())
+                .to_degrees();
+            let lon = lon0 - (sy.atan2(H - sx)).to_degrees();
+
+            coords[i] = Coord { lat, lon };
         }
-    } else {
-        for (size_t i = 0; i < vals_len; ++i) {
-            if (vals[i] == fill_value) {
-                vals[i] = -INFINITY;
-            }
+
+        (scan_angle, coords)
+    }
+}
+
+static NETCDF_GLOBAL_LOCK: OnceCell<Mutex<()>> = OnceCell::new();
+
+fn get_netcdf_lock() -> &'static Mutex<()> {
+    NETCDF_GLOBAL_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+const NC_NOWRITE: c_int = 0x0000;
+const NC_NOERR: c_int = 0;
+
+fn check_netcdf_error(status_code: c_int) -> Result<(), Box<dyn Error>> {
+    unsafe {
+        if status_code != NC_NOERR {
+            Err(format!(
+                "Error opening netcdf: {:?}",
+                CStr::from_ptr(nc_strerror(status_code)).to_str()
+            )
+            .into())
+        } else {
+            Ok(())
         }
     }
-
-    return vals;
-
-ERR_RETURN:
-    free(vals);
-    return 0;
 }
 
-static inline signed short *
-satfire_nc_extract_data_quality_flag(struct SatFireImage const *fdata)
-{
-    signed short *vals = 0;
+#[link(name = "netcdf")]
+extern "C" {
+    fn nc_open(path: *const c_char, mode: c_int, ncidp: *mut c_int) -> c_int;
+    fn nc_open_mem(
+        name: *const c_char,
+        mode: c_int,
+        buf_size: size_t,
+        buf: *mut c_void,
+        ncidp: *mut c_int,
+    ) -> c_int;
+    fn nc_close(handle: c_int) -> c_int;
 
-    int var_id = -1;
-    int status = nc_inq_varid(fdata->nc_file_id, "DQF", &var_id);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading DQF variable id: %s",
-           nc_strerror(status));
+    fn nc_strerror(code: c_int) -> *const c_char;
 
-    size_t vals_len = fdata->xlen * fdata->ylen;
-    vals = malloc(vals_len * sizeof(signed short));
-    assert(vals);
-
-    size_t start[2] = {0, 0};
-    size_t counts[2] = {fdata->ylen, fdata->xlen};
-    status = nc_get_vara_short(fdata->nc_file_id, var_id, start, counts, vals);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading DQF variable values: %s",
-           nc_strerror(status));
-
-    return vals;
-
-ERR_RETURN:
-    free(vals);
-    return 0;
+    fn nc_inq_dimid(handle: c_int, name: *const c_char, rv: *mut c_int) -> c_int;
+    fn nc_inq_dimlen(handle: c_int, dimid: c_int, rv: *mut size_t) -> c_int;
+    fn nc_inq_varid(handle: c_int, name: *const c_char, varid: *mut c_int) -> c_int;
+    fn nc_get_att_double(
+        handle: c_int,
+        varid: c_int,
+        name: *const c_char,
+        val: *mut c_double,
+    ) -> c_int;
+    fn nc_get_vara_short(
+        handle: c_int,
+        varid: c_int,
+        start: *const size_t,
+        counts: *const size_t,
+        vals: *mut c_short,
+    ) -> c_int;
+    fn nc_get_vara_double(
+        handle: c_int,
+        varid: c_int,
+        start: *const size_t,
+        counts: *const size_t,
+        vals: *mut c_double,
+    ) -> c_int;
 }
-
-static inline short *
-satfire_nc_extract_mask(struct SatFireImage const *fdata)
-{
-    short *vals = 0;
-
-    int var_id = -1;
-    int status = nc_inq_varid(fdata->nc_file_id, "Mask", &var_id);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Mask variable id: %s",
-           nc_strerror(status));
-
-    size_t vals_len = fdata->xlen * fdata->ylen;
-    vals = malloc(vals_len * sizeof(short));
-    assert(vals);
-
-    size_t start[2] = {0, 0};
-    size_t counts[2] = {fdata->ylen, fdata->xlen};
-    status = nc_get_vara_short(fdata->nc_file_id, var_id, start, counts, vals);
-    Stopif(status != NC_NOERR, goto ERR_RETURN, "Error reading Mask variable values: %s",
-           nc_strerror(status));
-
-    return vals;
-
-ERR_RETURN:
-    free(vals);
-    return 0;
-}
-
-GArray *
-fire_sat_image_extract_fire_points(struct SatFireImage const *fdata)
-{
-    assert(fdata);
-
-    GArray *points = 0;
-    double *powers = 0;
-    double *areas = 0;
-    double *temperatures = 0;
-    signed short *data_quality_flags = 0;
-    short *masks = 0;
-    points = g_array_new(false, true, sizeof(struct FirePoint));
-    assert(points);
-
-    int rc = pthread_mutex_lock(&netcdf_mtx);
-    Stopif(rc, goto ERR_RETURN, "Error acquiring lock on libnetcdf.");
-
-    powers = satfire_nc_extract_variable_double(fdata, "Power");
-    Stopif(!powers, pthread_mutex_unlock(&netcdf_mtx); goto ERR_RETURN, "Error reading Power");
-
-    areas = satfire_nc_extract_variable_double(fdata, "Area");
-    Stopif(!areas, pthread_mutex_unlock(&netcdf_mtx); goto ERR_RETURN, "Error reading Area");
-
-    temperatures = satfire_nc_extract_variable_double(fdata, "Temp");
-    Stopif(!temperatures, pthread_mutex_unlock(&netcdf_mtx);
-           goto ERR_RETURN, "Error reading Temperature");
-
-    masks = satfire_nc_extract_mask(fdata);
-    Stopif(!masks, pthread_mutex_unlock(&netcdf_mtx); goto ERR_RETURN, "Error reading Mask");
-
-    data_quality_flags = satfire_nc_extract_data_quality_flag(fdata);
-    Stopif(!data_quality_flags, pthread_mutex_unlock(&netcdf_mtx);
-           goto ERR_RETURN, "Error reading Data Quality Flags");
-
-    rc = pthread_mutex_unlock(&netcdf_mtx);
-    Stopif(rc, goto ERR_RETURN, "Error releasing lock on libnetcdf.");
-
-    for (int j = 0; j < fdata->ylen; ++j) {
-        for (int i = 0; i < fdata->xlen; ++i) {
-
-            double power_mw = powers[fdata->xlen * j + i];
-            double area = areas[fdata->xlen * j + i];
-            double temperature = temperatures[fdata->xlen * j + i];
-            short mask = masks[fdata->xlen * j + i];
-            signed short dqf = data_quality_flags[fdata->xlen * j + i];
-
-            // 0 for a data quality flag indicates a good quality fire detection.
-            if (dqf == 0) {
-
-                double ips[5] = {i - 0.5, i - 0.5, i + 0.5, i + 0.5, i};
-                double jps[5] = {j - 0.5, j + 0.5, j + 0.5, j - 0.5, j};
-
-                struct XYCoord xys[5] = {0};
-                struct SFCoord coords[5] = {0};
-
-                for (size_t k = 0; k < sizeof(xys) / sizeof(xys[0]); ++k) {
-                    xys[k] = satfire_convert_row_col_to_scan_angles(&fdata->trans, jps[k], ips[k]);
-                    coords[k] = satfire_convert_xy_to_latlon(&fdata->trans, xys[k]);
-                }
-
-                double scan_angle = hypot(xys[4].x, xys[4].y) * 180.0 / M_PI;
-
-                struct SFCoord ul = coords[0];
-                struct SFCoord ll = coords[1];
-                struct SFCoord lr = coords[2];
-                struct SFCoord ur = coords[3];
-
-                struct SFPixel pixel = {.ul = ul,
-                                        .ll = ll,
-                                        .lr = lr,
-                                        .ur = ur,
-                                        .power = power_mw,
-                                        .area = area,
-                                        .temperature = temperature,
-                                        .mask_flag = mask,
-                                        .data_quality_flag = dqf,
-                                        .scan_angle = scan_angle};
-
-                struct FirePoint pnt = {.x = i, .y = j, .pixel = pixel};
-                points = g_array_append_val(points, pnt);
-            }
-        }
-    }
-
-    free(powers);
-    free(areas);
-    free(temperatures);
-    free(data_quality_flags);
-    free(masks);
-    return points;
-
-ERR_RETURN:
-
-    if (points)
-        g_array_unref(points);
-    free(powers);
-    free(areas);
-    free(temperatures);
-    free(data_quality_flags);
-    free(masks);
-
-    return 0;
-}
-*/

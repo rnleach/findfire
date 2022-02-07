@@ -12,6 +12,7 @@ use chrono::NaiveDateTime;
  * It should be noted that a power, area, and temperature are not analyzed for every Pixel, so
  * the aggregate properties only aggregate these paramters for the Pixels that report values.
  */
+#[derive(Debug, Clone)]
 pub struct Cluster {
     /// Total (sum) of the fire power of the points in the cluster in megawatts.
     power: f64,
@@ -24,6 +25,106 @@ pub struct Cluster {
     /// Pixels making up the cluster.
     pixels: PixelList,
 }
+
+impl Default for Cluster {
+    fn default() -> Self {
+        Cluster {
+            power: 0.0,
+            area: 0.0,
+            max_temp: 0.0,
+            max_scan_angle: 0.0,
+            pixels: PixelList::new(),
+        }
+    }
+}
+
+impl Cluster {
+    /** Create a new Cluster with already initialized values. */
+    pub fn new(
+        power: f64,
+        area: f64,
+        max_temp: f64,
+        max_scan_angle: f64,
+        pixels: PixelList,
+    ) -> Cluster {
+        Cluster {
+            power,
+            area,
+            max_temp,
+            max_scan_angle,
+            pixels,
+        }
+    }
+
+    /** Get the total power of all pixels in the Cluster, megawatts. */
+    pub fn total_power(&self) -> f64 {
+        self.power
+    }
+
+    /** Get the total fire area of all pixels in the Cluster that had an area in the file, square
+     * meters. */
+    pub fn total_area(&self) -> f64 {
+        self.area
+    }
+
+    /** Get the max fire temperature of all pixels in the Cluster that had a temperature in the file,
+     * Kelvin. */
+    pub fn max_temperature(&self) -> f64 {
+        self.max_temp
+    }
+
+    /** Get the max scan angle of any pixel in this cluster. */
+    pub fn max_scan_angle(&self) -> f64 {
+        self.max_scan_angle
+    }
+
+    /** Get the number of SFPixels in a Cluster. */
+    pub fn pixel_count(&self) -> usize {
+        self.pixels.len()
+    }
+
+    /** Get access to the pixels in the cluster. */
+    pub fn pixels(&self) -> &PixelList {
+        &self.pixels
+    }
+
+    /*
+    /// Add a fire point to this Cluster.
+    fn add_fire_point(&mut self, fire_point: FirePoint)
+    {
+        assert(cluster);
+        assert(fire_point);
+
+        cluster->pixels = satfire_pixel_list_append(cluster->pixels, &fire_point->pixel);
+        if (!isinf(fire_point->pixel.power)) {
+            cluster->power += fire_point->pixel.power;
+        }
+
+        if (!isinf(fire_point->pixel.temperature)) {
+            cluster->max_temp = fmax(cluster->max_temp, fire_point->pixel.temperature);
+        }
+
+        if (!isinf(fire_point->pixel.area)) {
+            cluster->area += fire_point->pixel.area;
+        }
+
+        cluster->max_scan_angle = fmax(cluster->max_scan_angle, fire_point->pixel.scan_angle);
+    }
+    */
+}
+
+/*
+/** Get the centroid of a cluster. */
+struct SFCoord satfire_cluster_centroid(struct SFCluster const *cluster);
+
+struct SFCoord
+satfire_cluster_centroid(struct SFCluster const *cluster)
+{
+    assert(cluster);
+    return satfire_pixel_list_centroid(cluster->pixels);
+}
+
+*/
 
 /** A collection of [Cluster](crate::Cluster) objects.
  *
@@ -43,57 +144,6 @@ pub struct ClusterList {
 }
 
 /*
-
-
-/*-------------------------------------------------------------------------------------------------
-                                                 Cluster
--------------------------------------------------------------------------------------------------*/
-/** Create a new Cluster. */
-struct SFCluster *satfire_cluster_new(void);
-
-/** Cleanup a Cluster. */
-void satfire_cluster_destroy(struct SFCluster **cluster);
-
-/** Create a deep copy of a Cluster. */
-struct SFCluster *satfire_cluster_copy(struct SFCluster const *cluster);
-
-/** Get the total power of all pixels in the Cluster, megawatts. */
-double satfire_cluster_total_power(struct SFCluster const *cluster);
-
-/** Get the total fire area of all pixels in the Cluster that had an area in the file, square
- * meters. */
-double satfire_cluster_total_area(struct SFCluster const *cluster);
-
-/** Get the max fire temperature of all pixels in the Cluster that had a temperature in the file,
- * Kelvin. */
-double satfire_cluster_max_temperature(struct SFCluster const *cluster);
-
-/** Get the max scan angle of any pixel in this cluster. */
-double satfire_cluster_max_scan_angle(struct SFCluster const *cluster);
-
-/** Get the number of SFPixels in a Cluster. */
-unsigned int satfire_cluster_pixel_count(struct SFCluster const *cluster);
-
-/** Get access to the pixels in the cluster. */
-const struct SFPixelList *satfire_cluster_pixels(struct SFCluster const *cluster);
-
-/** Get the centroid of a cluster. */
-struct SFCoord satfire_cluster_centroid(struct SFCluster const *cluster);
-
-/** Compare Cluster objects for sorting in descending order of power. */
-int satfire_cluster_descending_power_compare(const void *ap, const void *bp);
-
-#include "satfire.h"
-
-#include <assert.h>
-#include <stdbool.h>
-#include <string.h>
-
-#include "sf_private.h"
-#include "sf_util.h"
-
-extern char const *out_of_memory;
-
 /*-------------------------------------------------------------------------------------------------
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/
@@ -197,132 +247,6 @@ unsigned int satfire_cluster_list_length(struct SFClusterList *list);
  */
 double satfire_cluster_list_total_power(struct SFClusterList *list);
 
-/*-------------------------------------------------------------------------------------------------
-                                                 Cluster
--------------------------------------------------------------------------------------------------*/
-struct SFCluster *
-satfire_cluster_new(void)
-{
-    struct SFCluster *new = malloc(sizeof(struct SFCluster));
-    Stopif(!new, exit(EXIT_FAILURE), "%s", out_of_memory);
-
-    *new =
-        (struct SFCluster){.power = 0.0, .pixels = satfire_pixel_list_new(), .max_scan_angle = 0.0};
-
-    return new;
-}
-
-void
-satfire_cluster_destroy(struct SFCluster **cluster)
-{
-    assert(cluster);
-    assert(*cluster);
-    (*cluster)->pixels = satfire_pixel_list_destroy((*cluster)->pixels);
-    free(*cluster);
-    *cluster = 0;
-}
-
-void
-satfire_cluster_add_fire_point(struct SFCluster *cluster, struct FirePoint *fire_point)
-{
-    assert(cluster);
-    assert(fire_point);
-
-    cluster->pixels = satfire_pixel_list_append(cluster->pixels, &fire_point->pixel);
-    if (!isinf(fire_point->pixel.power)) {
-        cluster->power += fire_point->pixel.power;
-    }
-
-    if (!isinf(fire_point->pixel.temperature)) {
-        cluster->max_temp = fmax(cluster->max_temp, fire_point->pixel.temperature);
-    }
-
-    if (!isinf(fire_point->pixel.area)) {
-        cluster->area += fire_point->pixel.area;
-    }
-
-    cluster->max_scan_angle = fmax(cluster->max_scan_angle, fire_point->pixel.scan_angle);
-}
-
-struct SFCluster *
-satfire_cluster_copy(struct SFCluster const *cluster)
-{
-    assert(cluster);
-
-    struct SFCluster *copy = malloc(sizeof(struct SFCluster));
-    Stopif(!copy, exit(EXIT_FAILURE), "%s", out_of_memory);
-
-    *copy = (struct SFCluster){.power = cluster->power,
-                               .area = cluster->area,
-                               .max_temp = cluster->max_temp,
-                               .pixels = satfire_pixel_list_copy(cluster->pixels),
-                               .max_scan_angle = cluster->max_scan_angle};
-
-    return copy;
-}
-
-double
-satfire_cluster_total_power(struct SFCluster const *cluster)
-{
-    assert(cluster);
-    return cluster->power;
-}
-
-double
-satfire_cluster_total_area(struct SFCluster const *cluster)
-{
-    assert(cluster);
-    return cluster->area;
-}
-
-double
-satfire_cluster_max_temperature(struct SFCluster const *cluster)
-{
-    assert(cluster);
-    return cluster->max_temp;
-}
-
-double
-satfire_cluster_max_scan_angle(struct SFCluster const *cluster)
-{
-    assert(cluster);
-    return cluster->max_scan_angle;
-}
-
-unsigned int
-satfire_cluster_pixel_count(struct SFCluster const *cluster)
-{
-    assert(cluster);
-
-    return cluster->pixels->len;
-}
-
-const struct SFPixelList *
-satfire_cluster_pixels(struct SFCluster const *cluster)
-{
-    assert(cluster);
-    return cluster->pixels;
-}
-
-struct SFCoord
-satfire_cluster_centroid(struct SFCluster const *cluster)
-{
-    assert(cluster);
-    return satfire_pixel_list_centroid(cluster->pixels);
-}
-
-int
-satfire_cluster_descending_power_compare(const void *ap, const void *bp)
-{
-    struct SFCluster const *a = ap;
-    struct SFCluster const *b = bp;
-
-    if (a->power > b->power)
-        return -1;
-    if (a->power < b->power)
-        return 1;
-    return 0;
-}
 /*-------------------------------------------------------------------------------------------------
                                                ClusterList
 -------------------------------------------------------------------------------------------------*/

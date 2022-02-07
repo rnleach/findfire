@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 chrono = "^0.4.19"
+libc = "0.2.117"
 netcdf = {version="^0.7.0", features=["memory"]}
+once_cell = "1.9.0"
 rusqlite = {version="^0.26.0", features=["blob", "chrono"]}
+static_assertions = "1.1.0"
 walkdir = "^2"
 zip = "0.5"
