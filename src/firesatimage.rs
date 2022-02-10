@@ -353,11 +353,11 @@ impl Drop for SatFireImage {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FirePoint {
     /// The polygon describing the scanned area.
-    pixel: Pixel,
+    pub pixel: Pixel,
     /// The x-coordinate (column number, often indexed as 'i') in the grid.
-    x: isize,
+    pub x: isize,
     /// The y-coordinate (row number, often indexed as 'j') in the grid.
-    y: isize,
+    pub y: isize,
 }
 
 /// Projection information required to convert from row/column number to scan angles and lat-lon.

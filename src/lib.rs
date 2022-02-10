@@ -12,6 +12,37 @@ pub use geo::{BoundingBox, Coord, Geo};
 pub use pixel::{Pixel, PixelList};
 pub use satellite::{DataQualityFlagCode, MaskCode, Satellite, Sector};
 
+use chrono::{DateTime, NaiveDateTime, Utc};
+/// Parse the file name and find the scan start time.
+pub fn start_time_from_file_name(fname: &str) -> Option<DateTime<Utc>> {
+    let start_idx = fname.find("_s")? + 2;
+    let slice = &fname[start_idx..];
+    let slice = if slice.len() > 13 {
+        &slice[..13]
+    } else {
+        return None;
+    };
+
+    NaiveDateTime::parse_from_str(slice, "%Y%j%H%M%S")
+        .ok()
+        .map(|naive| DateTime::<Utc>::from_utc(naive, Utc))
+}
+
+/// Parse the file name and find the scan end time.
+pub fn end_time_from_file_name(fname: &str) -> Option<DateTime<Utc>> {
+    let start_idx = fname.find("_e")? + 2;
+    let slice = &fname[start_idx..];
+    let slice = if slice.len() > 13 {
+        &slice[..13]
+    } else {
+        return None;
+    };
+
+    NaiveDateTime::parse_from_str(slice, "%Y%j%H%M%S")
+        .ok()
+        .map(|naive| DateTime::<Utc>::from_utc(naive, Utc))
+}
+
 // Private API
 mod cluster;
 mod database;
@@ -21,3 +52,28 @@ mod geo;
 mod kml;
 mod pixel;
 mod satellite;
+
+// test
+#[cfg(test)]
+mod test {
+    use super::*;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn test_start_time_from_file_name() {
+        const CASE1: &str =
+            "OR_ABI-L2-FDCF-M6_G17_s20212130100319_e20212130109386_c20212130109511.nc.zip";
+
+        let case1_start = start_time_from_file_name(CASE1).unwrap();
+        assert_eq!(
+            case1_start,
+            DateTime::<Utc>::from_utc(NaiveDate::from_yo(2021, 213).and_hms(1, 0, 31), Utc)
+        );
+
+        let case1_end = end_time_from_file_name(CASE1).unwrap();
+        assert_eq!(
+            case1_end,
+            DateTime::<Utc>::from_utc(NaiveDate::from_yo(2021, 213).and_hms(1, 9, 38), Utc)
+        );
+    }
+}
