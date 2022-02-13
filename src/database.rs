@@ -3,7 +3,7 @@ use crate::{
     pixel::PixelList,
     satellite::{Satellite, Sector},
 };
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 
 pub struct FireDatabase {}
 
@@ -20,17 +20,19 @@ pub struct FireDatabaseQueryClusters<'a> {
 }
 
 pub struct FireDatabaseClusterRow {
-    start: NaiveDateTime,
-    end: NaiveDateTime,
-    power: f64,
-    max_temperature: f64,
-    area: f64,
-    scan_angle: f64,
-    centroid: Coord,
-    sector: Sector,
-    sat: Satellite,
-    pixels: PixelList,
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
+    pub power: f64,
+    pub max_temperature: f64,
+    pub area: f64,
+    pub scan_angle: f64,
+    pub centroid: Coord,
+    pub sector: Sector,
+    pub sat: Satellite,
+    pub pixels: PixelList,
 }
+
+impl FireDatabaseClusterRow {}
 
 pub struct FiresDatabaseAddFire<'a> {
     db: &'a FireDatabase,
@@ -215,10 +217,6 @@ enum SFSatellite satfire_cluster_db_satfire_cluster_row_satellite(struct SFClust
 
 /** Get the scan sector the satellite was using when it detected this Cluster. */
 enum SFSector satfire_cluster_db_satfire_cluster_row_sector(struct SFClusterRow const *row);
-
-/** Get view of the SFPixels that make up this Cluster. */
-const struct SFPixelList *
-satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row);
 
 /** Call this on a SFClusterRow if you're done using it.
  *
@@ -1034,13 +1032,6 @@ satfire_cluster_db_satfire_cluster_row_sector(struct SFClusterRow const *row)
 {
     assert(row);
     return row->sector;
-}
-
-const struct SFPixelList *
-satfire_cluster_db_satfire_cluster_row_pixels(struct SFClusterRow const *row)
-{
-    assert(row);
-    return row->pixels;
 }
 
 struct SFPixelList *

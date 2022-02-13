@@ -3,7 +3,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 
 /** The GOES satellites this library works with. */
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Satellite {
     /// GOES-16 (formerly GOES-R), or commonly known as GOES East
     G16,
@@ -52,7 +52,7 @@ impl Satellite {
 }
 
 /** The satellite scan sectors this library recognizes. */
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sector {
     /// This is the full disk sector that includes the full viewable disk of the Earth.
     FULL,

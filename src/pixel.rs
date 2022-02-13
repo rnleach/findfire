@@ -44,6 +44,22 @@ pub struct Pixel {
 }
 
 impl Pixel {
+    fn max_merge(&mut self, other: &Pixel) {
+        self.power = self.power.max(other.power);
+        self.temperature = self.temperature.max(other.temperature);
+        self.area = self.area.max(other.area);
+        self.mask_flag = if self.mask_flag.0 < other.mask_flag.0 {
+            self.mask_flag
+        } else {
+            other.mask_flag
+        };
+        self.data_quality_flag = if self.data_quality_flag.0 < other.data_quality_flag.0 {
+            self.data_quality_flag
+        } else {
+            other.data_quality_flag
+        };
+    }
+
     fn write_bytes<W: Write>(&self, w: &mut W) -> Result<(), std::io::Error> {
         let mut write_coord = |coord: &Coord| -> Result<(), std::io::Error> {
             w.write(&coord.lat.to_ne_bytes())?;
@@ -540,6 +556,24 @@ impl PixelList {
         }
 
         false
+    }
+
+    pub(crate) fn max_merge(&mut self, other: &PixelList) {
+        for other_pixel in other.0.iter() {
+            let mut is_new = true;
+
+            for pixel in self.0.iter_mut() {
+                if pixel.approx_equal(other_pixel, 1.0e-5) {
+                    pixel.max_merge(other_pixel);
+                    is_new = false;
+                    break;
+                }
+            }
+
+            if is_new {
+                self.0.push(*other_pixel);
+            }
+        }
     }
 }
 
