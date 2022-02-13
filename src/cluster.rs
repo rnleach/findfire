@@ -212,7 +212,7 @@ impl ClusterList {
         let path: &Path = full_path.as_ref();
         let fname = path
             .file_name()
-            .ok_or("No file name".to_string())?
+            .ok_or_else(|| "No file name".to_string())?
             .to_string_lossy();
 
         let satellite = Satellite::string_contains_satellite(&fname)

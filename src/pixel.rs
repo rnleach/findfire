@@ -62,8 +62,8 @@ impl Pixel {
 
     fn write_bytes<W: Write>(&self, w: &mut W) -> Result<(), std::io::Error> {
         let mut write_coord = |coord: &Coord| -> Result<(), std::io::Error> {
-            w.write(&coord.lat.to_ne_bytes())?;
-            w.write(&coord.lon.to_ne_bytes())?;
+            w.write_all(&coord.lat.to_ne_bytes())?;
+            w.write_all(&coord.lon.to_ne_bytes())?;
             Ok(())
         };
 
@@ -72,16 +72,16 @@ impl Pixel {
         write_coord(&self.lr)?;
         write_coord(&self.ur)?;
 
-        w.write(&self.power.to_ne_bytes())?;
-        w.write(&self.area.to_ne_bytes())?;
-        w.write(&self.temperature.to_ne_bytes())?;
-        w.write(&self.scan_angle.to_ne_bytes())?;
-        w.write(&self.mask_flag.0.to_ne_bytes())?;
-        w.write(&self.data_quality_flag.0.to_ne_bytes())?;
+        w.write_all(&self.power.to_ne_bytes())?;
+        w.write_all(&self.area.to_ne_bytes())?;
+        w.write_all(&self.temperature.to_ne_bytes())?;
+        w.write_all(&self.scan_angle.to_ne_bytes())?;
+        w.write_all(&self.mask_flag.0.to_ne_bytes())?;
+        w.write_all(&self.data_quality_flag.0.to_ne_bytes())?;
 
         // Add some padding to match the old binary format from C
         const PADDING: u32 = 0;
-        w.write(&PADDING.to_ne_bytes())?;
+        w.write_all(&PADDING.to_ne_bytes())?;
 
         Ok(())
     }
@@ -368,16 +368,12 @@ impl Pixel {
 
         // Check if any not close points are contained in the other pixel
         for i in 0..self_close.len() {
-            if !self_close[i] {
-                if other.contains_coord(self_coords[i], eps) {
-                    return false;
-                }
+            if !self_close[i] && other.contains_coord(self_coords[i], eps) {
+                return false;
             }
 
-            if !other_close[i] {
-                if self.contains_coord(other_coords[i], eps) {
-                    return false;
-                }
+            if !other_close[i] && self.contains_coord(other_coords[i], eps) {
+                return false;
             }
         }
 
@@ -458,7 +454,7 @@ impl Geo for PixelList {
         centroid.lat /= self.0.len() as f64;
         centroid.lon /= self.0.len() as f64;
 
-        return centroid;
+        centroid
     }
 
     #[rustfmt::skip]
@@ -476,6 +472,12 @@ impl Geo for PixelList {
         }
 
         BoundingBox {ll: Coord {lat: min_lat, lon: min_lon}, ur: Coord {lat: max_lat, lon: max_lon}}
+    }
+}
+
+impl Default for PixelList {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -590,9 +592,9 @@ impl PixelList {
             std::mem::size_of::<Pixel>() * self.0.len() + 2 * std::mem::size_of::<usize>(),
         );
 
-        output.write(&self.0.len().to_ne_bytes()).unwrap();
+        output.write_all(&self.0.len().to_ne_bytes()).unwrap();
         // Do it again for compatibility with the original type coded in C.
-        output.write(&self.0.len().to_ne_bytes()).unwrap();
+        output.write_all(&self.0.len().to_ne_bytes()).unwrap();
         for pixel in &self.0 {
             pixel.write_bytes(&mut output).unwrap();
         }

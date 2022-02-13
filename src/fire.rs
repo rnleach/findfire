@@ -154,6 +154,12 @@ impl Geo for Fire {
 /// A list of [Fire] objects.
 pub struct FireList(Vec<Fire>);
 
+impl Default for FireList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FireList {
     /// Create a new, empty list.
     pub fn new() -> Self {
@@ -192,7 +198,7 @@ impl FireList {
 
     /// Extend a fire list using another fire list, the `src` list is left empty.
     pub fn extend(&mut self, src: &mut Self) {
-        self.0.extend(src.0.drain(..))
+        self.0.append(&mut src.0)
     }
 
     /// Detect overlaps in the fires in the list and merge them together into a single fire.
@@ -236,8 +242,6 @@ impl FireList {
         while i < len {
             let f = unsafe { self.0.get_unchecked(i) };
             if wildfire_is_stale(f, current_time) {
-                drop(f);
-
                 let temp = self.0.swap_remove(i);
                 len -= 1;
                 removed.0.push(temp);
@@ -255,10 +259,10 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     if duration_since_last_observed < Duration::days(4) {
         // Give it at least four days to come back to life again.
         false
-    } else if duration_since_last_observed > Duration::days(30) {
-        // If it's been out for 30 days, it's stale
-        true
-    } else if wildfire_duration < duration_since_last_observed {
+    } else if duration_since_last_observed > Duration::days(30)
+        || wildfire_duration < duration_since_last_observed
+    {
+        // If it's been out for 30 days, it's stale OR
         // If it's not been seen in a longer time than it was burning, call it stale.
         true
     } else {
