@@ -198,6 +198,11 @@ impl ClusterList {
         self.clusters.len()
     }
 
+    /// Is this an empty list?
+    pub fn is_empty(&self) -> bool {
+        self.clusters.len() == 0
+    }
+
     /// Get the total fire power of all the clusters in this list.
     pub fn total_power(&self) -> f64 {
         self.clusters

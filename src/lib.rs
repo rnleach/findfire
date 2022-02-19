@@ -4,8 +4,8 @@
 // Public API
 pub use cluster::{Cluster, ClusterList};
 pub use database::{
-    FireDatabase, FireDatabaseAddCluster, FireDatabaseClusterRow, FireDatabaseQueryClusterPresent,
-    FireDatabaseQueryClusters, FiresDatabaseAddFire,
+    FireDatabase, FireDatabaseAddCluster, FireDatabaseAddFire, FireDatabaseClusterRow,
+    FireDatabaseQueryClusterPresent, FireDatabaseQueryClusters,
 };
 pub use fire::{Fire, FireList};
 pub use geo::{BoundingBox, Coord, Geo};
