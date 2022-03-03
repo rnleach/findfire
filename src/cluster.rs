@@ -4,10 +4,10 @@ use crate::{
     geo::{BoundingBox, Coord, Geo},
     pixel::PixelList,
     satellite::{Satellite, Sector},
-    start_time_from_file_name,
+    start_time_from_file_name, SatFireResult,
 };
 use chrono::{DateTime, Utc};
-use std::{error::Error, path::Path};
+use std::path::Path;
 
 /** Represents a spatially contiguous cluster of [Pixel](crate::Pixel) objects.
  *
@@ -213,7 +213,7 @@ impl ClusterList {
     ///
     /// The metadata is gleaned from the file name, so this program relies on the current naming
     /// conventions of the NOAA big data program.
-    pub fn from_file<P: AsRef<Path>>(full_path: P) -> Result<ClusterList, Box<dyn Error>> {
+    pub fn from_file<P: AsRef<Path>>(full_path: P) -> SatFireResult<ClusterList> {
         let path: &Path = full_path.as_ref();
         let fname = path
             .file_name()

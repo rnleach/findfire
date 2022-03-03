@@ -10,9 +10,16 @@ pub use database::{
 pub use fire::{Fire, FireList};
 pub use geo::{BoundingBox, Coord, Geo};
 pub use pixel::{Pixel, PixelList};
-pub use satellite::{DataQualityFlagCode, MaskCode, Satellite, Sector};
+pub use satellite::{
+    parse_satellite_description_from_file_name, DataQualityFlagCode, MaskCode, Satellite, Sector,
+};
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+/// A generic error type.
+pub type SatFireError = Box<dyn Error + 'static>;
+
+/// A generic result type.
+pub type SatFireResult<T> = Result<T, SatFireError>;
+
 /// Parse the file name and find the scan start time.
 pub fn start_time_from_file_name(fname: &str) -> Option<DateTime<Utc>> {
     let start_idx = fname.find("_s")? + 2;
@@ -52,6 +59,9 @@ mod geo;
 mod kml;
 mod pixel;
 mod satellite;
+
+use chrono::{DateTime, NaiveDateTime, Utc};
+use std::error::Error;
 
 // test
 #[cfg(test)]

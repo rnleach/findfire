@@ -3,10 +3,11 @@ use crate::{
     geo::{BoundingBox, Coord, Geo},
     pixel::PixelList,
     satellite::{Satellite, Sector},
+    SatFireResult,
 };
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OpenFlags, ToSql};
-use std::{error::Error, path::Path};
+use std::path::Path;
 
 /// Represents a connection to the database where ALL the information related to fires is stored.
 pub struct FireDatabase {
@@ -19,7 +20,7 @@ impl FireDatabase {
     /// Initialize a database to make sure it exists and is set up properly. This should be run in
     /// the main thread before any other threads open a connection to the database to ensure
     /// consistency.
-    pub fn initialize<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn Error>> {
+    pub fn initialize<P: AsRef<Path>>(path: P) -> SatFireResult<()> {
         let path = path.as_ref();
 
         let _conn = Self::open_database_to_write(path)?;
@@ -27,14 +28,14 @@ impl FireDatabase {
     }
 
     /// Open a connection to the database to store clusters, wildfires, and associations.
-    pub fn connect<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+    pub fn connect<P: AsRef<Path>>(path: P) -> SatFireResult<Self> {
         let path = path.as_ref();
 
         let conn = Self::open_database_to_write(path)?;
         Ok(FireDatabase { conn })
     }
 
-    fn open_database_to_write(path: &Path) -> Result<Connection, Box<dyn Error>> {
+    fn open_database_to_write(path: &Path) -> SatFireResult<Connection> {
         let conn = rusqlite::Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -55,9 +56,8 @@ impl FireDatabase {
         &self,
         satellite: Satellite,
         sector: Sector,
-    ) -> Result<DateTime<Utc>, Box<dyn Error>> {
+    ) -> SatFireResult<DateTime<Utc>> {
         const QUERY: &str = include_str!("database/query_newest_start.sql");
-        "SELECT MAX(start_time) FROM clusters WHERE satellite = ? AND sector = ?";
         let mut stmt = self.conn.prepare(QUERY)?;
 
         let res: DateTime<Utc> = stmt.query_row([satellite.name(), sector.name()], |row| {
@@ -71,7 +71,7 @@ impl FireDatabase {
     }
 
     /// Get the next id number for a wildfire.
-    pub fn next_wildfire_id(&self) -> Result<u64, Box<dyn Error>> {
+    pub fn next_wildfire_id(&self) -> SatFireResult<u64> {
         const QUERY: &str = "SELECT IFNULL(MAX(fire_id) + 1, 1) FROM fires";
 
         let mut stmt = self.conn.prepare(QUERY)?;
@@ -81,9 +81,7 @@ impl FireDatabase {
     }
 
     /// Prepare to add cluster rows to the database.
-    pub fn satfire_cluster_db_prepare_to_add(
-        &self,
-    ) -> Result<FireDatabaseAddCluster, Box<dyn Error>> {
+    pub fn prepare_to_add_clusters(&self) -> SatFireResult<FireDatabaseAddCluster> {
         const ADD_CLUSTER_QUERY: &str = include_str!("database/add_cluster.sql");
         const ADD_NO_FIRE_QUERY: &str = include_str!("database/add_no_fire_cluster.sql");
 
@@ -98,9 +96,9 @@ impl FireDatabase {
     }
 
     /// Prepare to query the database if data from a satellite image is already in the database.
-    pub fn prepare_to_query_present(
+    pub fn prepare_to_query_clusters_present(
         &self,
-    ) -> Result<FireDatabaseQueryClusterPresent, Box<dyn Error>> {
+    ) -> SatFireResult<FireDatabaseQueryClusterPresent> {
         const QUERY_CLUSTER: &str = include_str!("database/query_num_clusters_present.sql");
         const QUERY_NO_FIRE: &str = include_str!("database/query_no_fires.sql");
 
@@ -121,7 +119,7 @@ impl FireDatabase {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
         area: BoundingBox,
-    ) -> Result<FireDatabaseQueryClusters<'a>, Box<dyn Error>> {
+    ) -> SatFireResult<FireDatabaseQueryClusters<'a>> {
         let sat_select = if let Some(sat) = sat {
             format!("AND satellite = '{}'", sat.name())
         } else {
@@ -178,7 +176,7 @@ pub struct FireDatabaseAddCluster<'a> {
 
 impl<'a> FireDatabaseAddCluster<'a> {
     /// Adds an entire ClusterList to the database.
-    pub fn add(&mut self, clist: ClusterList) -> Result<(), Box<dyn Error>> {
+    pub fn add(&mut self, clist: ClusterList) -> SatFireResult<()> {
         if clist.is_empty() {
             self.add_no_fire(clist)
         } else {
@@ -186,7 +184,7 @@ impl<'a> FireDatabaseAddCluster<'a> {
         }
     }
 
-    fn add_clusters(&mut self, clist: ClusterList) -> Result<(), Box<dyn Error>> {
+    fn add_clusters(&mut self, clist: ClusterList) -> SatFireResult<()> {
         self.conn.execute("BEGIN TRANSACTION", [])?;
 
         let satellite = clist.satellite();
@@ -222,7 +220,7 @@ impl<'a> FireDatabaseAddCluster<'a> {
         Ok(())
     }
 
-    fn add_no_fire(&mut self, clist: ClusterList) -> Result<(), Box<dyn Error>> {
+    fn add_no_fire(&mut self, clist: ClusterList) -> SatFireResult<()> {
         let satellite = clist.satellite();
         let sector = clist.sector();
         let scan_start = clist.scan_start().timestamp();
@@ -252,7 +250,7 @@ impl<'a> FireDatabaseQueryClusterPresent<'a> {
         sector: Sector,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<bool, Box<dyn Error>> {
+    ) -> SatFireResult<bool> {
         let num_clusters: i64 = self.clusters_stmt.query_row(
             [
                 &satellite.name() as &dyn ToSql,
@@ -293,13 +291,10 @@ impl<'a> FireDatabaseQueryClusters<'a> {
     /// Get an iterator over the rows
     pub fn rows(
         &mut self,
-    ) -> Result<
-        impl Iterator<Item = Result<FireDatabaseClusterRow, Box<dyn Error>>> + '_,
-        Box<dyn Error>,
-    > {
-        Ok(self.stmt.query_and_then(
-            [],
-            |row| -> Result<FireDatabaseClusterRow, Box<dyn Error>> {
+    ) -> SatFireResult<impl Iterator<Item = SatFireResult<FireDatabaseClusterRow>> + '_> {
+        Ok(self
+            .stmt
+            .query_and_then([], |row| -> SatFireResult<FireDatabaseClusterRow> {
                 let sat = match row.get_ref(0)? {
                     rusqlite::types::ValueRef::Text(txt) => {
                         let txt = unsafe { std::str::from_utf8_unchecked(txt) };
@@ -348,8 +343,7 @@ impl<'a> FireDatabaseQueryClusters<'a> {
                     centroid,
                     pixels,
                 })
-            },
-        )?)
+            })?)
     }
 }
 

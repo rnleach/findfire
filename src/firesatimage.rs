@@ -2,11 +2,11 @@ use crate::{
     geo::Coord,
     pixel::Pixel,
     satellite::{DataQualityFlagCode, MaskCode},
+    SatFireResult,
 };
 use libc::{c_char, c_double, c_int, c_short, c_void, size_t};
 use once_cell::sync::OnceCell;
 use std::{
-    error::Error,
     ffi::{CStr, CString},
     io::Read,
     path::Path,
@@ -37,7 +37,7 @@ pub(crate) struct SatFireImage {
 
 impl SatFireImage {
     /// Open a file containing GOES-R/S Fire Detection Characteristics.
-    pub(crate) fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+    pub(crate) fn open<P: AsRef<Path>>(path: P) -> SatFireResult<Self> {
         let p: &Path = path.as_ref();
         // FIXME change option into error
         let fname: String = p
@@ -59,7 +59,7 @@ impl SatFireImage {
         }
     }
 
-    fn open_zip(p: &Path, fname: String) -> Result<Self, Box<dyn Error>> {
+    fn open_zip(p: &Path, fname: String) -> SatFireResult<Self> {
         let path_str = CString::new(p.to_string_lossy().as_bytes())?;
 
         let file = std::fs::File::open(p)?;
@@ -96,7 +96,7 @@ impl SatFireImage {
         Ok(res)
     }
 
-    fn open_nc(p: &Path, fname: String) -> Result<Self, Box<dyn Error>> {
+    fn open_nc(p: &Path, fname: String) -> SatFireResult<Self> {
         let path_str = CString::new(p.to_string_lossy().as_bytes())?;
 
         let lock = get_netcdf_lock().lock();
@@ -118,7 +118,7 @@ impl SatFireImage {
         fname: String,
         handle: c_int,
         in_memory_buffer: Option<Vec<u8>>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> SatFireResult<Self> {
         let mut xlen: usize = 0;
         let mut ylen: usize = 0;
 
@@ -217,7 +217,7 @@ impl SatFireImage {
         })
     }
 
-    pub(crate) fn extract_fire_points(&self) -> Result<Vec<FirePoint>, Box<dyn Error>> {
+    pub(crate) fn extract_fire_points(&self) -> SatFireResult<Vec<FirePoint>> {
         let mut points: Vec<FirePoint> = Vec::new();
 
         let lock = get_netcdf_lock().lock();
@@ -281,7 +281,7 @@ impl SatFireImage {
         Ok(points)
     }
 
-    fn extract_variable_double(&self, vname: *const c_char) -> Result<Vec<f64>, Box<dyn Error>> {
+    fn extract_variable_double(&self, vname: *const c_char) -> SatFireResult<Vec<f64>> {
         let mut vals = Vec::with_capacity(self.xlen * self.ylen);
 
         unsafe {
@@ -307,7 +307,7 @@ impl SatFireImage {
         Ok(vals)
     }
 
-    fn extract_variable_short(&self, vname: *const c_char) -> Result<Vec<i16>, Box<dyn Error>> {
+    fn extract_variable_short(&self, vname: *const c_char) -> SatFireResult<Vec<i16>> {
         let mut vals = Vec::with_capacity(self.xlen * self.ylen);
 
         unsafe {
@@ -436,7 +436,7 @@ fn get_netcdf_lock() -> &'static Mutex<()> {
 const NC_NOWRITE: c_int = 0x0000;
 const NC_NOERR: c_int = 0;
 
-fn check_netcdf_error(status_code: c_int) -> Result<(), Box<dyn Error>> {
+fn check_netcdf_error(status_code: c_int) -> SatFireResult<()> {
     unsafe {
         if status_code != NC_NOERR {
             Err(format!(
