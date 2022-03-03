@@ -15,7 +15,7 @@ pub use satellite::{
 };
 
 /// A generic error type.
-pub type SatFireError = Box<dyn Error + 'static>;
+pub type SatFireError = Box<dyn Error + Send + Sync>;
 
 /// A generic result type.
 pub type SatFireResult<T> = Result<T, SatFireError>;
