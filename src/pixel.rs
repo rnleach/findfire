@@ -560,6 +560,10 @@ impl PixelList {
         false
     }
 
+    pub fn pixels(&self) -> &[Pixel] {
+        &self.0
+    }
+
     pub(crate) fn max_merge(&mut self, other: &PixelList) {
         for other_pixel in other.0.iter() {
             let mut is_new = true;
@@ -676,7 +680,7 @@ impl PixelList {
     /// that outputs a KML file where that higher function adds style information and the rest of the
     /// document.
     ///
-    pub(crate) fn kml_write(&self, kml: &mut KmlFile) {
+    pub fn kml_write(&self, kml: &mut KmlFile) {
         for pixel in &self.0 {
             let mut desc: [u8; 256] = [0; 256];
             let mut cursor = std::io::Cursor::new(&mut desc[..]);

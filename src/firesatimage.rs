@@ -35,6 +35,12 @@ pub(crate) struct SatFireImage {
     fname: String,
 }
 
+macro_rules! check_error {
+    ($code:expr) => {
+        check_netcdf_error($code, file!(), line!())
+    }
+}
+
 impl SatFireImage {
     /// Open a file containing GOES-R/S Fire Detection Characteristics.
     pub(crate) fn open<P: AsRef<Path>>(path: P) -> SatFireResult<Self> {
@@ -70,7 +76,7 @@ impl SatFireImage {
         let mut buf: Vec<u8> = Vec::with_capacity(nc_file.size() as usize + 10);
         let _size_read = nc_file.read_to_end(&mut buf)?;
 
-        let lock = get_netcdf_lock().lock();
+        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
         let mut file_id: c_int = -1;
         unsafe {
             let status = nc_open_mem(
@@ -82,8 +88,8 @@ impl SatFireImage {
             );
             if status != NC_NOERR {
                 return Err(format!(
-                    "Error opening netcdf: {:?}",
-                    CStr::from_ptr(nc_strerror(status)).to_str()
+                    "Error opening netcdf: {}",
+                    std::str::from_utf8_unchecked(CStr::from_ptr(nc_strerror(status)).to_bytes())
                 )
                 .into());
             }
@@ -99,11 +105,11 @@ impl SatFireImage {
     fn open_nc(p: &Path, fname: String) -> SatFireResult<Self> {
         let path_str = CString::new(p.to_string_lossy().as_bytes())?;
 
-        let lock = get_netcdf_lock().lock();
+        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
         let mut file_id: c_int = -1;
         unsafe {
             let status = nc_open(path_str.as_ptr(), NC_NOWRITE, &mut file_id as *mut c_int);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
         }
 
         let res = Self::initialize_with_nc_file_handle(fname, file_id, None)?;
@@ -143,9 +149,9 @@ impl SatFireImage {
                 b"x\0".as_ptr() as *const c_char,
                 &mut xdimid as *mut c_int,
             );
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_inq_dimlen(h, xdimid, &mut xlen as *mut size_t);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             let mut ydimid: c_int = -1;
             status = nc_inq_dimid(
@@ -153,49 +159,49 @@ impl SatFireImage {
                 b"y\0".as_ptr() as *const c_char,
                 &mut ydimid as *mut c_int,
             );
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_inq_dimlen(h, ydimid, &mut ylen as *mut size_t);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             let mut x: c_int = -1;
             let mut y: c_int = -1;
             status = nc_inq_varid(h, b"x\0".as_ptr() as *const c_char, &mut x as *mut c_int);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_inq_varid(h, b"y\0".as_ptr() as *const c_char, &mut y as *mut c_int);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
-            let scale_factor = b"scale_factor".as_ptr() as *const c_char;
+            let scale_factor = b"scale_factor\0".as_ptr() as *const c_char;
             status = nc_get_att_double(h, x, scale_factor, &mut xscale as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_get_att_double(h, y, scale_factor, &mut yscale as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
-            let add_offset = b"add_offset".as_ptr() as *const c_char;
+            let add_offset = b"add_offset\0".as_ptr() as *const c_char;
             status = nc_get_att_double(h, x, add_offset, &mut xoffset as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_get_att_double(h, y, add_offset, &mut yoffset as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             let mut proj_id: c_int = -1;
-            status = nc_inq_dimid(
+            status = nc_inq_varid(
                 h,
                 b"goes_imager_projection\0".as_ptr() as *const c_char,
                 &mut proj_id as *mut c_int,
             );
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             let semi_major_axis = b"semi_major_axis\0".as_ptr() as *const c_char;
             let semi_minor_axis = b"semi_minor_axis\0".as_ptr() as *const c_char;
             let perp_point_h = b"perspective_point_height\0".as_ptr() as *const c_char;
             let lon_origin = b"longitude_of_projection_origin\0".as_ptr() as *const c_char;
             status = nc_get_att_double(h, proj_id, semi_major_axis, &mut req as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_get_att_double(h, proj_id, semi_minor_axis, &mut rpol as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_get_att_double(h, proj_id, perp_point_h, &mut H as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
             status = nc_get_att_double(h, proj_id, lon_origin, &mut lon0 as *mut c_double);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
         }
 
         Ok(SatFireImage {
@@ -220,7 +226,7 @@ impl SatFireImage {
     pub(crate) fn extract_fire_points(&self) -> SatFireResult<Vec<FirePoint>> {
         let mut points: Vec<FirePoint> = Vec::new();
 
-        let lock = get_netcdf_lock().lock();
+        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
 
         let powers = self.extract_variable_double(b"Power\0".as_ptr() as *const c_char)?;
         let areas = self.extract_variable_double(b"Area\0".as_ptr() as *const c_char)?;
@@ -287,7 +293,7 @@ impl SatFireImage {
         unsafe {
             let mut varid: c_int = -1;
             let mut status = nc_inq_varid(self.nc_file_id, vname, &mut varid as *mut c_int);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             let start: [size_t; 2] = [0, 0];
             let counts: [size_t; 2] = [self.ylen, self.xlen];
@@ -299,7 +305,7 @@ impl SatFireImage {
                 counts.as_ptr(),
                 vals.as_mut_ptr(),
             );
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             vals.set_len(self.ylen * self.xlen);
         }
@@ -313,7 +319,7 @@ impl SatFireImage {
         unsafe {
             let mut varid: c_int = -1;
             let mut status = nc_inq_varid(self.nc_file_id, vname, &mut varid as *mut c_int);
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             let start: [size_t; 2] = [0, 0];
             let counts: [size_t; 2] = [self.ylen, self.xlen];
@@ -325,7 +331,7 @@ impl SatFireImage {
                 counts.as_ptr(),
                 vals.as_mut_ptr(),
             );
-            check_netcdf_error(status)?;
+            check_error!(status)?;
 
             vals.set_len(self.ylen * self.xlen);
         }
@@ -336,7 +342,7 @@ impl SatFireImage {
 
 impl Drop for SatFireImage {
     fn drop(&mut self) {
-        let lock = get_netcdf_lock().lock();
+        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
 
         unsafe {
             let _ = nc_close(self.nc_file_id);
@@ -436,12 +442,12 @@ fn get_netcdf_lock() -> &'static Mutex<()> {
 const NC_NOWRITE: c_int = 0x0000;
 const NC_NOERR: c_int = 0;
 
-fn check_netcdf_error(status_code: c_int) -> SatFireResult<()> {
+fn check_netcdf_error(status_code: c_int, file: &'static str, line: u32) -> SatFireResult<()> {
     unsafe {
         if status_code != NC_NOERR {
             Err(format!(
-                "Error opening netcdf: {:?}",
-                CStr::from_ptr(nc_strerror(status_code)).to_str()
+                "{}[{}]netCDF error: {}", file, line,
+                std::str::from_utf8_unchecked(CStr::from_ptr(nc_strerror(status_code)).to_bytes())
             )
             .into())
         } else {

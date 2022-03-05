@@ -8,14 +8,14 @@
 //! type API. That means the user is responsible for closing all tags.
 
 use crate::SatFireResult;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use std::{
     fs::File,
     io::{BufWriter, Write},
     path::Path,
 };
 
-pub(crate) struct KmlFile(BufWriter<File>);
+pub struct KmlFile(BufWriter<File>);
 
 impl KmlFile {
     /// Open a file for output and start by putting the header out.
@@ -178,7 +178,7 @@ impl KmlFile {
     }
 
     /// Write out a TimeSpan element.
-    pub fn timespan(&mut self, start: NaiveDateTime, end: NaiveDateTime) -> SatFireResult<()> {
+    pub fn timespan(&mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> SatFireResult<()> {
         self.0.write_all("<TimeSpan>\n".as_bytes())?;
         writeln!(
             self.0,

@@ -9,6 +9,7 @@ pub use database::{
 };
 pub use fire::{Fire, FireList};
 pub use geo::{BoundingBox, Coord, Geo};
+pub use kml::KmlFile;
 pub use pixel::{Pixel, PixelList};
 pub use satellite::{
     parse_satellite_description_from_file_name, DataQualityFlagCode, MaskCode, Satellite, Sector,

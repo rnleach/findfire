@@ -1,9 +1,10 @@
 /*! Contains all the information about satellites. */
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, Utc};
+use strum::EnumIter;
 
 /** The GOES satellites this library works with. */
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum Satellite {
     /// GOES-16 (formerly GOES-R), or commonly known as GOES East
     G16,
@@ -41,18 +42,18 @@ impl Satellite {
     /// This is the time that the satellite was officially declared operational after all checkouts
     /// and operational testing. It may have started sending data before this date, but it may not
     /// be trustworthy data.
-    pub fn operational(&self) -> NaiveDateTime {
+    pub fn operational(&self) -> DateTime<Utc> {
         use Satellite::*;
 
         match self {
-            G16 => NaiveDate::from_ymd(2017, 12, 18).and_hms(12, 0, 0),
-            G17 => NaiveDate::from_ymd(2019, 2, 12).and_hms(12, 0, 0),
+            G16 => DateTime::from_utc(NaiveDate::from_ymd(2017, 12, 18).and_hms(12, 0, 0), Utc),
+            G17 => DateTime::from_utc(NaiveDate::from_ymd(2019, 2, 12).and_hms(12, 0, 0), Utc),
         }
     }
 }
 
 /** The satellite scan sectors this library recognizes. */
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum Sector {
     /// This is the full disk sector that includes the full viewable disk of the Earth.
     FULL,
@@ -102,6 +103,19 @@ impl Sector {
             None
         }
     }
+}
+
+/// Parse the satellite, sector, scan start time, and scan end time from a file name
+pub fn parse_satellite_description_from_file_name(
+    fname: &str,
+) -> Option<(Satellite, Sector, DateTime<Utc>, DateTime<Utc>)> {
+    let sat = Satellite::string_contains_satellite(fname)?;
+    let sector = Sector::string_contains_sector(fname)?;
+
+    let start_time = crate::start_time_from_file_name(fname)?;
+    let end_time = crate::end_time_from_file_name(fname)?;
+
+    Some((sat, sector, start_time, end_time))
 }
 
 /// Represents a code from the Mask field of the NetCDF files.
