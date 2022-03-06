@@ -197,11 +197,11 @@ impl DataQualityFlagCode {
     /// Translate a DQF code to a string.
     pub fn as_str(self) -> &'static str {
         match self.0 {
-            0 => "good_quality_fire_pixel_qf ",
-            1 => "good_quality_fire_free_land_pixel_qf ",
-            2 => "invalid_due_to_opaque_cloud_pixel_qf ",
-            3 => "invalid_due_to_surface_type_or_sunglint_or_LZA_threshold_exceeded_or_off_earth_or_missing_input_data_qf ",
-            4 => "invalid_due_to_bad_input_data_qf ",
+            0 => "good_quality_fire_pixel_qf",
+            1 => "good_quality_fire_free_land_pixel_qf",
+            2 => "invalid_due_to_opaque_cloud_pixel_qf",
+            3 => "invalid_due_to_surface_type_or_sunglint_or_LZA_threshold_exceeded_or_off_earth_or_missing_input_data_qf",
+            4 => "invalid_due_to_bad_input_data_qf",
             5 => "invalid_due_to_algorithm_failure_qf",
             255 | -1 => "missing",
             _ => "unknown",

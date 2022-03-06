@@ -38,7 +38,7 @@ pub(crate) struct SatFireImage {
 macro_rules! check_error {
     ($code:expr) => {
         check_netcdf_error($code, file!(), line!())
-    }
+    };
 }
 
 impl SatFireImage {
@@ -76,7 +76,9 @@ impl SatFireImage {
         let mut buf: Vec<u8> = Vec::with_capacity(nc_file.size() as usize + 10);
         let _size_read = nc_file.read_to_end(&mut buf)?;
 
-        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
+        let lock = get_netcdf_lock()
+            .lock()
+            .expect("Error locking global mutex for netCDF");
         let mut file_id: c_int = -1;
         unsafe {
             let status = nc_open_mem(
@@ -105,7 +107,9 @@ impl SatFireImage {
     fn open_nc(p: &Path, fname: String) -> SatFireResult<Self> {
         let path_str = CString::new(p.to_string_lossy().as_bytes())?;
 
-        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
+        let lock = get_netcdf_lock()
+            .lock()
+            .expect("Error locking global mutex for netCDF");
         let mut file_id: c_int = -1;
         unsafe {
             let status = nc_open(path_str.as_ptr(), NC_NOWRITE, &mut file_id as *mut c_int);
@@ -226,7 +230,9 @@ impl SatFireImage {
     pub(crate) fn extract_fire_points(&self) -> SatFireResult<Vec<FirePoint>> {
         let mut points: Vec<FirePoint> = Vec::new();
 
-        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
+        let lock = get_netcdf_lock()
+            .lock()
+            .expect("Error locking global mutex for netCDF");
 
         let powers = self.extract_variable_double(b"Power\0".as_ptr() as *const c_char)?;
         let areas = self.extract_variable_double(b"Area\0".as_ptr() as *const c_char)?;
@@ -342,7 +348,9 @@ impl SatFireImage {
 
 impl Drop for SatFireImage {
     fn drop(&mut self) {
-        let lock = get_netcdf_lock().lock().expect("Error locking global mutex for netCDF");
+        let lock = get_netcdf_lock()
+            .lock()
+            .expect("Error locking global mutex for netCDF");
 
         unsafe {
             let _ = nc_close(self.nc_file_id);
@@ -395,7 +403,7 @@ impl CoordTransform {
 
         let x = self.xscale * cols[4] + self.xoffset;
         let y = self.yscale * rows[4] + self.yoffset;
-        let scan_angle = x.hypot(y);
+        let scan_angle = x.hypot(y).to_degrees();
 
         for i in 0..5 {
             let x = self.xscale * cols[i] + self.xoffset;
@@ -446,7 +454,9 @@ fn check_netcdf_error(status_code: c_int, file: &'static str, line: u32) -> SatF
     unsafe {
         if status_code != NC_NOERR {
             Err(format!(
-                "{}[{}]netCDF error: {}", file, line,
+                "{}[{}]netCDF error: {}",
+                file,
+                line,
                 std::str::from_utf8_unchecked(CStr::from_ptr(nc_strerror(status_code)).to_bytes())
             )
             .into())

@@ -691,7 +691,7 @@ impl PixelList {
                     "Power: {:.0} MW<br/>",
                     "Area: {:.0} m^2</br>",
                     "Temperature: {:.0} K<br/>",
-                    "scan angle: {:.0}&deg;<br/>",
+                    "scan angle: {:.2}&deg;<br/>",
                     "Mask Flag: {}<br/>",
                     "Data Quality Flag: {}<br/>"
                 ),
@@ -703,7 +703,10 @@ impl PixelList {
                 pixel.data_quality_flag.as_str()
             );
 
-            let desc = unsafe { std::str::from_utf8_unchecked(&desc) };
+            let position = cursor.position() as usize;
+            drop(cursor);
+
+            let desc = unsafe { std::str::from_utf8_unchecked(&desc[..position]) };
             let _ = kml.start_placemark(None, Some(desc), None);
 
             Self::kml_write_pixel_style(kml, pixel.power);

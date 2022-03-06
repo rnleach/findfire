@@ -836,12 +836,14 @@ fn output_cluster_stat_kml(
             "Sector: {}<br/>",
             "Power: {:.0} MW<br/>",
             "Area: {:.0} m^2<br/>",
+            "Max Scan Angle: {:0.3}&deg;<br/>",
             "Max Temperature: {:.0}&deg;K"
         ),
         cluster.sat.name(),
         cluster.sector.name(),
         cluster.fire.total_power(),
         cluster.fire.total_area(),
+        cluster.fire.max_scan_angle(),
         cluster.fire.max_temperature()
     );
 

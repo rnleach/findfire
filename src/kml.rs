@@ -17,18 +17,27 @@ use std::{
 
 pub struct KmlFile(BufWriter<File>);
 
+impl Drop for KmlFile {
+    fn drop(&mut self) {
+        const FOOTER: &str = concat!(r#"</Document>"#, "\n", r#"</kml>"#, "\n");
+        let _ = self.0.write_all(FOOTER.as_bytes());
+    }
+}
+
 impl KmlFile {
     /// Open a file for output and start by putting the header out.
     pub fn start_document<P: AsRef<Path>>(pth: P) -> SatFireResult<Self> {
         let p = pth.as_ref();
 
-        let f = std::fs::File::open(p)?;
+        let f = std::fs::File::create(p)?;
         let mut buf = BufWriter::new(f);
 
         const HEADER: &str = concat!(
             r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            "\n",
             r#"<kml xmlns="http://www.opengis.net/kml/2.2">"#,
-            r#"<Document>\n"#
+            "\n",
+            "<Document>\n"
         );
 
         buf.write_all(HEADER.as_bytes())?;
@@ -187,7 +196,7 @@ impl KmlFile {
         )?;
         writeln!(
             self.0,
-            "<end>{}</end>n",
+            "<end>{}</end>",
             end.format("%Y-%m-%dT%H:%M:%S.000Z")
         )?;
         self.0.write_all("</TimeSpan>\n".as_bytes())?;
@@ -287,7 +296,7 @@ impl KmlFile {
     pub fn create_point(&mut self, lat: f64, lon: f64, z: f64) -> SatFireResult<()> {
         writeln!(
             self.0,
-            "<Point>\n<coordinates>{},{},{}</coordinates>\n</Point>\n",
+            "<Point>\n<coordinates>{},{},{}</coordinates>\n</Point>",
             lon, lat, z
         )?;
         Ok(())
