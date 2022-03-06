@@ -357,7 +357,9 @@ fn db_filler_thread<P: AsRef<Path>>(
  * viewed by the GOES satellites, and the angles / geometry seem to have something to do with it.
  *
  * The value of 8.3 degrees is based on visual inspection of a graph of cluster power vs max scan
- * angle of the cluster member centroids.
+ * angle of the cluster member centroids. Based on the satellite product documentation
+ * (https://www.goes-r.gov/products/docs/PUG-L2+-vol5.pdf) I calculated that the limb of the Earth
+ * is at a scan angle of about 8.7 degrees.
  */
 const MAX_SCAN_ANGLE: f64 = 8.3;
 
