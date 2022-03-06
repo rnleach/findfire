@@ -218,7 +218,7 @@ impl SatFireImage {
                 yoffset,
                 req,
                 rpol,
-                H,
+                H: H + req,
                 lon0,
             },
             buffer: in_memory_buffer,
