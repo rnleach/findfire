@@ -3,7 +3,10 @@ use crate::{
     kml::KmlFile,
     satellite::{DataQualityFlagCode, MaskCode},
 };
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    mem::size_of,
+};
 
 /// The coordinates describing the area of a pixel viewed from a GOES satellite.
 #[derive(Debug, Clone, Copy)]
@@ -62,8 +65,8 @@ impl Pixel {
 
     fn write_bytes<W: Write>(&self, w: &mut W) -> Result<(), std::io::Error> {
         let mut write_coord = |coord: &Coord| -> Result<(), std::io::Error> {
-            w.write_all(&coord.lat.to_ne_bytes())?;
-            w.write_all(&coord.lon.to_ne_bytes())?;
+            w.write_all(&coord.lat.to_le_bytes())?;
+            w.write_all(&coord.lon.to_le_bytes())?;
             Ok(())
         };
 
@@ -72,27 +75,24 @@ impl Pixel {
         write_coord(&self.lr)?;
         write_coord(&self.ur)?;
 
-        w.write_all(&self.power.to_ne_bytes())?;
-        w.write_all(&self.area.to_ne_bytes())?;
-        w.write_all(&self.temperature.to_ne_bytes())?;
-        w.write_all(&self.scan_angle.to_ne_bytes())?;
-        w.write_all(&self.mask_flag.0.to_ne_bytes())?;
-        w.write_all(&self.data_quality_flag.0.to_ne_bytes())?;
-
-        // Add some padding to match the old binary format from C
-        const PADDING: u32 = 0;
-        w.write_all(&PADDING.to_ne_bytes())?;
+        w.write_all(&self.power.to_le_bytes())?;
+        w.write_all(&self.area.to_le_bytes())?;
+        w.write_all(&self.temperature.to_le_bytes())?;
+        w.write_all(&self.scan_angle.to_le_bytes())?;
+        w.write_all(&self.mask_flag.0.to_le_bytes())?;
+        w.write_all(&self.data_quality_flag.0.to_le_bytes())?;
 
         Ok(())
     }
 
     fn read_bytes<R: Read>(r: &mut R) -> Self {
+        let mut buf: [u8; 8] = [0; 8];
+
         let mut read_coord = || -> Coord {
-            let mut buf: [u8; 8] = [0; 8];
-            r.read_exact(&mut buf).unwrap();
-            let lat = f64::from_ne_bytes(buf);
-            r.read_exact(&mut buf).unwrap();
-            let lon = f64::from_ne_bytes(buf);
+            let _ = r.read_exact(&mut buf);
+            let lat = f64::from_le_bytes(buf);
+            let _ = r.read_exact(&mut buf);
+            let lon = f64::from_le_bytes(buf);
             Coord { lat, lon }
         };
 
@@ -101,25 +101,20 @@ impl Pixel {
         let lr = read_coord();
         let ur = read_coord();
 
-        let mut buf: [u8; 8] = [0; 8];
-        r.read_exact(&mut buf).unwrap();
-        let power = f64::from_ne_bytes(buf);
-        r.read_exact(&mut buf).unwrap();
-        let area = f64::from_ne_bytes(buf);
-        r.read_exact(&mut buf).unwrap();
-        let temperature = f64::from_ne_bytes(buf);
-        r.read_exact(&mut buf).unwrap();
-        let scan_angle = f64::from_ne_bytes(buf);
+        let _ = r.read_exact(&mut buf);
+        let power = f64::from_le_bytes(buf);
+        let _ = r.read_exact(&mut buf);
+        let area = f64::from_le_bytes(buf);
+        let _ = r.read_exact(&mut buf);
+        let temperature = f64::from_le_bytes(buf);
+        let _ = r.read_exact(&mut buf);
+        let scan_angle = f64::from_le_bytes(buf);
 
         let mut buf: [u8; 2] = [0; 2];
-        r.read_exact(&mut buf).unwrap();
-        let mask_flag = MaskCode(i16::from_ne_bytes(buf));
-        r.read_exact(&mut buf).unwrap();
-        let data_quality_flag = DataQualityFlagCode(i16::from_ne_bytes(buf));
-
-        // Read out the padding to match the old C binary format
-        let mut buf: [u8; 4] = [0; 4];
-        r.read_exact(&mut buf).unwrap();
+        let _ = r.read_exact(&mut buf);
+        let mask_flag = MaskCode(i16::from_le_bytes(buf));
+        let _ = r.read_exact(&mut buf);
+        let data_quality_flag = DataQualityFlagCode(i16::from_le_bytes(buf));
 
         Pixel {
             ul,
@@ -588,19 +583,14 @@ impl PixelList {
  *-----------------------------------------------------------------------------------------------*/
 impl PixelList {
     /// Encode the PixelList into a binary format suitable for storing in a database.
-    ///
-    /// At this time it doesn't support a portable format, meaning no adjustments are made for
-    /// endianness or any padding in the array.
     pub fn binary_serialize(&self) -> Vec<u8> {
-        let mut output = Vec::with_capacity(
-            std::mem::size_of::<Pixel>() * self.0.len() + 2 * std::mem::size_of::<usize>(),
-        );
+        // Ignore write errors since we're writing to a Vec<u8>
+        
+        let mut output = Vec::with_capacity(size_of::<usize>() + size_of::<Pixel>() * self.0.len());
 
-        output.write_all(&self.0.len().to_ne_bytes()).unwrap();
-        // Do it again for compatibility with the original type coded in C.
-        output.write_all(&self.0.len().to_ne_bytes()).unwrap();
+        let _ = output.write_all(&self.0.len().to_le_bytes());
         for pixel in &self.0 {
-            pixel.write_bytes(&mut output).unwrap();
+            let _ = pixel.write_bytes(&mut output);
         }
 
         output
@@ -609,13 +599,11 @@ impl PixelList {
     /// Deserialize an array of bytes into a PixelList.
     ///
     pub fn binary_deserialize<R: Read>(r: &mut R) -> Self {
-        let mut buf: [u8; std::mem::size_of::<usize>()] = [0; std::mem::size_of::<usize>()];
+        
+        let mut buf: [u8; size_of::<usize>()] = [0; size_of::<usize>()];
 
-        r.read_exact(&mut buf).unwrap();
-        let len = usize::from_ne_bytes(buf);
-
-        // Read the "Capacity" variable from the old C binary format.
-        r.read_exact(&mut buf).unwrap();
+        let _ = r.read_exact(&mut buf);
+        let len = usize::from_le_bytes(buf);
 
         let mut data: Vec<Pixel> = Vec::with_capacity(len);
 
