@@ -39,6 +39,9 @@ macro_rules! check_error {
     ($code:expr) => {
         check_netcdf_error($code, file!(), line!())
     };
+    ($code:expr, "attr") => {
+        check_netcdf_attribute_error($code, file!(), line!())
+    };
 }
 
 impl SatFireImage {
@@ -296,24 +299,52 @@ impl SatFireImage {
     fn extract_variable_double(&self, vname: *const c_char) -> SatFireResult<Vec<f64>> {
         let mut vals = Vec::with_capacity(self.xlen * self.ylen);
 
+        let mut skip_transform;
+        let mut scale_factor: f64 = 1.0;
+        let mut add_offset: f64 = 0.0;
+        let mut fill_value: f64 = 65535.0;
+
         unsafe {
+            let fid = self.nc_file_id;
             let mut varid: c_int = -1;
-            let mut status = nc_inq_varid(self.nc_file_id, vname, &mut varid as *mut c_int);
+            let mut status = nc_inq_varid(fid, vname, &mut varid as *mut c_int);
             check_error!(status)?;
 
             let start: [size_t; 2] = [0, 0];
             let counts: [size_t; 2] = [self.ylen, self.xlen];
-
-            status = nc_get_vara_double(
-                self.nc_file_id,
-                varid,
-                start.as_ptr(),
-                counts.as_ptr(),
-                vals.as_mut_ptr(),
-            );
+            let (start, counts) = (start.as_ptr(), counts.as_ptr());
+            status = nc_get_vara_double(fid, varid, start, counts, vals.as_mut_ptr());
             check_error!(status)?;
 
             vals.set_len(self.ylen * self.xlen);
+
+            let scale_str = b"scale_factor\0".as_ptr() as *const c_char;
+            let offset_str = b"add_offset\0".as_ptr() as *const c_char;
+            let fill_str = b"_FillValue\0".as_ptr() as *const c_char;
+            status = nc_get_att_double(fid, varid, scale_str, &mut scale_factor as *mut c_double);
+            check_error!(status, "attr")?;
+            skip_transform = status == NC_ENOTATT;
+            status = nc_get_att_double(fid, varid, offset_str, &mut add_offset as *mut c_double);
+            check_error!(status, "attr")?;
+            skip_transform = skip_transform && (status == NC_ENOTATT);
+            status = nc_get_att_double(fid, varid, fill_str, &mut fill_value as *mut c_double);
+            check_error!(status, "attr")?;
+        }
+
+        if skip_transform {
+            for val in vals.iter_mut() {
+                *val = if *val == fill_value {
+                    -f64::INFINITY
+                } else {
+                    *val * scale_factor + add_offset
+                };
+            }
+        } else {
+            for val in vals.iter_mut() {
+                if *val == fill_value {
+                    *val = -f64::INFINITY;
+                }
+            }
         }
 
         Ok(vals)
@@ -449,12 +480,33 @@ fn get_netcdf_lock() -> &'static Mutex<()> {
 
 const NC_NOWRITE: c_int = 0x0000;
 const NC_NOERR: c_int = 0;
+const NC_ENOTATT: c_int = -43;
 
 fn check_netcdf_error(status_code: c_int, file: &'static str, line: u32) -> SatFireResult<()> {
     unsafe {
         if status_code != NC_NOERR {
             Err(format!(
                 "{}[{}]netCDF error: {}",
+                file,
+                line,
+                std::str::from_utf8_unchecked(CStr::from_ptr(nc_strerror(status_code)).to_bytes())
+            )
+            .into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn check_netcdf_attribute_error(
+    status_code: c_int,
+    file: &'static str,
+    line: u32,
+) -> SatFireResult<()> {
+    unsafe {
+        if status_code != NC_NOERR && status_code != NC_ENOTATT {
+            Err(format!(
+                "{}[{}]netCDF error loading attribute: {}",
                 file,
                 line,
                 std::str::from_utf8_unchecked(CStr::from_ptr(nc_strerror(status_code)).to_bytes())
