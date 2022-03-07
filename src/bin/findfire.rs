@@ -779,8 +779,7 @@ fn create_standard_dir_filter(
 
 fn is_cluster_a_keeper(cluster: &Cluster) -> bool {
     // Check if it meets our mask criteria
-    let mut keep_mask_criteria = false;
-    for pixel in cluster.pixels().pixels().iter() {
+    let keep_mask_criteria = cluster.pixels().pixels().iter().any(|pixel| {
         match pixel.mask_flag.0 {
             10   // good_fire_pixel
             | 11 // saturated_fire_pixel
@@ -794,14 +793,15 @@ fn is_cluster_a_keeper(cluster: &Cluster) -> bool {
             | 33 // temporally_filtered_high_probability_fire_pixel
             | 34 // temporally_filtered_medium_probablity_fire_pixel
                 => {
-                keep_mask_criteria = true;
-                break;
+                 true
             }
-            _ => {}
+            _ => false
         }
-    }
+    });
 
-    keep_mask_criteria
+    let scan_angle_criteria = cluster.max_scan_angle() < MAX_SCAN_ANGLE;
+
+    keep_mask_criteria && scan_angle_criteria
 }
 
 /*-------------------------------------------------------------------------------------------------
