@@ -585,7 +585,7 @@ impl PixelList {
     /// Encode the PixelList into a binary format suitable for storing in a database.
     pub fn binary_serialize(&self) -> Vec<u8> {
         // Ignore write errors since we're writing to a Vec<u8>
-        
+
         let mut output = Vec::with_capacity(size_of::<usize>() + size_of::<Pixel>() * self.0.len());
 
         let _ = output.write_all(&self.0.len().to_le_bytes());
@@ -599,7 +599,6 @@ impl PixelList {
     /// Deserialize an array of bytes into a PixelList.
     ///
     pub fn binary_deserialize<R: Read>(r: &mut R) -> Self {
-        
         let mut buf: [u8; size_of::<usize>()] = [0; size_of::<usize>()];
 
         let _ = r.read_exact(&mut buf);
