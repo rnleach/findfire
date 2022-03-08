@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 chrono = "^0.4.19"
-clap = {version="^3.1.0", features=["derive", "cargo"]}
+clap = {version="^3.1.0", features=["derive", "cargo", "env"]}
 crossbeam-channel = "^0.5.2"
 libc = "0.2.117"
 netcdf = {version="^0.7.0", features=["memory"]}

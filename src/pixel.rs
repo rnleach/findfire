@@ -672,7 +672,7 @@ impl PixelList {
             let mut desc: [u8; 256] = [0; 256];
             let mut cursor = std::io::Cursor::new(&mut desc[..]);
 
-            let _ = write!(
+            write!(
                 cursor,
                 concat!(
                     "Power: {:.0} MW<br/>",
@@ -688,30 +688,37 @@ impl PixelList {
                 pixel.scan_angle,
                 pixel.mask_flag.as_str(),
                 pixel.data_quality_flag.as_str()
-            );
+            )
+            .unwrap();
 
             let position = cursor.position() as usize;
             drop(cursor);
 
             let desc = unsafe { std::str::from_utf8_unchecked(&desc[..position]) };
-            let _ = kml.start_placemark(None, Some(desc), None);
+            kml.start_placemark(None, Some(desc), None).unwrap();
 
             Self::kml_write_pixel_style(kml, pixel.power);
-            let _ = kml.start_polygon(true, true, Some("clampToGround"));
-            let _ = kml.polygon_start_outer_ring();
-            let _ = kml.start_linear_ring();
+            kml.start_polygon(true, true, Some("clampToGround"))
+                .unwrap();
+            kml.polygon_start_outer_ring().unwrap();
+            kml.start_linear_ring().unwrap();
 
-            let _ = kml.linear_ring_add_vertex(pixel.ul.lat, pixel.ul.lon, 0.0);
-            let _ = kml.linear_ring_add_vertex(pixel.ll.lat, pixel.ll.lon, 0.0);
-            let _ = kml.linear_ring_add_vertex(pixel.lr.lat, pixel.lr.lon, 0.0);
-            let _ = kml.linear_ring_add_vertex(pixel.ur.lat, pixel.ur.lon, 0.0);
+            kml.linear_ring_add_vertex(pixel.ul.lat, pixel.ul.lon, 0.0)
+                .unwrap();
+            kml.linear_ring_add_vertex(pixel.ll.lat, pixel.ll.lon, 0.0)
+                .unwrap();
+            kml.linear_ring_add_vertex(pixel.lr.lat, pixel.lr.lon, 0.0)
+                .unwrap();
+            kml.linear_ring_add_vertex(pixel.ur.lat, pixel.ur.lon, 0.0)
+                .unwrap();
 
             // Close the loop.
-            let _ = kml.linear_ring_add_vertex(pixel.ul.lat, pixel.ul.lon, 0.0);
-            let _ = kml.finish_linear_ring();
-            let _ = kml.polygon_finish_outer_ring();
-            let _ = kml.finish_polygon();
-            let _ = kml.finish_placemark();
+            kml.linear_ring_add_vertex(pixel.ul.lat, pixel.ul.lon, 0.0)
+                .unwrap();
+            kml.finish_linear_ring().unwrap();
+            kml.polygon_finish_outer_ring().unwrap();
+            kml.finish_polygon().unwrap();
+            kml.finish_placemark().unwrap();
         }
     }
 }

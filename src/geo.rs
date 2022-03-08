@@ -1,4 +1,5 @@
 //! Geographic primitives specifically suited to the needs of this crate.
+use std::fmt::Display;
 
 /// A coordinate consisting of a latitude and a longitude.
 #[derive(Debug, Clone, Copy)]
@@ -31,6 +32,16 @@ pub struct BoundingBox {
     pub ll: Coord,
     /// The upper right corner of the box.
     pub ur: Coord,
+}
+
+impl Display for BoundingBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{},{},{},{}",
+            self.ll.lat, self.ll.lon, self.ur.lat, self.ur.lon
+        )
+    }
 }
 
 impl BoundingBox {
