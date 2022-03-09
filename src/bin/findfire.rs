@@ -511,6 +511,12 @@ impl ClusterStats {
     }
 }
 
+fn u32_pct(num: u32, denom: u32) -> u32 {
+    let num = num as f64;
+    let denom = denom as f64;
+    (num / denom * 100.0).round() as u32
+}
+
 impl Display for ClusterStats {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\nIndividual Cluster Stats\n")?;
@@ -529,32 +535,32 @@ impl Display for ClusterStats {
         writeln!(
             f,
             "  Pct <   1 MW: {:10}",
-            self.num_power_lt_1mw as f64 / self.num_clusters as f64
+            u32_pct(self.num_power_lt_1mw, self.num_clusters)
         )?;
         writeln!(
             f,
             "  Pct <  10 MW: {:10}",
-            self.num_power_lt_10mw as f64 / self.num_clusters as f64
+            u32_pct(self.num_power_lt_10mw, self.num_clusters)
         )?;
         writeln!(
             f,
             "  Pct < 100 MW: {:10}",
-            self.num_power_lt_100mw as f64 / self.num_clusters as f64
+            u32_pct(self.num_power_lt_100mw, self.num_clusters)
         )?;
         writeln!(
             f,
             "  Pct <   1 GW: {:10}",
-            self.num_power_lt_1gw as f64 / self.num_clusters as f64
+            u32_pct(self.num_power_lt_1gw, self.num_clusters)
         )?;
         writeln!(
             f,
             "  Pct <  10 GW: {:10}",
-            self.num_power_lt_10gw as f64 / self.num_clusters as f64
+            u32_pct(self.num_power_lt_10gw, self.num_clusters)
         )?;
         writeln!(
             f,
             "  Pct < 100 GW: {:10}",
-            self.num_power_lt_100gw as f64 / self.num_clusters as f64
+            u32_pct(self.num_power_lt_100gw, self.num_clusters)
         )?;
         Ok(())
     }
