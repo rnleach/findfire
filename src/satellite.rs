@@ -1,10 +1,10 @@
 /*! Contains all the information about satellites. */
 
 use chrono::{DateTime, NaiveDate, Utc};
-use strum::EnumIter;
+use strum::{Display, EnumIter};
 
 /** The GOES satellites this library works with. */
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
 pub enum Satellite {
     /// GOES-16 (formerly GOES-R), or commonly known as GOES East
     G16,
@@ -53,7 +53,7 @@ impl Satellite {
 }
 
 /** The satellite scan sectors this library recognizes. */
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
 pub enum Sector {
     /// This is the full disk sector that includes the full viewable disk of the Earth.
     FULL,

@@ -45,15 +45,6 @@ impl KmlFile {
         Ok(KmlFile(buf))
     }
 
-    /// End the document and close the file.
-    pub fn finish_document(mut self) -> SatFireResult<()> {
-        const FOOTER: &str = r#"</Document>\n</kml>\n"#;
-
-        self.0.write_all(FOOTER.as_bytes())?;
-
-        Ok(())
-    }
-
     /// Write a description element to the file.
     pub fn write_description(&mut self, description: &str) -> SatFireResult<()> {
         writeln!(
