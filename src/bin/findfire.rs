@@ -38,7 +38,7 @@ use strum::IntoEnumIterator;
 /// summary statistics about the clusters and images that were analyzed during this run.
 ///
 #[derive(Debug, Parser)]
-#[clap(name = "findfire")]
+#[clap(bin_name = "findfire")]
 #[clap(author, version, about)]
 struct FindFireOptionsInit {
     /// The path to the database file.

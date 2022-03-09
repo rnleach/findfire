@@ -19,7 +19,7 @@ use strum::IntoEnumIterator;
 /// This program will export all the clusters in a requested region and time range into a KML file.
 ///
 #[derive(Debug, Parser)]
-#[clap(name = "showfire")]
+#[clap(bin_name = "showfire")]
 #[clap(author, version, about)]
 struct ShowFireOptionsInit {
     /// The path to the database file.

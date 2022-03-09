@@ -16,7 +16,6 @@ use std::{
 /// satellite and sector as KML.
 ///
 #[derive(Debug, Parser)]
-#[clap(name = "satfire")]
 #[clap(bin_name = "currentfire")]
 #[clap(author, version, about)]
 struct CurrentFireOptionsInit {
