@@ -46,7 +46,8 @@ struct FindFireOptionsInit {
     /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
     /// environment variable.
     #[clap(short, long)]
-    store_file: Option<PathBuf>,
+    #[clap(env = "CLUSTER_DB")]
+    store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     ///
@@ -60,11 +61,12 @@ struct FindFireOptionsInit {
     /// If this is not specified, then the program will check for it in the "SAT_ARCHIVE"
     /// environment variable.
     #[clap(short, long)]
-    data_dir: Option<PathBuf>,
+    #[clap(env = "SAT_ARCHIVE")]
+    data_dir: PathBuf,
 
     /// Only look for data newer than the most recent in the database.
     #[clap(short, long)]
-    only_new: bool,
+    new_only: bool,
 
     /// Verbose output
     #[clap(short, long)]
@@ -83,7 +85,7 @@ struct FindFireOptionsChecked {
     data_dir: PathBuf,
 
     /// Only look for data newer than the most recent in the database.
-    only_new: bool,
+    new_only: bool,
 
     /// Verbose output
     verbose: bool,
@@ -97,14 +99,9 @@ fn parse_args() -> SatFireResult<FindFireOptionsChecked> {
         store_file,
         kml_file,
         data_dir,
-        only_new,
+        new_only,
         verbose,
     } = FindFireOptionsInit::parse();
-
-    let store_file = match store_file {
-        Some(v) => v,
-        None => PathBuf::from(std::env::var("CLUSTER_DB")?),
-    };
 
     let kml_file = match kml_file {
         Some(v) => v,
@@ -115,16 +112,11 @@ fn parse_args() -> SatFireResult<FindFireOptionsChecked> {
         }
     };
 
-    let data_dir = match data_dir {
-        Some(v) => v,
-        None => PathBuf::from(std::env::var("SAT_ARCHIVE")?),
-    };
-
     Ok(FindFireOptionsChecked {
         store_file,
         kml_file,
         data_dir,
-        only_new,
+        new_only,
         verbose,
     })
 }
@@ -150,7 +142,7 @@ fn main() -> SatFireResult<()> {
     let data_dir = &opts.data_dir;
     let store_file = &opts.store_file;
     let verbose = opts.verbose;
-    let only_new = opts.only_new;
+    let only_new = opts.new_only;
 
     let walk_dir = dir_walker(data_dir, store_file, to_present_filter, only_new, verbose)?;
     let filter_present = filter_already_processed(store_file, from_dir_walker, to_loader, verbose)?;
@@ -195,6 +187,10 @@ fn dir_walker<P: AsRef<Path>>(
                     .newest_scan_start(sat, sector)
                     .unwrap_or_else(|_| sat.operational());
                 inner.insert(sector, latest);
+
+                if verbose {
+                    println!("Most Recent {} {}: {}", sat, sector, latest);
+                }
             }
         }
     } else {
@@ -224,10 +220,6 @@ fn dir_walker<P: AsRef<Path>>(
                         || e.path().extension().map(|ex| ex == "zip").unwrap_or(false)
                 })
             {
-                if verbose {
-                    println!("processing {}", entry.path().display());
-                }
-
                 to_db_present_filter.send(entry.into_path())?;
             }
 
@@ -256,6 +248,16 @@ fn filter_already_processed<P: AsRef<Path>>(
                     satfire::parse_satellite_description_from_file_name(&fname.to_string_lossy())
                 }) {
                     if !is_present.present(sat, sector, start, end)? {
+                        if verbose {
+                            println!(
+                                "processing {} {} {} - {}",
+                                sat,
+                                sector,
+                                start,
+                                path.display()
+                            );
+                        }
+
                         to_loader.send(path)?;
                     } else if verbose {
                         println!("already in db: {}", path.display());
