@@ -251,6 +251,9 @@ impl<'a> FireDatabaseQueryClusterPresent<'a> {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> SatFireResult<bool> {
+        let start = start.timestamp();
+        let end = end.timestamp();
+
         let num_clusters: i64 = self.clusters_stmt.query_row(
             [
                 &satellite.name() as &dyn ToSql,
