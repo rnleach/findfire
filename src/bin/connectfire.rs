@@ -77,27 +77,29 @@ struct FireStats {
     most_powerful: Option<Fire>,
     hottest: Option<Fire>,
     sat: Satellite,
+    count: usize,
 }
 
 impl Display for FireStats {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        writeln!(f, " -- Summary Stats for Connect Fire {} --", self.sat)?;
+        writeln!(f, " ---- Summary Stats for Connect Fire {} ----", self.sat)?;
+        writeln!(f, "\n           Processed {:9} Fires\n", self.count)?;
         if let Some(ref longest) = self.longest {
-            writeln!(f, " -- Longest Duration Fire --")?;
+            writeln!(f, "   -- Longest Duration Fire --")?;
             writeln!(f, "{}", longest)?;
         } else {
             writeln!(f, "No longest duration fire for stats.")?;
         }
 
         if let Some(ref most_powerful) = self.most_powerful {
-            writeln!(f, " -- Most Powerful Fire --")?;
+            writeln!(f, "   -- Most Powerful Fire --")?;
             writeln!(f, "{}", most_powerful)?;
         } else {
             writeln!(f, "No most powerful fire for stats.")?;
         }
 
         if let Some(ref hottest) = self.hottest {
-            writeln!(f, " -- Hottest Fire --")?;
+            writeln!(f, "   -- Hottest Fire --")?;
             writeln!(f, "{}", hottest)?;
         } else {
             writeln!(f, "No hottest fire for stats.")?;
@@ -114,6 +116,7 @@ impl FireStats {
             most_powerful: None,
             hottest: None,
             sat,
+            count: 0,
         }
     }
 
@@ -150,6 +153,8 @@ impl FireStats {
                 fires_hottest_temp = fire.max_temperature();
                 fires_hottest = Some(fire);
             }
+
+            self.count += 1;
         }
 
         if let Some(fires_longest) = fires_longest {
