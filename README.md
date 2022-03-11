@@ -3,7 +3,7 @@ A collection of programs for working with GOES-16/17 Fire Detection Charactersti
 wildfire detections.
 
 ## findfire
-Analysis of GOES-R/S NetCDF4 Fire Detection Characteristics files.
+Analysis of GOES-16/17 (GOES-R/S) NetCDF4 Fire Detection Characteristics files.
 
 Given a directory containing *-FDCC-*, *-FDCF-*, or *-FDCM-* files (Fire Detection Characteristics)
 from GOES-16/17 satellites, this program will analyze them. The analysis finds clusters of pixels
@@ -13,10 +13,7 @@ power of the cluster in megawatts, and a binary representation of the image pixe
 cluster. 
 
 The scan angle is the distance of the centroid of a pixel or cluster from the respective satellites
-nadir position on the earth. The distance is in degrees latitude and longitude, so it represents the
-angle between the line from the center of the Earth to nadir and the line from the center of the
-Earth to the centroid. This is a good proxy for measuring how close a pixel or cluster is to the
-limb of the Earth as viewed by the satellite, which is useful for some quality control.
+nadir position on the earth. The distance is in degrees from the center of the satellite's view.
 
 The binary representation stored in the database includes the 4 corner coordinates, the scan angle 
 and the fire power in megawatts of each pixel in the cluster. This basically represents all of the
@@ -50,30 +47,3 @@ time series database.
 Once this program is complete, the data it creates can be queried to produce a time series of fire
 power for a given fire.
 
-## Libraries
-
-### GLIB
-So far I'm only using the following from GLIB:
- - The test module.
- - Command line option parser.
- - GArray
- - GList
-
-
-### netcdf
- This is critical for accessing the data. The data files are in NetCDF4 format.
-
-### libzip
- The archive may store the NetCDF files in a zipped archive to save space.
-
-### SQLITE3
- sqlite3 is used for the database backend. In the future a different backend could be used for a
- more central storage that is accessable by multiple programs at a time, but for the time being 
- keeping the data on the same computer as the program will probably perform quicker and just be
- simpler.
-
-### courier
- My own personal source library for a threadsafe queue for sending data between threads.
-
-### kamel
- My own personal source library for writing KML files.
