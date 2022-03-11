@@ -204,9 +204,9 @@ impl FireList {
     /// `clust` was consumed, then it returns `None`.
     pub fn update(&mut self, row: FireDatabaseClusterRow) -> Option<FireDatabaseClusterRow> {
         let cluster_pixels: &PixelList = &row.pixels;
-        for fire_pixels in self.0.iter_mut().map(|f| &mut f.area) {
-            if cluster_pixels.adjacent_to_or_overlaps(fire_pixels, 1.0e-5) {
-                fire_pixels.max_merge(cluster_pixels);
+        for fire in self.0.iter_mut() {
+            if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
+                fire.update(&row);
                 return None;
             }
         }
