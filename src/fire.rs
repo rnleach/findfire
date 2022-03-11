@@ -52,11 +52,38 @@ pub struct Fire {
 
 impl Display for Fire {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let duration = self.duration();
+        let mut duration_buf = String::with_capacity(64);
+        let weeks = duration.num_weeks();
+        if weeks > 0 {
+            let _ = write!(
+                &mut duration_buf as &mut dyn std::fmt::Write,
+                "{} weeks ",
+                weeks
+            );
+        }
+
+        let days = duration.num_days() % 7;
+        if days > 0 {
+            let _ = write!(
+                &mut duration_buf as &mut dyn std::fmt::Write,
+                "{} days ",
+                days
+            );
+        }
+
+        let hours = duration.num_hours() % 24;
+        let _ = write!(
+            &mut duration_buf as &mut dyn std::fmt::Write,
+            "{} hours",
+            hours
+        );
+
         writeln!(f, "               ID: {:9}", self.id)?;
         writeln!(f, "        Satellite: {}", self.sat)?;
         writeln!(f, "   First Observed: {}", self.first_observed)?;
         writeln!(f, "    Last Observed: {}", self.last_observed)?;
-        writeln!(f, "         Duration: {}", self.duration())?;
+        writeln!(f, "         Duration: {}", duration_buf)?;
         writeln!(
             f,
             "         Centroid: {:.6},{:.6}",

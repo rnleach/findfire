@@ -198,13 +198,41 @@ fn save_wildfire_list_as_kml<P: AsRef<Path>>(kml_path: P, fires: &FireList) -> S
     )?;
     kml.finish_style()?;
 
-    let mut name = String::new();
-    let mut description = String::new();
+    let mut name = String::with_capacity(32);
+    let mut description = String::with_capacity(256);
+    let mut duration_buf = String::with_capacity(64);
     for fire in fires.iter() {
         name.clear();
         let _ = write!(&mut name, "{}", fire.id());
 
         kml.start_folder(Some(&name), None, false)?;
+
+        duration_buf.clear();
+        let duration = fire.duration();
+        let weeks = duration.num_weeks();
+        if weeks > 0 {
+            let _ = write!(
+                &mut duration_buf as &mut dyn std::fmt::Write,
+                "{} weeks ",
+                weeks
+            );
+        }
+
+        let days = duration.num_days() % 7;
+        if days > 0 {
+            let _ = write!(
+                &mut duration_buf as &mut dyn std::fmt::Write,
+                "{} days ",
+                days
+            );
+        }
+
+        let hours = duration.num_hours() % 24;
+        let _ = write!(
+            &mut duration_buf as &mut dyn std::fmt::Write,
+            "{} hours",
+            hours
+        );
 
         description.clear();
         let _ = write!(
@@ -220,7 +248,7 @@ fn save_wildfire_list_as_kml<P: AsRef<Path>>(kml_path: P, fires: &FireList) -> S
             fire.id(),
             fire.first_observed(),
             fire.last_observed(),
-            fire.duration(),
+            duration_buf,
             fire.max_power(),
             fire.max_temperature()
         );
@@ -259,27 +287,35 @@ fn process_rows_for_satellite<P: AsRef<Path>>(
 
     let mut current_time_step: DateTime<Utc> =
         DateTime::from_utc(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0), Utc);
+    let mut last_merge = current_time_step;
 
     let mut num_absorbed = 0;
+    let mut num_new = 0;
     for cluster in rows {
         let cluster = cluster?;
 
         let start = cluster.start;
 
         if start != current_time_step {
-            let num_merged = current_fires.merge_fires(&mut old_fires);
-            let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
-            let num_new = current_fires.extend(&mut new_fires);
+            if current_time_step - last_merge > Duration::hours(1) {
+                // Only merge once per hour to speed things up.
+                let num_merged = current_fires.merge_fires(&mut old_fires);
+                let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
+                last_merge = current_time_step;
 
-            if verbose {
-                println!(
-                    "Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4} at {}",
-                    num_absorbed, num_merged, num_old, num_new, current_time_step
-                );
+                if verbose {
+                    println!(
+                        "Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4} at {}",
+                        num_absorbed, num_merged, num_old, num_new, current_time_step
+                    );
+                }
+
+                num_absorbed = 0;
+                num_new = 0;
             }
+            num_new += current_fires.extend(&mut new_fires);
 
             current_time_step = start;
-            num_absorbed = 0;
 
             stats.update(&current_fires);
 
