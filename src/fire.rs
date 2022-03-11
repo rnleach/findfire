@@ -5,6 +5,7 @@ use crate::{
     satellite::Satellite,
 };
 use chrono::{DateTime, Duration, Utc};
+use std::fmt::{self, Display};
 
 /**
  * The aggregate properties of a temporally connected group of [Cluster](crate::Cluster) objects.
@@ -47,6 +48,23 @@ pub struct Fire {
     area: PixelList,
     /// The satellite the Clusters that were a part of this fire were observed with.
     sat: Satellite,
+}
+
+impl Display for Fire {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, "               ID: {:9}", self.id)?;
+        writeln!(f, "        Satellite: {}", self.sat)?;
+        writeln!(f, "   First Observed: {}", self.first_observed)?;
+        writeln!(f, "    Last Observed: {}", self.last_observed)?;
+        writeln!(f, "         Duration: {}", self.duration())?;
+        writeln!(
+            f,
+            "         Centroid: {:.6},{:.6}",
+            self.centroid.lat, self.centroid.lon
+        )?;
+        writeln!(f, "        Max Power: {:.0} MW", self.max_power)?;
+        writeln!(f, "  Max Temperature: {:.0}K", self.max_temperature)
+    }
 }
 
 impl Fire {
@@ -197,14 +215,25 @@ impl FireList {
     }
 
     /// Extend a fire list using another fire list, the `src` list is left empty.
-    pub fn extend(&mut self, src: &mut Self) {
-        self.0.append(&mut src.0)
+    ///
+    /// Returns the number of items added to this list.
+    pub fn extend(&mut self, src: &mut Self) -> usize {
+        let src_sz = src.len();
+        self.0.append(&mut src.0);
+        src_sz
     }
 
     /// Detect overlaps in the fires in the list and merge them together into a single fire.
-    pub fn merge_fires(&mut self, merged_away: &mut Self) {
+    ///
+    /// # Arguments
+    /// merged_away - is a list to move the smaller of two merged fires into.
+    ///
+    /// # Returns
+    /// The number of mergers that occurred.
+    pub fn merge_fires(&mut self, merged_away: &mut Self) -> usize {
         let mut i = 0;
         let mut len = self.0.len();
+        let starting_size = self.0.len();
         while i < len {
             // safe because i < len as checked by the while condition
             let ifire = unsafe { &mut *(self.0.get_unchecked_mut(i) as *mut Fire) };
@@ -224,6 +253,8 @@ impl FireList {
 
             i += 1;
         }
+
+        starting_size - self.0.len()
     }
 
     /// Get the number of fires in the list.
@@ -231,14 +262,23 @@ impl FireList {
         self.0.len()
     }
 
+    /// Check if this list is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Remove fires from the list that are likely no longer burning.
     ///
     /// # Arguments
     /// removed - is the list to add the drained elements into.
     /// current_time - is the current time of the clusters that are being processed.
-    pub fn drain_stale_fires(&mut self, removed: &mut Self, current_time: DateTime<Utc>) {
+    ///
+    /// # Returns
+    /// The number of items moved to the `removed` list.
+    pub fn drain_stale_fires(&mut self, removed: &mut Self, current_time: DateTime<Utc>) -> usize {
         let mut i = 0;
         let mut len = self.0.len();
+        let starting_size = self.0.len();
         while i < len {
             let f = unsafe { self.0.get_unchecked(i) };
             if wildfire_is_stale(f, current_time) {
@@ -249,6 +289,13 @@ impl FireList {
                 i += 1;
             }
         }
+
+        starting_size - self.0.len()
+    }
+
+    /// Get an iterator over the fires.
+    pub fn iter(&self) -> impl Iterator<Item = &Fire> {
+        self.0.iter()
     }
 }
 

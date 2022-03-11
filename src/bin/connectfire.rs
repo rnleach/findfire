@@ -1,402 +1,362 @@
-fn main() {
-    println!("Hello world.");
-}
+use chrono::{DateTime, Duration, NaiveDate, Utc};
+use clap::Parser;
+use satfire::{
+    BoundingBox, Coord, Fire, FireDatabase, FireList, Geo, KmlFile, SatFireResult, Satellite,
+};
+use std::{
+    fmt::{self, Display, Write},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
-/*
-/** \file connectfire.c
- * \brief Create several time series of fires by temporally connecting clusters (from findfire.c).
- *
- * Connect clusters from the output database of findfire to make time series of fires. Each time
- * series is given an ID and stored in a database with a start date and an end date. In the future
- * other statistics may be added to that database. Another table in the database will record the
- * relationship to clusters by associating a row number from the sqlite database with a fire ID
- * from the database table created by this program.
- */
-// Standard C
-#include <stdatomic.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-
-// System installed libraries
-#include <glib.h>
-
-// My source libs
-#include "kamel.h"
-
-// My project headers
-#include "satfire.h"
-#include "sf_util.h"
+use strum::IntoEnumIterator;
 
 /*-------------------------------------------------------------------------------------------------
  *                                        Global State
  *-----------------------------------------------------------------------------------------------*/
-_Atomic(unsigned int) next_wildfire_id;
+static NEXT_WILDFIRE_ID: AtomicU64 = AtomicU64::new(0);
 
 /*-------------------------------------------------------------------------------------------------
- *                          Program Initialization, Finalization, and Options
+ *                                     Command Line Options
  *-----------------------------------------------------------------------------------------------*/
-static struct ConnectFireOptions {
-    char *database_file;
-    bool verbose;
 
-} options = {0};
+///
+/// Create several time series of fires by temporally connecting clusters (from findfire).
+///
+/// Connect clusters from the output database of findfire to make time series' of fires. Each time
+/// series is given an ID and stored in a database with a start date and an end date. In the
+/// future, other statistics may be added to that database. Another table in the database will
+/// record the relationship to clusters by associating a row number from the database with a fire ID
+/// (created by this program) to the table with clusters.
+///
+#[derive(Debug, Parser)]
+#[clap(bin_name = "connectfire")]
+#[clap(author, version, about)]
+struct ConnectFireOptions {
+    /// The path to the database file.
+    ///
+    /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
+    /// environment variable.
+    #[clap(short, long)]
+    #[clap(env = "CLUSTER_DB")]
+    store_file: PathBuf,
 
-// clang-format off
-static GOptionEntry option_entries[] =
-{
-    {
-        "verbose",
-        'v',
-        G_OPTION_FLAG_NONE,
-        G_OPTION_ARG_NONE,
-        &options.verbose,
-        "Show verbose output.",
-        0
-    },
-
-    {NULL}
-};
-// clang-format on
-
-static void
-program_initialization(int argc[static 1], char ***argv)
-{
-    // Force to use UTC timezone.
-    setenv("TZ", "UTC", 1);
-    tzset();
-
-    satfire_initialize();
-
-    // Initialize with with environment variables and default values.
-    if (getenv("CLUSTER_DB")) {
-        asprintf(&options.database_file, "%s", getenv("CLUSTER_DB"));
-    }
-
-    // Parse command line options.
-    GError *error = 0;
-    GOptionContext *context = g_option_context_new("- Temporally connect clusters to form fires.");
-    g_option_context_add_main_entries(context, option_entries, 0);
-    g_option_context_parse(context, argc, argv, &error);
-    Stopif(error, exit(EXIT_FAILURE), "Error parsing options: %s", error->message);
-    g_option_context_free(context);
-
-    Stopif(!options.database_file, exit(EXIT_FAILURE), "Invalid, database_file is NULL");
-
-    // Print out options as configured.
-    if (options.verbose) {
-        fprintf(stdout, "  Database: %s\n", options.database_file);
-    }
-
-    satfire_db_initialize(options.database_file);
+    /// Verbose output
+    #[clap(short, long)]
+    verbose: bool,
 }
 
-static void
-program_finalization()
-{
-    free(options.database_file);
+impl Display for ConnectFireOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, "\n")?; // yes, two blank lines.
+        writeln!(f, "    Database: {}", self.store_file.display())?;
+        writeln!(f, "\n")?; // yes, two blank lines.
 
-    satfire_finalize();
+        Ok(())
+    }
+}
+
+/// Get the command line arguments and check them.
+///
+/// If there is missing data, try to fill it in with environment variables.
+fn parse_args() -> SatFireResult<ConnectFireOptions> {
+    let opts = ConnectFireOptions::parse();
+
+    if opts.verbose {
+        println!("{}", opts);
+    }
+
+    Ok(opts)
 }
 
 /*-------------------------------------------------------------------------------------------------
  *                                    Stats for this run.
  *-----------------------------------------------------------------------------------------------*/
-static void
-update_wildfire_stats(struct SFWildfireList const *curr, struct SFWildfire **longest,
-                      struct SFWildfire **most_powerful, struct SFWildfire **hottest)
-{
-    assert(longest && most_powerful && hottest);
+struct FireStats {
+    longest: Option<Fire>,
+    most_powerful: Option<Fire>,
+    hottest: Option<Fire>,
+    sat: Satellite,
+}
 
-    // If the list is empty, just return.
-    if (!curr) {
-        return;
-    }
-
-    //
-    // Get the maximums for the current list
-    //
-    struct SFWildfire const *longest_curr = satfire_wildfirelist_get(curr, 0);
-    double longest_duration = satfire_wildfire_duration(longest_curr);
-
-    struct SFWildfire const *most_powerful_curr = satfire_wildfirelist_get(curr, 0);
-    double most_power = satfire_wildfire_max_power(most_powerful_curr);
-
-    struct SFWildfire const *hottest_curr = satfire_wildfirelist_get(curr, 0);
-    double hottest_temp = satfire_wildfire_max_temperature(hottest_curr);
-
-    for (size_t i = 1; i < satfire_wildfirelist_len(curr); ++i) {
-        struct SFWildfire const *tst = satfire_wildfirelist_get(curr, i);
-
-        double duration = satfire_wildfire_duration(tst);
-        double power = satfire_wildfire_max_power(tst);
-        double temp = satfire_wildfire_max_temperature(tst);
-
-        if (duration > longest_duration) {
-            longest_curr = tst;
-            longest_duration = duration;
+impl Display for FireStats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, " -- Summary Stats for Connect Fire {} --", self.sat)?;
+        if let Some(ref longest) = self.longest {
+            writeln!(f, " -- Longest Duration Fire --")?;
+            writeln!(f, "{}", longest)?;
+        } else {
+            writeln!(f, "No longest duration fire for stats.")?;
         }
 
-        if (power > most_power) {
-            most_powerful_curr = tst;
-            most_power = power;
+        if let Some(ref most_powerful) = self.most_powerful {
+            writeln!(f, " -- Most Powerful Fire --")?;
+            writeln!(f, "{}", most_powerful)?;
+        } else {
+            writeln!(f, "No most powerful fire for stats.")?;
         }
 
-        if (temp > hottest_temp) {
-            hottest_curr = tst;
-            hottest_temp = temp;
+        if let Some(ref hottest) = self.hottest {
+            writeln!(f, " -- Hottest Fire --")?;
+            writeln!(f, "{}", hottest)?;
+        } else {
+            writeln!(f, "No hottest fire for stats.")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl FireStats {
+    fn new(sat: Satellite) -> Self {
+        FireStats {
+            longest: None,
+            most_powerful: None,
+            hottest: None,
+            sat,
         }
     }
 
-    // Compare to the inputs
-    bool update_longest = (*longest && longest_duration > satfire_wildfire_duration(*longest) &&
-                           *longest != longest_curr) ||
-                          (!*longest);
-    if (update_longest) {
-        satfire_wildfire_destroy(g_steal_pointer(longest));
-        *longest = satfire_wildfire_clone(longest_curr);
-    }
+    fn update(&mut self, fires: &FireList) {
+        // Return early if the list is empty. There's nothing to do.
+        if fires.is_empty() {
+            return;
+        }
 
-    bool update_power =
-        (*most_powerful && most_power > satfire_wildfire_max_power(*most_powerful) &&
-         *most_powerful != most_powerful_curr) ||
-        (!*most_powerful);
-    if (update_power) {
-        satfire_wildfire_destroy(g_steal_pointer(most_powerful));
-        *most_powerful = satfire_wildfire_clone(most_powerful_curr);
-    }
+        //
+        // Get the maximums for the currentl list.
+        //
+        let mut fires_longest_dur = Duration::minutes(0);
+        let mut fires_longest: Option<&Fire> = None;
 
-    bool update_hottest = (*hottest && hottest_temp > satfire_wildfire_max_temperature(*hottest) &&
-                           *hottest != hottest_curr) ||
-                          (!*hottest);
-    if (update_hottest) {
-        satfire_wildfire_destroy(g_steal_pointer(hottest));
-        *hottest = satfire_wildfire_clone(hottest_curr);
+        let mut fires_most_power_power = -f64::INFINITY;
+        let mut fires_most_power: Option<&Fire> = None;
+
+        let mut fires_hottest_temp = -f64::INFINITY;
+        let mut fires_hottest: Option<&Fire> = None;
+
+        for fire in fires.iter() {
+            if fire.duration() > fires_longest_dur {
+                fires_longest_dur = fire.duration();
+                fires_longest = Some(fire);
+            }
+
+            if fire.max_power() > fires_most_power_power {
+                fires_most_power_power = fire.max_power();
+                fires_most_power = Some(fire);
+            }
+
+            if fire.max_temperature() > fires_hottest_temp {
+                fires_hottest_temp = fire.max_temperature();
+                fires_hottest = Some(fire);
+            }
+        }
+
+        if let Some(fires_longest) = fires_longest {
+            if let Some(ref mut longest) = self.longest {
+                if fires_longest_dur > longest.duration() {
+                    *longest = fires_longest.clone();
+                }
+            } else {
+                self.longest = Some(fires_longest.clone());
+            }
+        }
+
+        if let Some(fires_most_power) = fires_most_power {
+            if let Some(ref mut most_powerful) = self.most_powerful {
+                if fires_most_power_power > most_powerful.max_power() {
+                    *most_powerful = fires_most_power.clone();
+                }
+            } else {
+                self.most_powerful = Some(fires_most_power.clone());
+            }
+        }
+
+        if let Some(fires_hottest) = fires_hottest {
+            if let Some(ref mut hottest) = self.hottest {
+                if fires_hottest_temp > hottest.max_power() {
+                    *hottest = fires_hottest.clone();
+                }
+            } else {
+                self.hottest = Some(fires_hottest.clone());
+            }
+        }
     }
 }
 
 /*-------------------------------------------------------------------------------------------------
  *                                   Output List of Fires as KML
  *-----------------------------------------------------------------------------------------------*/
-static void
-save_wildfire_list(struct SFWildfireList *fires, char const *fname)
-{
-    assert(fires);
+fn save_wildfire_list_as_kml<P: AsRef<Path>>(kml_path: P, fires: &FireList) -> SatFireResult<()> {
+    let mut kml = KmlFile::start_document(kml_path)?;
 
-    FILE *out = fopen(fname, "w");
-    Stopif(!out, exit(EXIT_FAILURE), "error opening file: %s", fname);
+    kml.start_style(Some("fire"))?;
+    kml.create_poly_style(Some("880000FF"), true, false)?;
+    kml.create_icon_style(
+        Some("http://maps.google.com/mapfiles/kml/shapes/firedept.png"),
+        1.3,
+    )?;
+    kml.finish_style()?;
 
-    kamel_start_document(out);
+    let mut name = String::new();
+    let mut description = String::new();
+    for fire in fires.iter() {
+        name.clear();
+        let _ = write!(&mut name, "{}", fire.id());
 
-    kamel_start_style(out, "fire");
-    kamel_poly_style(out, "880000FF", true, false);
-    kamel_icon_style(out, "http://maps.google.com/mapfiles/kml/shapes/firedept.png", 1.3);
-    kamel_end_style(out);
+        kml.start_folder(Some(&name), None, false)?;
 
-    size_t len = satfire_wildfirelist_len(fires);
-    for (size_t i = 0; i < len; ++i) {
-        struct SFWildfire const *f = satfire_wildfirelist_get(fires, i);
+        description.clear();
+        let _ = write!(
+            &mut description,
+            concat!(
+                "ID: {}<br/>",
+                "Start: {}<br/>",
+                "End: {}<br/>",
+                "Duration: {}<br/>",
+                "Max Power: {:.0} MW<br/>",
+                "Max Temperature: {:.0} Kelvin<br/>",
+            ),
+            fire.id(),
+            fire.first_observed(),
+            fire.last_observed(),
+            fire.duration(),
+            fire.max_power(),
+            fire.max_temperature()
+        );
 
-        char id[32] = {0};
-        snprintf(id, sizeof(id), "%u", satfire_wildfire_id(f));
+        kml.start_placemark(Some(&name), Some(&description), Some("#fire"))?;
+        let centroid = fire.centroid();
+        kml.create_point(centroid.lat, centroid.lon, 0.0)?;
+        kml.finish_placemark()?;
 
-        time_t starttm = satfire_wildfire_get_first_observed(f);
-        struct tm start = *gmtime(&starttm);
-        char start_buf[32] = {0};
-        strftime(start_buf, sizeof(start_buf), "%Y-%m-%d %H:%M:%SZ", &start);
-
-        time_t endtm = satfire_wildfire_get_last_observed(f);
-        struct tm end = *gmtime(&endtm);
-        char end_buf[32] = {0};
-        strftime(end_buf, sizeof(end_buf), "%Y-%m-%d %H:%M:%SZ", &end);
-
-        double duration = satfire_wildfire_duration(f);
-
-        int days = (int)floor(duration / 60.0 / 60.0 / 24.0);
-        double so_far = days * 60.0 * 60.0 * 24.0;
-
-        int hours = (int)floor((duration - so_far) / 60.0 / 60.0);
-
-        char desc[1024] = {0};
-        snprintf(desc, sizeof(desc),
-                 "ID: %u<br/>"
-                 "Start: %s<br/>"
-                 "End: %s<br/>"
-                 "Duration: %d days %d hours<br/>"
-                 "Max Power: %.0lf MW<br/>"
-                 "Max Temperature: %.0lf Kelvin<br/>",
-                 satfire_wildfire_id(f), start_buf, end_buf, days, hours,
-                 satfire_wildfire_max_power(f), satfire_wildfire_max_temperature(f));
-
-        kamel_start_folder(out, id, 0, false);
-
-        kamel_start_placemark(out, id, desc, "#fire");
-        struct SFCoord centroid = satfire_wildfire_centroid(f);
-        kamel_point(out, centroid.lat, centroid.lon, 0.0);
-        kamel_end_placemark(out);
-
-        satfire_pixel_list_kml_write(out, satfire_wildfire_pixels(f));
-
-        kamel_end_folder(out);
+        fire.pixels().kml_write(&mut kml);
+        kml.finish_folder()?;
     }
 
-    kamel_end_document(out);
-
-    fclose(out);
+    Ok(())
 }
-
 /*-------------------------------------------------------------------------------------------------
  *                                   Processing For A Satellite
  *-----------------------------------------------------------------------------------------------*/
-static void
-process_rows_for_satellite(enum SFSatellite sat, time_t start, time_t end,
-                           struct SFBoundingBox area, SFDatabaseH db)
-{
-    assert(db);
+fn process_rows_for_satellite<P: AsRef<Path>>(
+    db: &FireDatabase,
+    sat: Satellite,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    area: BoundingBox,
+    kml_path: P,
+    verbose: bool,
+) -> SatFireResult<()> {
+    let mut stats = FireStats::new(sat);
 
-    SFClusterDatabaseQueryRowsH rows =
-        satfire_cluster_db_query_rows(db, sat, SATFIRE_SECTOR_NONE, start, end, area);
-    Stopif(!rows, return, "Error querying rows for %s, returning from function.",
-           satfire_satellite_name(sat));
+    let mut rows = db.query_clusters(Some(sat), None, start, end, area)?;
+    let rows = rows.rows()?;
 
-    struct SFWildfireList *current_fires = 0;
-    struct SFWildfireList *new_fires = 0;
-    struct SFWildfireList *old_fires = 0;
+    let mut current_fires = FireList::new(); // TODO: Load these from the database.
+    let mut new_fires = FireList::new();
+    let mut old_fires = FireList::new();
 
-    struct SFWildfire *longest = 0;
-    struct SFWildfire *most_powerful = 0;
-    struct SFWildfire *hottest = 0;
+    let mut current_time_step: DateTime<Utc> =
+        DateTime::from_utc(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0), Utc);
 
-    time_t current_time_step = 0;
+    let mut num_absorbed = 0;
+    for cluster in rows {
+        let cluster = cluster?;
 
-    struct SFClusterRow *row = 0;
-    size_t num_absorbed = 0;
-    while ((row = satfire_cluster_db_query_rows_next(rows, row))) {
+        let start = cluster.start;
 
-        time_t start = satfire_cluster_db_satfire_cluster_row_start(row);
+        if start != current_time_step {
+            let num_merged = current_fires.merge_fires(&mut old_fires);
+            let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
+            let num_new = current_fires.extend(&mut new_fires);
 
-        if (start != current_time_step) {
-
-            size_t num_merged = satfire_wildfirelist_len(current_fires);
-            old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
-            num_merged -= satfire_wildfirelist_len(current_fires);
-
-            size_t num_old = satfire_wildfirelist_len(current_fires);
-            old_fires =
-                satfire_wildfirelist_drain_stale_fires(current_fires, old_fires, current_time_step);
-            num_old -= satfire_wildfirelist_len(current_fires);
-
-            size_t num_new = satfire_wildfirelist_len(new_fires);
-            current_fires = satfire_wildfirelist_extend(current_fires, new_fires);
-
-            printf("Absorbed = %4ld Merged = %4ld Aged out = %4ld New = %4ld at %s", num_absorbed,
-                   num_merged, num_old, num_new, ctime(&current_time_step));
+            if verbose {
+                println!(
+                    "Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4} at {}",
+                    num_absorbed, num_merged, num_old, num_new, current_time_step
+                );
+            }
 
             current_time_step = start;
             num_absorbed = 0;
 
-            update_wildfire_stats(old_fires, &longest, &most_powerful, &hottest);
+            stats.update(&current_fires);
 
             // TODO: send old fires to a database thread.
         }
 
-        bool cluster_merged = satfire_wildfirelist_update(current_fires, row);
-
-        if (!cluster_merged) {
-
-            unsigned int id = atomic_fetch_add(&next_wildfire_id, 1);
-            new_fires = satfire_wildfirelist_create_add_fire(new_fires, id, row);
-
+        if let Some(cluster) = current_fires.update(cluster) {
+            let id = NEXT_WILDFIRE_ID.fetch_add(1, Ordering::SeqCst);
+            new_fires.create_add_fire(id, cluster);
         } else {
-            ++num_absorbed;
+            num_absorbed += 1;
         }
     }
 
-    old_fires = satfire_wildfirelist_merge_fires(current_fires, old_fires);
-    old_fires = satfire_wildfirelist_extend(old_fires, current_fires);
-    old_fires = satfire_wildfirelist_extend(old_fires, new_fires);
+    let num_merged = current_fires.merge_fires(&mut old_fires);
+    let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
+    let num_new = current_fires.extend(&mut new_fires);
 
-    update_wildfire_stats(old_fires, &longest, &most_powerful, &hottest);
+    save_wildfire_list_as_kml(kml_path, &current_fires)?;
 
-    char fname[256] = {0};
-    int num_printed = snprintf(fname, sizeof(fname), "%s_%s.kml", options.database_file,
-                               satfire_satellite_name(sat));
-    Stopif(num_printed >= sizeof(fname), exit(EXIT_FAILURE), "filename buffer overflow");
-    save_wildfire_list(old_fires, fname);
+    if verbose {
+        println!(
+            "Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4} at {}",
+            num_absorbed, num_merged, num_old, num_new, current_time_step
+        );
+    }
 
-    printf("\n\nRun Summary for satellite %s:\n\t"
-           "    Old Fires: %5ld\n\t"
-           "Current Fires: %5ld\n\t"
-           "    New Fires: %5ld\n\n\n",
-           satfire_satellite_name(sat), satfire_wildfirelist_len(old_fires),
-           satfire_wildfirelist_len(current_fires), satfire_wildfirelist_len(new_fires));
+    old_fires.extend(&mut current_fires);
+    stats.update(&old_fires);
+
+    assert!(current_fires.is_empty());
+    assert!(new_fires.is_empty());
 
     // TODO: send old fires to a database thread
 
-    current_fires = satfire_wildfirelist_destroy(current_fires);
-    new_fires = satfire_wildfirelist_destroy(new_fires);
-    old_fires = satfire_wildfirelist_destroy(old_fires);
+    if verbose {
+        println!("{}", stats);
+    }
 
-    int sc = satfire_cluster_db_query_rows_finalize(&rows);
-    Stopif(sc, return, "Error finalizing row query, returning from function.");
-
-    printf("\nLongest duration fire:\n");
-    satfire_wildfire_print(longest);
-
-    printf("\nMost powerul fire:\n");
-    satfire_wildfire_print(most_powerful);
-
-    printf("\nHottest fire:\n");
-    satfire_wildfire_print(hottest);
-
-    printf("\n\n");
-
-    satfire_wildfire_destroy(longest);
-    satfire_wildfire_destroy(most_powerful);
-    satfire_wildfire_destroy(hottest);
-
-    return;
+    Ok(())
 }
+
 /*-------------------------------------------------------------------------------------------------
  *                                             Main
  *-----------------------------------------------------------------------------------------------*/
-int
-main(int argc, char *argv[argc + 1])
-{
-    program_initialization(&argc, &argv);
+fn main() -> SatFireResult<()> {
+    let opts = parse_args()?;
 
-    // Connect to the chosen database.
-    SFDatabaseH db = satfire_db_connect(options.database_file);
-    Stopif(!db, exit(EXIT_FAILURE), "Unable to connect to database %s", options.database_file);
+    let db = FireDatabase::connect(&opts.store_file)?;
 
-    //
-    // Restore state from where we last left off.
-    //
-    unsigned int next_id = satfire_fires_db_next_wildfire_id(db);
+    let start = DateTime::from_utc(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0), Utc);
+    let end = Utc::now();
 
-    if (options.verbose) {
-        fprintf(stdout, "  Next wildfire ID number: %u\n", next_id);
+    let area = BoundingBox {
+        ll: Coord {
+            lat: -90.0,
+            lon: -180.0,
+        },
+        ur: Coord {
+            lat: 90.0,
+            lon: 180.0,
+        },
+    };
+
+    let next_id = db.next_wildfire_id()?;
+    NEXT_WILDFIRE_ID.store(next_id, Ordering::SeqCst);
+
+    if opts.verbose {
+        println!("Next fire ID {}", next_id);
     }
 
-    atomic_init(&next_wildfire_id, next_id);
-
-    time_t start = 0; // TODO: Figure this out from the database.
-    time_t end = time(0);
-
-    // Start out using the whole world! For this program, no reason to limit the area.
-    struct SFBoundingBox area = {.ll = (struct SFCoord){.lat = -90.0, .lon = -180.0},
-                                 .ur = (struct SFCoord){.lat = 90.0, .lon = 180.0}};
-
-    //
-    // Do the processing.
-    //
-    for (unsigned int sat = 0; sat < SATFIRE_SATELLITE_NUM; sat++) {
-        process_rows_for_satellite(sat, start, end, area, db);
+    for sat in Satellite::iter() {
+        let mut kml_path = opts.store_file.clone();
+        kml_path.set_file_name(sat.name());
+        kml_path.set_extension("kml");
+        process_rows_for_satellite(&db, sat, start, end, area, &kml_path, opts.verbose)?;
     }
 
-    satfire_db_close(&db);
-    program_finalization();
-
-    return EXIT_SUCCESS;
+    Ok(())
 }
-*/
