@@ -1,5 +1,6 @@
 use crate::{
     cluster::ClusterList,
+    fire::{Fire, FireList},
     geo::{BoundingBox, Coord, Geo},
     pixel::PixelList,
     satellite::{Satellite, Sector},
@@ -7,6 +8,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OpenFlags, ToSql};
+use rustc_hash::FxHashMap as HashMap;
 use std::path::Path;
 
 /// Represents a connection to the database where ALL the information related to fires is stored.
@@ -134,6 +136,7 @@ impl FireDatabase {
 
         let query = &format!(
             r#"SELECT
+                 rowid,
                  satellite,
                  sector,
                  start_time,
@@ -165,6 +168,11 @@ impl FireDatabase {
         let stmt = self.conn.prepare(query)?;
 
         Ok(FireDatabaseQueryClusters { stmt })
+    }
+
+    /// Add fires and associations to clusters to the database.
+    pub fn prepare_to_add_fires(&self) -> SatFireResult<FireDatabaseAddFire> {
+        todo!()
     }
 }
 
@@ -298,7 +306,8 @@ impl<'a> FireDatabaseQueryClusters<'a> {
         Ok(self
             .stmt
             .query_and_then([], |row| -> SatFireResult<FireDatabaseClusterRow> {
-                let sat = match row.get_ref(0)? {
+                let rowid: i64 = row.get(0)?;
+                let sat = match row.get_ref(1)? {
                     rusqlite::types::ValueRef::Text(txt) => {
                         let txt = unsafe { std::str::from_utf8_unchecked(txt) };
                         Satellite::string_contains_satellite(txt).ok_or("Invalid satellite")
@@ -306,7 +315,7 @@ impl<'a> FireDatabaseQueryClusters<'a> {
                     _ => Err("satellite not text"),
                 }?;
 
-                let sector = match row.get_ref(1)? {
+                let sector = match row.get_ref(2)? {
                     rusqlite::types::ValueRef::Text(txt) => {
                         let txt = unsafe { std::str::from_utf8_unchecked(txt) };
                         Sector::string_contains_sector(txt).ok_or("Invalid sector")
@@ -315,18 +324,18 @@ impl<'a> FireDatabaseQueryClusters<'a> {
                 }?;
 
                 let start: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(2)?, 0), Utc);
-                let end: DateTime<Utc> =
                     DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
-                let power: f64 = row.get(4)?;
-                let max_temperature: f64 = row.get(5)?;
-                let area: f64 = row.get(6)?;
-                let scan_angle: f64 = row.get(7)?;
-                let lat: f64 = row.get(8)?;
-                let lon: f64 = row.get(9)?;
+                let end: DateTime<Utc> =
+                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
+                let power: f64 = row.get(5)?;
+                let max_temperature: f64 = row.get(6)?;
+                let area: f64 = row.get(7)?;
+                let scan_angle: f64 = row.get(8)?;
+                let lat: f64 = row.get(9)?;
+                let lon: f64 = row.get(10)?;
                 let centroid = Coord { lat, lon };
 
-                let pixels = match row.get_ref(10)? {
+                let pixels = match row.get_ref(11)? {
                     rusqlite::types::ValueRef::Blob(bytes) => {
                         let mut cursor = std::io::Cursor::new(bytes);
                         Ok(PixelList::binary_deserialize(&mut cursor))
@@ -335,6 +344,7 @@ impl<'a> FireDatabaseQueryClusters<'a> {
                 }?;
 
                 Ok(FireDatabaseClusterRow {
+                    rowid,
                     sat,
                     sector,
                     start,
@@ -352,6 +362,7 @@ impl<'a> FireDatabaseQueryClusters<'a> {
 
 /// All the data about a cluster retrieved from the database.
 pub struct FireDatabaseClusterRow {
+    pub rowid: i64,
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
     pub power: f64,
@@ -367,61 +378,25 @@ pub struct FireDatabaseClusterRow {
 impl FireDatabaseClusterRow {}
 
 pub struct FireDatabaseAddFire<'a> {
-    stmt: rusqlite::Statement<'a>,
+    fire_stmt: rusqlite::Statement<'a>,
+    assoc_stmt: rusqlite::Statement<'a>,
+    associations: HashMap<u64, Vec<u64>>,
 }
 
-impl<'a> FireDatabaseAddFire<'a> {}
+impl<'a> FireDatabaseAddFire<'a> {
+    /// Add a list of fires to the database.
+    pub fn add_fires(&mut self, fires: &FireList) -> SatFireResult<()> {
+        // For each fire in fires
+        //   copy the fire_id and add it to a vector
+        //   insert it into the database
+        // For each fire_id in 'the vector'
+        //   get the corresponding vector out of the hash map
+        //   add the associations to the database.
+        todo!()
+    }
 
-/*
-
-/**
- * \brief Prepare to add rows to the fires database.
- *
- * \returns NULL or the 0 pointer on error.
- */
-SFFiresDatabaseAddH satfire_fires_db_prepare_to_add(SFDatabaseH db);
-SFFiresDatabaseAddH
-satfire_fires_db_prepare_to_add(SFDatabaseH db)
-{
-    // TODO implement
-    assert(false);
-    return 0;
+    /// Add associations.
+    pub fn add_associations(&mut self, associations: &[(u64, u64)]) -> SatFireResult<()> {
+        todo!()
+    }
 }
-
-/**
- * \brief Finalize add transaction.
- *
- * \returns 0 if there is no error.
- */
-int satfire_fires_db_finalize_add(SFFiresDatabaseAddH *stmt);
-int
-satfire_fires_db_finalize_add(SFFiresDatabaseAddH *stmt)
-{
-    // TODO implement
-    assert(false);
-    return 0;
-}
-
-/**
- * \brief Adds or updates a fire to the database.
- *
- * \returns the 0 on success and non-zero on error.
- */
-int satfire_fires_db_add(SFFiresDatabaseAddH stmt, struct SFWildfire *fire);
-int
-satfire_fires_db_add(SFFiresDatabaseAddH stmt, struct SFWildfire *fire)
-{
-    // TODO implement
-    assert(false);
-    return 0;
-}
-
-*/
-
-/*
-struct SFPixelList *
-satfire_cluster_db_satfire_cluster_row_steal_pixels(struct SFClusterRow *row)
-{
-    return g_steal_pointer(&row->pixels);
-}
-*/
