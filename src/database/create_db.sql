@@ -20,6 +20,8 @@ CREATE INDEX IF NOT EXISTS file_processed
   ON clusters (satellite, sector, start_time,
                end_time);
 
+-- This table records files that have been processed, but 
+-- did not contain any clusters.
 CREATE TABLE IF NOT EXISTS no_fire (
   satellite  TEXT    NOT NULL,
   sector     TEXT    NOT NULL,
@@ -39,6 +41,7 @@ CREATE TABLE IF NOT EXISTS fires (
 
 PRAGMA foreign_keys = ON;
 
+-- These are associations between fires and clusters.
 CREATE TABLE IF NOT EXISTS associations (
   fire_id    INTEGER NOT NULL,
   cluster_id INTEGER NOT NULL,
