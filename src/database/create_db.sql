@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS fires (
   lat             REAL    NOT NULL,
   lon             REAL    NOT NULL,
   max_power       REAL    NOT NULL,
-  max_temperature REAL    NOR NULL,
+  max_temperature REAL    NOT NULL,
   pixels          BLOB    NOT NULL);
 
 PRAGMA foreign_keys = ON;
@@ -46,5 +46,5 @@ CREATE TABLE IF NOT EXISTS associations (
   fire_id    INTEGER NOT NULL,
   cluster_id INTEGER NOT NULL,
   FOREIGN KEY(fire_id)    REFERENCES fires(fire_id),
-  FOREIGN KEY(cluster_id) REFERENCES clusers(cluster_id));
+  FOREIGN KEY(cluster_id) REFERENCES clusters(cluster_id));
 
