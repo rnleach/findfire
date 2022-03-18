@@ -4,10 +4,11 @@
 // Public API
 pub use cluster::{Cluster, ClusterList};
 pub use database::{
-    FireDatabase, FireDatabaseAddCluster, FireDatabaseAddFire, FireDatabaseClusterRow,
-    FireDatabaseQueryClusterPresent, FireDatabaseQueryClusters,
+    ClusterDatabase, ClusterDatabaseAddCluster, ClusterDatabaseClusterRow,
+    ClusterDatabaseQueryClusterPresent, ClusterDatabaseQueryClusters, FiresDatabase,
+    FiresDatabaseAddFire,
 };
-pub use fire::{Fire, FireList};
+pub use fire::{Fire, FireList, FireListUpdateResult};
 pub use geo::{BoundingBox, Coord, Geo};
 pub use kml::KmlFile;
 pub use pixel::{Pixel, PixelList};

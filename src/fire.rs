@@ -1,5 +1,5 @@
 use crate::{
-    database::FireDatabaseClusterRow,
+    database::ClusterDatabaseClusterRow,
     geo::{BoundingBox, Coord, Geo},
     pixel::PixelList,
     satellite::Satellite,
@@ -96,7 +96,7 @@ impl Display for Fire {
 
 impl Fire {
     /// Create a new wildfire.
-    pub fn new(id: u64, initial: FireDatabaseClusterRow) -> Self {
+    pub fn new(id: u64, initial: ClusterDatabaseClusterRow) -> Self {
         Fire {
             first_observed: initial.start,
             last_observed: initial.end,
@@ -106,6 +106,29 @@ impl Fire {
             id,
             area: initial.pixels,
             sat: initial.sat,
+        }
+    }
+
+    /// Create one from raw parts.
+    pub fn new_from_raw_parts(
+        id: u64,
+        area: PixelList,
+        first_observed: DateTime<Utc>,
+        last_observed: DateTime<Utc>,
+        max_power: f64,
+        max_temperature: f64,
+        centroid: Coord,
+        sat: Satellite,
+    ) -> Self {
+        Fire {
+            first_observed,
+            last_observed,
+            centroid,
+            max_power,
+            max_temperature,
+            id,
+            area,
+            sat,
         }
     }
 
@@ -149,8 +172,8 @@ impl Fire {
         self.sat
     }
 
-    /// Update a wildfire by adding the information in this FireDatabaseClusterRow to it.
-    pub fn update(&mut self, row: &FireDatabaseClusterRow) {
+    /// Update a wildfire by adding the information in this ClusterDatabaseClusterRow to it.
+    pub fn update(&mut self, row: &ClusterDatabaseClusterRow) {
         debug_assert!(row.sat == self.sat);
 
         self.last_observed = row.end;
@@ -199,6 +222,11 @@ impl Geo for Fire {
 /// A list of [Fire] objects.
 pub struct FireList(Vec<Fire>);
 
+pub enum FireListUpdateResult {
+    NoMatch(ClusterDatabaseClusterRow),
+    Match(u64),
+}
+
 impl Default for FireList {
     fn default() -> Self {
         Self::new()
@@ -217,7 +245,7 @@ impl FireList {
     }
 
     /// Create a new fire and add it to the list.
-    pub fn create_add_fire(&mut self, id: u64, cluster_row: FireDatabaseClusterRow) {
+    pub fn create_add_fire(&mut self, id: u64, cluster_row: ClusterDatabaseClusterRow) {
         self.add_fire(Fire::new(id, cluster_row))
     }
 
@@ -229,16 +257,16 @@ impl FireList {
     ///
     /// `Some(clust)` if `clust` was not matched to a fire and used to update it. If the
     /// `clust` was consumed, then it returns `None`.
-    pub fn update(&mut self, row: FireDatabaseClusterRow) -> Option<FireDatabaseClusterRow> {
+    pub fn update(&mut self, row: ClusterDatabaseClusterRow) -> FireListUpdateResult {
         let cluster_pixels: &PixelList = &row.pixels;
         for fire in self.0.iter_mut() {
             if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
                 fire.update(&row);
-                return None;
+                return FireListUpdateResult::Match(fire.id);
             }
         }
 
-        Some(row)
+        FireListUpdateResult::NoMatch(row)
     }
 
     /// Extend a fire list using another fire list, the `src` list is left empty.

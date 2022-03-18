@@ -1,8 +1,8 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
 use satfire::{
-    BoundingBox, Coord, FireDatabase, FireDatabaseClusterRow, KmlFile, SatFireResult, Satellite,
-    Sector,
+    BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlFile, SatFireResult,
+    Satellite, Sector,
 };
 use std::{
     fmt::{self, Display},
@@ -22,13 +22,13 @@ use strum::IntoEnumIterator;
 #[clap(bin_name = "showfire")]
 #[clap(author, version, about)]
 struct ShowFireOptionsInit {
-    /// The path to the database file.
+    /// The path to the cluster database file.
     ///
     /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
     /// environment variable.
     #[clap(short, long)]
     #[clap(env = "CLUSTER_DB")]
-    store_file: PathBuf,
+    cluster_store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     ///
@@ -114,7 +114,7 @@ fn parse_datetime(dt_str: &str) -> SatFireResult<DateTime<Utc>> {
 #[derive(Debug)]
 struct ShowFireOptionsChecked {
     /// The path to the database file.
-    store_file: PathBuf,
+    cluster_store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     kml_file: PathBuf,
@@ -135,7 +135,7 @@ struct ShowFireOptionsChecked {
 impl Display for ShowFireOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
-        writeln!(f, "    Database: {}", self.store_file.display())?;
+        writeln!(f, "    Database: {}", self.cluster_store_file.display())?;
         writeln!(f, "  Output KML: {}", self.kml_file.display())?;
         writeln!(f, "       Start: {}", self.start)?;
         writeln!(f, "         End: {}", self.end)?;
@@ -155,7 +155,7 @@ impl Display for ShowFireOptionsChecked {
 /// If there is missing data, try to fill it in with environment variables.
 fn parse_args() -> SatFireResult<ShowFireOptionsChecked> {
     let ShowFireOptionsInit {
-        store_file,
+        cluster_store_file,
         kml_file,
         start,
         end,
@@ -166,14 +166,14 @@ fn parse_args() -> SatFireResult<ShowFireOptionsChecked> {
     let kml_file = match kml_file {
         Some(v) => v,
         None => {
-            let mut clone = store_file.clone();
+            let mut clone = cluster_store_file.clone();
             clone.set_extension("kml");
             clone
         }
     };
 
     let checked = ShowFireOptionsChecked {
-        store_file,
+        cluster_store_file,
         kml_file,
         start,
         end,
@@ -194,7 +194,7 @@ fn parse_args() -> SatFireResult<ShowFireOptionsChecked> {
 fn main() -> SatFireResult<()> {
     let opts = parse_args()?;
 
-    let db = FireDatabase::connect(&opts.store_file)?;
+    let db = ClusterDatabase::connect(&opts.cluster_store_file)?;
     let mut kfile = KmlFile::start_document(&opts.kml_file)?;
 
     for sat in Satellite::iter() {
@@ -207,7 +207,7 @@ fn main() -> SatFireResult<()> {
                 db.query_clusters(Some(sat), Some(sector), opts.start, opts.end, opts.bbox)?;
 
             for row_res in query.rows()? {
-                let FireDatabaseClusterRow {
+                let ClusterDatabaseClusterRow {
                     start, end, pixels, ..
                 } = match row_res {
                     Ok(row) => row,

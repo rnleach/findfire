@@ -6,17 +6,17 @@ use crate::{
     satellite::{Satellite, Sector},
     SatFireResult,
 };
-use chrono::{DateTime, Utc};
-use rusqlite::{Connection, OpenFlags, ToSql};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, ToSql};
 use rustc_hash::FxHashMap as HashMap;
 use std::path::Path;
 
 /// Represents a connection to the database where ALL the information related to fires is stored.
-pub struct FireDatabase {
+pub struct ClusterDatabase {
     conn: Connection,
 }
 
-impl FireDatabase {
+impl ClusterDatabase {
     /// Initialize a database.
     ///
     /// Initialize a database to make sure it exists and is set up properly. This should be run in
@@ -34,7 +34,7 @@ impl FireDatabase {
         let path = path.as_ref();
 
         let conn = Self::open_database_to_write(path)?;
-        Ok(FireDatabase { conn })
+        Ok(ClusterDatabase { conn })
     }
 
     fn open_database_to_write(path: &Path) -> SatFireResult<Connection> {
@@ -47,7 +47,7 @@ impl FireDatabase {
 
         // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
-        const QUERY: &str = include_str!("database/create_db.sql");
+        const QUERY: &str = include_str!("database/create_cluster_db.sql");
         conn.execute_batch(QUERY)?;
 
         Ok(conn)
@@ -59,7 +59,7 @@ impl FireDatabase {
         satellite: Satellite,
         sector: Sector,
     ) -> SatFireResult<DateTime<Utc>> {
-        const QUERY: &str = include_str!("database/query_newest_start.sql");
+        const QUERY: &str = include_str!("database/query_newest_cluster.sql");
         let mut stmt = self.conn.prepare(QUERY)?;
 
         let res: DateTime<Utc> = stmt.query_row([satellite.name(), sector.name()], |row| {
@@ -72,25 +72,15 @@ impl FireDatabase {
         Ok(res)
     }
 
-    /// Get the next id number for a wildfire.
-    pub fn next_wildfire_id(&self) -> SatFireResult<u64> {
-        const QUERY: &str = "SELECT IFNULL(MAX(fire_id) + 1, 1) FROM fires";
-
-        let mut stmt = self.conn.prepare(QUERY)?;
-        let res: u64 = stmt.query_row([], |row| row.get(0))?;
-
-        Ok(res)
-    }
-
     /// Prepare to add cluster rows to the database.
-    pub fn prepare_to_add_clusters(&self) -> SatFireResult<FireDatabaseAddCluster> {
+    pub fn prepare_to_add_clusters(&self) -> SatFireResult<ClusterDatabaseAddCluster> {
         const ADD_CLUSTER_QUERY: &str = include_str!("database/add_cluster.sql");
-        const ADD_NO_FIRE_QUERY: &str = include_str!("database/add_no_fire_cluster.sql");
+        const ADD_NO_FIRE_QUERY: &str = include_str!("database/add_no_cluster.sql");
 
         let add_cluster_stmt = self.conn.prepare(ADD_CLUSTER_QUERY)?;
         let add_no_fire_stmt = self.conn.prepare(ADD_NO_FIRE_QUERY)?;
 
-        Ok(FireDatabaseAddCluster {
+        Ok(ClusterDatabaseAddCluster {
             add_cluster_stmt,
             add_no_fire_stmt,
             conn: &self.conn,
@@ -100,14 +90,14 @@ impl FireDatabase {
     /// Prepare to query the database if data from a satellite image is already in the database.
     pub fn prepare_to_query_clusters_present(
         &self,
-    ) -> SatFireResult<FireDatabaseQueryClusterPresent> {
+    ) -> SatFireResult<ClusterDatabaseQueryClusterPresent> {
         const QUERY_CLUSTER: &str = include_str!("database/query_num_clusters_present.sql");
-        const QUERY_NO_FIRE: &str = include_str!("database/query_no_fires.sql");
+        const QUERY_NO_FIRE: &str = include_str!("database/query_no_clusters.sql");
 
         let clusters_stmt = self.conn.prepare(QUERY_CLUSTER)?;
         let no_fire_stmt = self.conn.prepare(QUERY_NO_FIRE)?;
 
-        Ok(FireDatabaseQueryClusterPresent {
+        Ok(ClusterDatabaseQueryClusterPresent {
             clusters_stmt,
             no_fire_stmt,
         })
@@ -121,7 +111,7 @@ impl FireDatabase {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
         area: BoundingBox,
-    ) -> SatFireResult<FireDatabaseQueryClusters<'a>> {
+    ) -> SatFireResult<ClusterDatabaseQueryClusters<'a>> {
         let sat_select = if let Some(sat) = sat {
             format!("AND satellite = '{}'", sat.name())
         } else {
@@ -167,22 +157,17 @@ impl FireDatabase {
 
         let stmt = self.conn.prepare(query)?;
 
-        Ok(FireDatabaseQueryClusters { stmt })
-    }
-
-    /// Add fires and associations to clusters to the database.
-    pub fn prepare_to_add_fires(&self) -> SatFireResult<FireDatabaseAddFire> {
-        todo!()
+        Ok(ClusterDatabaseQueryClusters { stmt })
     }
 }
 
-pub struct FireDatabaseAddCluster<'a> {
+pub struct ClusterDatabaseAddCluster<'a> {
     add_cluster_stmt: rusqlite::Statement<'a>,
     add_no_fire_stmt: rusqlite::Statement<'a>,
     conn: &'a Connection,
 }
 
-impl<'a> FireDatabaseAddCluster<'a> {
+impl<'a> ClusterDatabaseAddCluster<'a> {
     /// Adds an entire ClusterList to the database.
     pub fn add(&mut self, clist: ClusterList) -> SatFireResult<()> {
         if clist.is_empty() {
@@ -245,12 +230,12 @@ impl<'a> FireDatabaseAddCluster<'a> {
     }
 }
 
-pub struct FireDatabaseQueryClusterPresent<'a> {
+pub struct ClusterDatabaseQueryClusterPresent<'a> {
     clusters_stmt: rusqlite::Statement<'a>,
     no_fire_stmt: rusqlite::Statement<'a>,
 }
 
-impl<'a> FireDatabaseQueryClusterPresent<'a> {
+impl<'a> ClusterDatabaseQueryClusterPresent<'a> {
     /// Check to see if an entry for these values already exists in the database.
     pub fn present(
         &mut self,
@@ -294,19 +279,19 @@ impl<'a> FireDatabaseQueryClusterPresent<'a> {
     }
 }
 
-pub struct FireDatabaseQueryClusters<'a> {
+pub struct ClusterDatabaseQueryClusters<'a> {
     stmt: rusqlite::Statement<'a>,
 }
 
-impl<'a> FireDatabaseQueryClusters<'a> {
+impl<'a> ClusterDatabaseQueryClusters<'a> {
     /// Get an iterator over the rows
     pub fn rows(
         &mut self,
-    ) -> SatFireResult<impl Iterator<Item = SatFireResult<FireDatabaseClusterRow>> + '_> {
+    ) -> SatFireResult<impl Iterator<Item = SatFireResult<ClusterDatabaseClusterRow>> + '_> {
         Ok(self
             .stmt
-            .query_and_then([], |row| -> SatFireResult<FireDatabaseClusterRow> {
-                let rowid: i64 = row.get(0)?;
+            .query_and_then([], |row| -> SatFireResult<ClusterDatabaseClusterRow> {
+                let rowid: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
                 let sat = match row.get_ref(1)? {
                     rusqlite::types::ValueRef::Text(txt) => {
                         let txt = unsafe { std::str::from_utf8_unchecked(txt) };
@@ -343,7 +328,7 @@ impl<'a> FireDatabaseQueryClusters<'a> {
                     _ => Err("Invalid type in pixels column"),
                 }?;
 
-                Ok(FireDatabaseClusterRow {
+                Ok(ClusterDatabaseClusterRow {
                     rowid,
                     sat,
                     sector,
@@ -361,8 +346,8 @@ impl<'a> FireDatabaseQueryClusters<'a> {
 }
 
 /// All the data about a cluster retrieved from the database.
-pub struct FireDatabaseClusterRow {
-    pub rowid: i64,
+pub struct ClusterDatabaseClusterRow {
+    pub rowid: u64,
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
     pub power: f64,
@@ -375,28 +360,214 @@ pub struct FireDatabaseClusterRow {
     pub pixels: PixelList,
 }
 
-impl FireDatabaseClusterRow {}
+impl ClusterDatabaseClusterRow {}
 
-pub struct FireDatabaseAddFire<'a> {
+/// Represents a connection to the database where ALL the information related to fires is stored.
+pub struct FiresDatabase {
+    conn: Connection,
+}
+
+impl FiresDatabase {
+    /// Initialize a database.
+    ///
+    /// Initialize a database to make sure it exists and is set up properly. This should be run in
+    /// the main thread before any other threads open a connection to the database to ensure
+    /// consistency.
+    pub fn initialize<P: AsRef<Path>>(path: P) -> SatFireResult<()> {
+        let path = path.as_ref();
+
+        let _conn = Self::open_database_to_write(path)?;
+        Ok(())
+    }
+
+    /// Open a connection to the database to store clusters, wildfires, and associations.
+    pub fn connect<P: AsRef<Path>>(path: P) -> SatFireResult<Self> {
+        let path = path.as_ref();
+
+        let conn = Self::open_database_to_write(path)?;
+        Ok(Self { conn })
+    }
+
+    fn open_database_to_write(path: &Path) -> SatFireResult<Connection> {
+        let conn = rusqlite::Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_CREATE
+                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+
+        // A 5-second busy time out is WAY too much. If we hit this something has gone terribly wrong.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        const QUERY: &str = include_str!("database/create_fire_db.sql");
+        conn.execute_batch(QUERY)?;
+
+        Ok(conn)
+    }
+
+    /// Get the next id number for a wildfire.
+    pub fn next_wildfire_id(&self) -> SatFireResult<u64> {
+        const QUERY: &str = "SELECT IFNULL(MAX(fire_id) + 1, 1) FROM fires";
+
+        let mut stmt = self.conn.prepare(QUERY)?;
+        let res: u64 = stmt.query_row([], |row| row.get(0))?;
+
+        Ok(res)
+    }
+
+    /// Get the most recent start time
+    pub fn last_observed(&self, sat: Satellite) -> DateTime<Utc> {
+        self.conn
+            .query_row(
+                "SELECT MAX(last_observed) FROM fires WHERE satellite = ?",
+                [sat.name()],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|time_stamp| {
+                DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(time_stamp, 0), Utc)
+            })
+            .unwrap_or_else(|_| sat.operational())
+    }
+
+    /// Get the fires that are still going.
+    pub fn ongoing_fires(&self, sat: Satellite) -> SatFireResult<FireList> {
+        let ts = match self.conn.query_row(
+            "SELECT MAX(last_observed) FROM fires WHERE satellite = ?",
+            [sat.name()],
+            |row| row.get::<_, i64>(0),
+        ) {
+            Ok(time_stamp) => time_stamp,
+            Err(_) => return Ok(FireList::new()),
+        };
+
+        let latest: DateTime<Utc> = DateTime::from_utc(NaiveDateTime::from_timestamp(ts, 0), Utc);
+        let earliest = latest - Duration::days(175);
+
+        const QUERY: &str = include_str!("database/query_most_recent_fires.sql");
+        let mut stmt = self.conn.prepare(QUERY)?;
+
+        let mut fires = FireList::new();
+
+        stmt.query_and_then(
+            [&earliest.timestamp() as &dyn ToSql, &sat.name()],
+            |row| -> SatFireResult<Fire> {
+                let id: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
+
+                let sat = match row.get_ref(1)? {
+                    rusqlite::types::ValueRef::Text(txt) => {
+                        let txt = unsafe { std::str::from_utf8_unchecked(txt) };
+                        Satellite::string_contains_satellite(txt).ok_or("Invalid sattelite")
+                    }
+                    _ => Err("sattelite not text"),
+                }?;
+
+                let first_observed: DateTime<Utc> =
+                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(2)?, 0), Utc);
+                let last_observed: DateTime<Utc> =
+                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
+
+                let lat: f64 = row.get(4)?;
+                let lon: f64 = row.get(5)?;
+                let centroid = Coord { lat, lon };
+
+                let max_power: f64 = row.get(6)?;
+                let max_temperature: f64 = row.get(7)?;
+
+                let area = match row.get_ref(8)? {
+                    rusqlite::types::ValueRef::Blob(bytes) => {
+                        let mut cursor = std::io::Cursor::new(bytes);
+                        Ok(PixelList::binary_deserialize(&mut cursor))
+                    }
+                    _ => Err("Invalid type in pixels column"),
+                }?;
+
+                Ok(Fire::new_from_raw_parts(
+                    id,
+                    area,
+                    first_observed,
+                    last_observed,
+                    max_power,
+                    max_temperature,
+                    centroid,
+                    sat,
+                ))
+            },
+        )?
+        .filter_map(Result::ok)
+        .for_each(|fire| fires.add_fire(fire));
+
+        let mut waste = FireList::default();
+
+        fires.drain_stale_fires(&mut waste, latest);
+
+        Ok(fires)
+    }
+
+    /// Add fires and associations to clusters to the database.
+    pub fn prepare_to_add_fires(&self) -> SatFireResult<FiresDatabaseAddFire> {
+        const FIRE_QUERY: &str = include_str!("database/add_fire.sql");
+        const ASSOC_QUERY: &str = include_str!("database/add_association.sql");
+
+        let fire_stmt = self.conn.prepare(FIRE_QUERY)?;
+        let assoc_stmt = self.conn.prepare(ASSOC_QUERY)?;
+        let associations = HashMap::default();
+
+        Ok(FiresDatabaseAddFire {
+            conn: &self.conn,
+            fire_stmt,
+            assoc_stmt,
+            associations,
+        })
+    }
+}
+
+pub struct FiresDatabaseAddFire<'a> {
+    conn: &'a rusqlite::Connection,
     fire_stmt: rusqlite::Statement<'a>,
     assoc_stmt: rusqlite::Statement<'a>,
     associations: HashMap<u64, Vec<u64>>,
 }
 
-impl<'a> FireDatabaseAddFire<'a> {
+impl<'a> FiresDatabaseAddFire<'a> {
     /// Add a list of fires to the database.
     pub fn add_fires(&mut self, fires: &FireList) -> SatFireResult<()> {
-        // For each fire in fires
-        //   copy the fire_id and add it to a vector
-        //   insert it into the database
-        // For each fire_id in 'the vector'
-        //   get the corresponding vector out of the hash map
-        //   add the associations to the database.
-        todo!()
+        let mut ids = Vec::with_capacity(fires.len());
+
+        self.conn.execute("BEGIN TRANSACTION", [])?;
+
+        for fire in fires.iter() {
+            ids.push(fire.id());
+
+            let Coord { lat, lon } = fire.pixels().centroid();
+            let pixels = fire.pixels().binary_serialize();
+
+            self.fire_stmt.execute([
+                &fire.id() as &dyn ToSql,
+                &fire.satellite().name(),
+                &fire.first_observed().timestamp(),
+                &fire.last_observed().timestamp(),
+                &lat,
+                &lon,
+                &fire.max_power(),
+                &fire.max_temperature(),
+                &pixels,
+            ])?;
+        }
+
+        for id in ids {
+            if let Some(cluster_ids) = self.associations.remove(&id) {
+                for cluster_id in cluster_ids {
+                    self.assoc_stmt.execute([id, cluster_id])?;
+                }
+            }
+        }
+        self.conn.execute("COMMIT", [])?;
+
+        Ok(())
     }
 
     /// Add associations.
-    pub fn add_associations(&mut self, associations: &[(u64, u64)]) -> SatFireResult<()> {
-        todo!()
+    pub fn add_association(&mut self, fireid: u64, clusterid: u64) {
+        let cluster_ids = self.associations.entry(fireid).or_insert(vec![]);
+        cluster_ids.push(clusterid);
     }
 }

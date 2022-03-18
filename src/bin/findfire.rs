@@ -3,7 +3,9 @@
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use satfire::{Cluster, ClusterList, FireDatabase, Geo, KmlFile, SatFireResult, Satellite, Sector};
+use satfire::{
+    Cluster, ClusterDatabase, ClusterList, Geo, KmlFile, SatFireResult, Satellite, Sector,
+};
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
@@ -41,13 +43,13 @@ use strum::IntoEnumIterator;
 #[clap(bin_name = "findfire")]
 #[clap(author, version, about)]
 struct FindFireOptionsInit {
-    /// The path to the database file.
+    /// The path to the cluster database file.
     ///
     /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
     /// environment variable.
     #[clap(short, long)]
     #[clap(env = "CLUSTER_DB")]
-    store_file: PathBuf,
+    cluster_store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     ///
@@ -76,7 +78,7 @@ struct FindFireOptionsInit {
 #[derive(Debug)]
 struct FindFireOptionsChecked {
     /// The path to the database file.
-    store_file: PathBuf,
+    cluster_store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     kml_file: PathBuf,
@@ -96,7 +98,7 @@ struct FindFireOptionsChecked {
 /// If there is missing data, try to fill it in with environment variables.
 fn parse_args() -> SatFireResult<FindFireOptionsChecked> {
     let FindFireOptionsInit {
-        store_file,
+        cluster_store_file,
         kml_file,
         data_dir,
         new_only,
@@ -106,14 +108,14 @@ fn parse_args() -> SatFireResult<FindFireOptionsChecked> {
     let kml_file = match kml_file {
         Some(v) => v,
         None => {
-            let mut clone = store_file.clone();
+            let mut clone = cluster_store_file.clone();
             clone.set_extension("kml");
             clone
         }
     };
 
     Ok(FindFireOptionsChecked {
-        store_file,
+        cluster_store_file,
         kml_file,
         data_dir,
         new_only,
@@ -133,22 +135,28 @@ fn main() -> SatFireResult<()> {
         println!("{:#?}", opts);
     }
 
-    FireDatabase::initialize(&opts.store_file)?;
+    ClusterDatabase::initialize(&opts.cluster_store_file)?;
 
-    let (to_present_filter, from_dir_walker) = bounded(8);
-    let (to_loader, from_present_filter) = bounded(8);
-    let (to_db_writer, from_loader) = bounded(8);
+    let (to_present_filter, from_dir_walker) = bounded(512);
+    let (to_loader, from_present_filter) = bounded(512);
+    let (to_db_writer, from_loader) = bounded(512);
 
     let data_dir = &opts.data_dir;
-    let store_file = &opts.store_file;
+    let store_file = &opts.cluster_store_file;
     let verbose = opts.verbose;
     let only_new = opts.new_only;
 
     let walk_dir = dir_walker(data_dir, store_file, to_present_filter, only_new, verbose)?;
     let filter_present = filter_already_processed(store_file, from_dir_walker, to_loader, verbose)?;
     let loader = loader_threads(from_present_filter, to_db_writer, verbose)?;
-    let db_filler = db_filler_thread(&opts.store_file, from_loader, &opts.kml_file, opts.verbose)?;
+    let db_filler = db_filler_thread(
+        &opts.cluster_store_file,
+        from_loader,
+        &opts.kml_file,
+        opts.verbose,
+    )?;
 
+    db_filler.join().expect("Error joining db filler thread")?;
     walk_dir.join().expect("Error joining dir walker thread")?;
     filter_present
         .join()
@@ -157,8 +165,6 @@ fn main() -> SatFireResult<()> {
     for jh in loader {
         jh.join().expect("Error joining loader thread")?;
     }
-
-    db_filler.join().expect("Error joining db filler thread")?;
 
     Ok(())
 }
@@ -178,7 +184,7 @@ fn dir_walker<P: AsRef<Path>>(
     // Get the most recent version in the database if necessary
     let mut most_recent = HashMap::new();
     if only_new {
-        let db = FireDatabase::connect(store_file)?;
+        let db = ClusterDatabase::connect(store_file)?;
 
         for sat in Satellite::iter() {
             let inner = most_recent.entry(sat).or_insert(HashMap::new());
@@ -240,7 +246,7 @@ fn filter_already_processed<P: AsRef<Path>>(
     let jh = std::thread::Builder::new()
         .name("findifre-filter".to_owned())
         .spawn(move || {
-            let db = FireDatabase::connect(store_file)?;
+            let db = ClusterDatabase::connect(store_file)?;
             let mut is_present = db.prepare_to_query_clusters_present()?;
 
             for path in from_dir_walker {
@@ -322,7 +328,7 @@ fn db_filler_thread<P: AsRef<Path>>(
     let jh = std::thread::Builder::new()
         .name("findfire-dbase".to_owned())
         .spawn(move || {
-            let db = FireDatabase::connect(store_file)?;
+            let db = ClusterDatabase::connect(store_file)?;
             let mut add_stmt = db.prepare_to_add_clusters()?;
 
             let mut cluster_stats: Option<ClusterStats> = None;
