@@ -187,7 +187,7 @@ fn dir_walker<P: AsRef<Path>>(
         let db = ClusterDatabase::connect(store_file)?;
 
         for sat in Satellite::iter() {
-            let inner = most_recent.entry(sat).or_insert(HashMap::new());
+            let inner = most_recent.entry(sat).or_insert_with(HashMap::new);
             for sector in Sector::iter() {
                 let latest = db
                     .newest_scan_start(sat, sector)
@@ -201,7 +201,7 @@ fn dir_walker<P: AsRef<Path>>(
         }
     } else {
         for sat in Satellite::iter() {
-            let inner = most_recent.entry(sat).or_insert(HashMap::new());
+            let inner = most_recent.entry(sat).or_insert_with(HashMap::new);
             for sector in Sector::iter() {
                 inner.insert(sector, sat.operational());
             }
@@ -713,70 +713,68 @@ fn create_standard_dir_filter(
                 if year == i32::MIN {
                     if sub_path.len() >= 4 {
                         // Try to parse the year
-                        match sub_path[..4].parse::<i32>() {
-                            Ok(possible_year) => {
-                                // If it's larger than 2016, it's probably the year.
-                                if possible_year > 2016 {
-                                    year = possible_year;
+                        if let Ok(possible_year) = sub_path[..4].parse::<i32>() {
+                            // If it's larger than 2016, it's probably the year.
+                            if possible_year > 2016 {
+                                year = possible_year;
 
-                                    // Return early if we can
-                                    if year < mr_year {
+                                // Return early if we can
+                                match year {
+                                    x if x < mr_year => {
                                         if verbose {
                                             println!("skipping {}", entry.path().display());
                                         }
                                         return false;
-                                    } else if year > mr_year {
+                                    }
+                                    x if x > mr_year => {
                                         return true;
                                     }
+                                    _ => {}
                                 }
                             }
-                            Err(_) => {}
                         }
                     }
                 } else if doy == i32::MIN {
                     if sub_path.len() >= 3 {
                         // Try to parse the day of the year
-                        match sub_path[..3].parse::<i32>() {
-                            Ok(possible_doy) => {
-                                // Limits on the day of the year
-                                if possible_doy > 0 && possible_doy < 367 {
-                                    doy = possible_doy;
+                        if let Ok(possible_doy) = sub_path[..3].parse::<i32>() {
+                            // Limits on the day of the year
+                            if possible_doy > 0 && possible_doy < 367 {
+                                doy = possible_doy;
 
-                                    // Return early if we can
-                                    if year == mr_year && doy < mr_doy {
-                                        if verbose {
-                                            println!("skipping {}", entry.path().display());
-                                        }
-                                        return false;
-                                    } else if year == mr_year && doy > mr_doy {
-                                        return true;
+                                // Return early if we can
+                                if year == mr_year && doy < mr_doy {
+                                    if verbose {
+                                        println!("skipping {}", entry.path().display());
                                     }
+                                    return false;
+                                } else if year == mr_year && doy > mr_doy {
+                                    return true;
                                 }
                             }
-                            Err(_) => {}
                         }
                     }
                 } else if hour == i32::MIN {
+                    // Collapsing the if statement breaks a pattern established above and is less
+                    // clear. Quiet clippy!
+                    #[allow(clippy::collapsible_if)]
                     if sub_path.len() >= 2 {
                         // Try to parse the hour of the day
-                        match sub_path[..2].parse::<i32>() {
-                            Ok(possible_hour) => {
-                                // Limits on hour of the day!
-                                if possible_hour >= 0 && possible_hour < 25 {
-                                    hour = possible_hour;
+                        if let Ok(possible_hour) = sub_path[..2].parse::<i32>() {
+                            // Limits on hour of the day!
+                            if (0..25).contains(&possible_hour) {
+                                hour = possible_hour;
 
-                                    // We have all the info we need, we should be able to return
-                                    if year == mr_year && doy == mr_doy && hour < mr_hour {
-                                        if verbose {
-                                            println!("skipping {}", entry.path().display());
-                                        }
-                                        return false;
-                                    } else {
-                                        return true;
+                                // We have all the info we need, we should be able to return
+                                if year == mr_year && doy == mr_doy && hour < mr_hour {
+                                    if verbose {
+                                        println!("skipping {}", entry.path().display());
                                     }
+                                    return false;
+                                } else {
+                                    return true;
                                 }
                             }
-                            Err(_) => {}
                         }
                     }
                 }

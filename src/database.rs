@@ -104,24 +104,24 @@ impl ClusterDatabase {
     }
 
     /// Query clusters from the database.
-    pub fn query_clusters<'a>(
-        &'a self,
+    pub fn query_clusters(
+        &self,
         sat: Option<Satellite>,
         sect: Option<Sector>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
         area: BoundingBox,
-    ) -> SatFireResult<ClusterDatabaseQueryClusters<'a>> {
+    ) -> SatFireResult<ClusterDatabaseQueryClusters<'_>> {
         let sat_select = if let Some(sat) = sat {
             format!("AND satellite = '{}'", sat.name())
         } else {
-            format!("")
+            String::new()
         };
 
         let sector_select = if let Some(sect) = sect {
             format!("AND sector = '{}'", sect.name())
         } else {
-            format!("")
+            String::new()
         };
 
         let query = &format!(
@@ -480,7 +480,7 @@ impl FiresDatabase {
                     _ => Err("Invalid type in pixels column"),
                 }?;
 
-                Ok(Fire::new_from_raw_parts(
+                Ok(Fire {
                     id,
                     area,
                     first_observed,
@@ -489,7 +489,7 @@ impl FiresDatabase {
                     max_temperature,
                     centroid,
                     sat,
-                ))
+                })
             },
         )?
         .filter_map(Result::ok)

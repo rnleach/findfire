@@ -148,10 +148,8 @@ impl SatFireImage {
         let mut lon0: f64 = f64::NAN;
 
         unsafe {
-            let mut status: c_int;
-
             let mut xdimid: c_int = -1;
-            status = nc_inq_dimid(
+            let mut status = nc_inq_dimid(
                 h,
                 b"x\0".as_ptr() as *const c_char,
                 &mut xdimid as *mut c_int,

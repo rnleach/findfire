@@ -429,7 +429,7 @@ fn database_filler(
     db_store: PathBuf,
     messages: Receiver<DatabaseMessage>,
 ) -> JoinHandle<SatFireResult<()>> {
-    let jh = thread::spawn(move || {
+    thread::spawn(move || {
         let db = FiresDatabase::connect(db_store)?;
         let mut add_fire = db.prepare_to_add_fires()?;
 
@@ -443,9 +443,7 @@ fn database_filler(
         }
 
         Ok(())
-    });
-
-    jh
+    })
 }
 
 /*-------------------------------------------------------------------------------------------------

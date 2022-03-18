@@ -221,6 +221,9 @@ impl Line {
         };
         let intersect = result.intersection; // short-hand
 
+        // Clippy doesn't like this, but the comments make the semantics clearer. Let the optimizer
+        // work it out for me.
+        #[allow(clippy::if_same_then_else)]
         if y0 - self.start.lat.max(self.end.lat) > eps
             || self.start.lat.min(self.end.lat) - y0 > eps
             || x0 - self.start.lon.max(self.end.lon) > eps

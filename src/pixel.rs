@@ -357,7 +357,7 @@ impl Pixel {
         }
 
         // bail out early if we can
-        if num_close_coords < 1 || num_close_coords > 2 {
+        if !(1..=2).contains(&num_close_coords) {
             return false;
         }
 
@@ -490,6 +490,11 @@ impl PixelList {
     /// Get the number of pixels in this list.
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    /// Check if this PixelList is empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     /// Append a [Pixel] to the end of the list.

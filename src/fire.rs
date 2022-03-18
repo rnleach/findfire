@@ -25,29 +25,29 @@ use std::fmt::{self, Display};
 #[derive(Debug, Clone)]
 pub struct Fire {
     /// The scan start time of the first Cluster where this fire was detected.
-    first_observed: DateTime<Utc>,
+    pub(crate) first_observed: DateTime<Utc>,
     /// The scan end time of the last Cluster where this fire was detected.
-    last_observed: DateTime<Utc>,
+    pub(crate) last_observed: DateTime<Utc>,
     /// The centroid of all the combined Clusters that contributed to this fire.
-    centroid: Coord,
+    pub(crate) centroid: Coord,
     /// The power of the most powerful Cluster that was associated with this fire. Note that
     /// several clusters may be associated with a fire at any given scan time, but they might be
     /// spatially separated (e.g. on different ends of the original fire). The powers of those
     /// different Clusters are NOT combined to come up with a total power for the time. This
     /// represents the single most powerful Cluster aggregated into this fire.
-    max_power: f64,
+    pub(crate) max_power: f64,
     /// The maximum temperature of any Pixel that was ever associated with this fire.
-    max_temperature: f64,
+    pub(crate) max_temperature: f64,
     /// An unique ID number for this fire that will be used identify this fire in a database that
     /// will also be used to associate this fire with Clusters which are a part of it.
-    id: u64,
+    pub(crate) id: u64,
     /// Each Pixel in this contains the maximum power, area, and temperature observed in it's
     /// area during the fire. Since all the data for each satellite is projected to a common grid
     /// before being published online, throughout the life of the fire the Pixels will perfectly
     /// overlap. This is kind of a composite of the properties of the fire over it's lifetime.
-    area: PixelList,
+    pub(crate) area: PixelList,
     /// The satellite the Clusters that were a part of this fire were observed with.
-    sat: Satellite,
+    pub(crate) sat: Satellite,
 }
 
 impl Display for Fire {
@@ -106,29 +106,6 @@ impl Fire {
             id,
             area: initial.pixels,
             sat: initial.sat,
-        }
-    }
-
-    /// Create one from raw parts.
-    pub fn new_from_raw_parts(
-        id: u64,
-        area: PixelList,
-        first_observed: DateTime<Utc>,
-        last_observed: DateTime<Utc>,
-        max_power: f64,
-        max_temperature: f64,
-        centroid: Coord,
-        sat: Satellite,
-    ) -> Self {
-        Fire {
-            first_observed,
-            last_observed,
-            centroid,
-            max_power,
-            max_temperature,
-            id,
-            area,
-            sat,
         }
     }
 
@@ -360,14 +337,9 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
 
     if duration_since_last_observed < Duration::days(4) {
         // Give it at least four days to come back to life again.
-        false
-    } else if duration_since_last_observed > Duration::days(30)
-        || wildfire_duration < duration_since_last_observed
-    {
-        // If it's been out for 30 days, it's stale OR
-        // If it's not been seen in a longer time than it was burning, call it stale.
-        true
-    } else {
-        false
+        return false;
     }
+
+    duration_since_last_observed > Duration::days(30)
+        || wildfire_duration < duration_since_last_observed
 }
