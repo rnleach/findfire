@@ -94,12 +94,18 @@ struct FireStats {
     hottest: Option<Fire>,
     sat: Satellite,
     count: usize,
+    max_active: usize,
 }
 
 impl Display for FireStats {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, " ---- Summary Stats for Connect Fire {} ----", self.sat)?;
-        writeln!(f, "\n           Processed {:9} Fires\n", self.count)?;
+        writeln!(f, "\n           Processed {:9} Fires", self.count)?;
+        writeln!(
+            f,
+            "      Maximum Number of Active Fires {:9}\n",
+            self.max_active
+        )?;
         if let Some(ref longest) = self.longest {
             writeln!(f, "   -- Longest Duration Fire --")?;
             writeln!(f, "{}", longest)?;
@@ -133,6 +139,7 @@ impl FireStats {
             hottest: None,
             sat,
             count: 0,
+            max_active: 0,
         }
     }
 
@@ -171,6 +178,7 @@ impl FireStats {
             }
 
             self.count += 1;
+            self.max_active = self.max_active.max(fires.len());
         }
 
         if let Some(fires_longest) = fires_longest {
@@ -343,8 +351,18 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
 
                 if verbose {
                     println!(
-                        "Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4} at {}",
-                        num_absorbed, num_merged, num_old, num_new, current_time_step
+                        concat!(
+                            "Satellite {} at {}:",
+                            " Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4}",
+                            " Total Active = {:6}"
+                        ),
+                        sat,
+                        current_time_step,
+                        num_absorbed,
+                        num_merged,
+                        num_old,
+                        num_new,
+                        current_fires.len()
                     );
                 }
 
@@ -397,8 +415,18 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
 
     if verbose {
         println!(
-            "Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4} at {}",
-            num_absorbed, num_merged, num_old, num_new, current_time_step
+            concat!(
+                "Satellite {} at {}:",
+                " Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4}",
+                " Total Active = {:6}"
+            ),
+            sat,
+            current_time_step,
+            num_absorbed,
+            num_merged,
+            num_old,
+            num_new,
+            current_fires.len()
         );
     }
 
