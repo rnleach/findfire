@@ -232,10 +232,21 @@ impl Default for FireList {
     }
 }
 
+impl From<Vec<Fire>> for FireList {
+    fn from(src: Vec<Fire>) -> Self {
+        FireList(src)
+    }
+}
+
 impl FireList {
     /// Create a new, empty list.
     pub fn new() -> Self {
         FireList(vec![])
+    }
+
+    /// Get a vector of fires
+    pub fn into_vec(self) -> Vec<Fire> {
+        self.0
     }
 
     /// Add a fire to the list.
