@@ -3,9 +3,13 @@ use crate::{
     geo::{BoundingBox, Coord, Geo},
     pixel::PixelList,
     satellite::Satellite,
+    KmlFile, SatFireResult,
 };
 use chrono::{DateTime, Duration, Utc};
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display, Write},
+    path::Path,
+};
 
 /**
  * The aggregate properties of a temporally connected group of [Cluster](crate::Cluster) objects.
@@ -328,6 +332,85 @@ impl FireList {
     /// Get an iterator over the fires.
     pub fn iter(&self) -> impl Iterator<Item = &Fire> {
         self.0.iter()
+    }
+
+    /// Save this list in a KML file.
+    pub fn save_kml<P: AsRef<Path>>(&self, kml_path: P) -> SatFireResult<()> {
+        let mut kml = KmlFile::start_document(kml_path)?;
+
+        kml.start_style(Some("fire"))?;
+        kml.create_poly_style(Some("880000FF"), true, false)?;
+        kml.create_icon_style(
+            Some("http://maps.google.com/mapfiles/kml/shapes/firedept.png"),
+            1.3,
+        )?;
+        kml.finish_style()?;
+
+        let mut name = String::with_capacity(32);
+        let mut description = String::with_capacity(256);
+        let mut duration_buf = String::with_capacity(64);
+        for fire in self.iter() {
+            name.clear();
+            let _ = write!(&mut name, "{}", fire.id());
+
+            kml.start_folder(Some(&name), None, false)?;
+
+            duration_buf.clear();
+            let duration = fire.duration();
+            let weeks = duration.num_weeks();
+            if weeks > 0 {
+                let _ = write!(
+                    &mut duration_buf as &mut dyn std::fmt::Write,
+                    "{} weeks ",
+                    weeks
+                );
+            }
+
+            let days = duration.num_days() % 7;
+            if days > 0 {
+                let _ = write!(
+                    &mut duration_buf as &mut dyn std::fmt::Write,
+                    "{} days ",
+                    days
+                );
+            }
+
+            let hours = duration.num_hours() % 24;
+            let _ = write!(
+                &mut duration_buf as &mut dyn std::fmt::Write,
+                "{} hours",
+                hours
+            );
+
+            description.clear();
+            let _ = write!(
+                &mut description,
+                concat!(
+                    "ID: {}<br/>",
+                    "Start: {}<br/>",
+                    "End: {}<br/>",
+                    "Duration: {}<br/>",
+                    "Max Power: {:.0} MW<br/>",
+                    "Max Temperature: {:.0} Kelvin<br/>",
+                ),
+                fire.id(),
+                fire.first_observed(),
+                fire.last_observed(),
+                duration_buf,
+                fire.max_power(),
+                fire.max_temperature()
+            );
+
+            kml.start_placemark(Some(&name), Some(&description), Some("#fire"))?;
+            let centroid = fire.centroid();
+            kml.create_point(centroid.lat, centroid.lon, 0.0)?;
+            kml.finish_placemark()?;
+
+            fire.pixels().kml_write(&mut kml);
+            kml.finish_folder()?;
+        }
+
+        Ok(())
     }
 }
 
