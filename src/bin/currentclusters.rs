@@ -18,9 +18,9 @@ use std::{
 /// satellite and sector as KML.
 ///
 #[derive(Debug, Parser)]
-#[clap(bin_name = "currentfire")]
+#[clap(bin_name = "currentclusters")]
 #[clap(author, version, about)]
-struct CurrentFireOptionsInit {
+struct CurrentClustersOptionsInit {
     /// The path to the cluster database file.
     ///
     /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
@@ -69,7 +69,7 @@ fn parse_sector(sector: &str) -> SatFireResult<Sector> {
 }
 
 #[derive(Debug)]
-struct CurrentFireOptionsChecked {
+struct CurrentClustersOptionsChecked {
     /// The path to the database file.
     cluster_store_file: PathBuf,
 
@@ -86,7 +86,7 @@ struct CurrentFireOptionsChecked {
     verbose: bool,
 }
 
-impl Display for CurrentFireOptionsChecked {
+impl Display for CurrentClustersOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
         writeln!(f, "    Database: {}", self.cluster_store_file.display())?;
@@ -102,14 +102,14 @@ impl Display for CurrentFireOptionsChecked {
 /// Get the command line arguments and check them.
 ///
 /// If there is missing data, try to fill it in with environment variables.
-fn parse_args() -> SatFireResult<CurrentFireOptionsChecked> {
-    let CurrentFireOptionsInit {
+fn parse_args() -> SatFireResult<CurrentClustersOptionsChecked> {
+    let CurrentClustersOptionsInit {
         cluster_store_file,
         kml_file,
         sat,
         sector,
         verbose,
-    } = CurrentFireOptionsInit::parse();
+    } = CurrentClustersOptionsInit::parse();
 
     let kml_file = match kml_file {
         Some(v) => v,
@@ -120,7 +120,7 @@ fn parse_args() -> SatFireResult<CurrentFireOptionsChecked> {
         }
     };
 
-    let checked = CurrentFireOptionsChecked {
+    let checked = CurrentClustersOptionsChecked {
         cluster_store_file,
         kml_file,
         sat,

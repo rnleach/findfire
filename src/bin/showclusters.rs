@@ -19,9 +19,9 @@ use strum::IntoEnumIterator;
 /// This program will export all the clusters in a requested region and time range into a KML file.
 ///
 #[derive(Debug, Parser)]
-#[clap(bin_name = "showfire")]
+#[clap(bin_name = "showclusters")]
 #[clap(author, version, about)]
-struct ShowFireOptionsInit {
+struct ShowClustersOptionsInit {
     /// The path to the cluster database file.
     ///
     /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
@@ -112,7 +112,7 @@ fn parse_datetime(dt_str: &str) -> SatFireResult<DateTime<Utc>> {
 }
 
 #[derive(Debug)]
-struct ShowFireOptionsChecked {
+struct ShowClustersOptionsChecked {
     /// The path to the database file.
     cluster_store_file: PathBuf,
 
@@ -132,7 +132,7 @@ struct ShowFireOptionsChecked {
     bbox: BoundingBox,
 }
 
-impl Display for ShowFireOptionsChecked {
+impl Display for ShowClustersOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
         writeln!(f, "    Database: {}", self.cluster_store_file.display())?;
@@ -153,15 +153,15 @@ impl Display for ShowFireOptionsChecked {
 /// Get the command line arguments and check them.
 ///
 /// If there is missing data, try to fill it in with environment variables.
-fn parse_args() -> SatFireResult<ShowFireOptionsChecked> {
-    let ShowFireOptionsInit {
+fn parse_args() -> SatFireResult<ShowClustersOptionsChecked> {
+    let ShowClustersOptionsInit {
         cluster_store_file,
         kml_file,
         start,
         end,
         bbox,
         verbose,
-    } = ShowFireOptionsInit::parse();
+    } = ShowClustersOptionsInit::parse();
 
     let kml_file = match kml_file {
         Some(v) => v,
@@ -172,7 +172,7 @@ fn parse_args() -> SatFireResult<ShowFireOptionsChecked> {
         }
     };
 
-    let checked = ShowFireOptionsChecked {
+    let checked = ShowClustersOptionsChecked {
         cluster_store_file,
         kml_file,
         start,
