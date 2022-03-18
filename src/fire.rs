@@ -188,6 +188,24 @@ impl Fire {
         self.max_power = self.max_power.max(right.max_power);
         self.max_temperature = self.max_temperature.max(right.max_temperature);
     }
+
+    /// Format the duration in an easy to read way.
+    pub fn format_duration(&self, buffer: &mut String) {
+        buffer.clear();
+        let duration = self.duration();
+        let weeks = duration.num_weeks();
+        if weeks > 0 {
+            let _ = write!(buffer as &mut dyn std::fmt::Write, "{} weeks ", weeks);
+        }
+
+        let days = duration.num_days() % 7;
+        if days > 0 {
+            let _ = write!(buffer as &mut dyn std::fmt::Write, "{} days ", days);
+        }
+
+        let hours = duration.num_hours() % 24;
+        let _ = write!(buffer as &mut dyn std::fmt::Write, "{} hours", hours);
+    }
 }
 
 impl Geo for Fire {
@@ -339,10 +357,9 @@ impl FireList {
         let mut kml = KmlFile::start_document(kml_path)?;
 
         kml.start_style(Some("fire"))?;
-        kml.create_poly_style(Some("880000FF"), true, false)?;
         kml.create_icon_style(
             Some("http://maps.google.com/mapfiles/kml/shapes/firedept.png"),
-            1.3,
+            1.0,
         )?;
         kml.finish_style()?;
 
@@ -355,32 +372,7 @@ impl FireList {
 
             kml.start_folder(Some(&name), None, false)?;
 
-            duration_buf.clear();
-            let duration = fire.duration();
-            let weeks = duration.num_weeks();
-            if weeks > 0 {
-                let _ = write!(
-                    &mut duration_buf as &mut dyn std::fmt::Write,
-                    "{} weeks ",
-                    weeks
-                );
-            }
-
-            let days = duration.num_days() % 7;
-            if days > 0 {
-                let _ = write!(
-                    &mut duration_buf as &mut dyn std::fmt::Write,
-                    "{} days ",
-                    days
-                );
-            }
-
-            let hours = duration.num_hours() % 24;
-            let _ = write!(
-                &mut duration_buf as &mut dyn std::fmt::Write,
-                "{} hours",
-                hours
-            );
+            fire.format_duration(&mut duration_buf);
 
             description.clear();
             let _ = write!(

@@ -1,9 +1,6 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
-use satfire::{
-    BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlFile, SatFireResult,
-    Satellite, Sector,
-};
+use satfire::{BoundingBox, Coord, FiresDatabase, Geo, KmlFile, SatFireResult, Satellite};
 use std::{
     fmt::{self, Display},
     path::PathBuf,
@@ -14,26 +11,26 @@ use strum::IntoEnumIterator;
  *                               Parse Command Line Arguments
  *-----------------------------------------------------------------------------------------------*/
 ///
-/// Export clusters into a KML file.
+/// Export fires into a KML file.
 ///
-/// This program will export all the clusters in a requested region and time range into a KML file.
+/// This program will export all the fires in a requested region and time range into a KML file.
 ///
 #[derive(Debug, Parser)]
-#[clap(bin_name = "showclusters")]
+#[clap(bin_name = "showfires")]
 #[clap(author, version, about)]
-struct ShowClustersOptionsInit {
-    /// The path to the cluster database file.
+struct ShowFiresOptionsInit {
+    /// The path to the fires database file.
     ///
-    /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
+    /// If this is not specified, then the program will check for it in the "FIRES_DB"
     /// environment variable.
     #[clap(short, long)]
-    #[clap(env = "CLUSTER_DB")]
-    cluster_store_file: PathBuf,
+    #[clap(env = "FIRES_DB")]
+    fires_store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     ///
     /// If this is not specified, then the program will create one automatically by replacing the
-    /// file extension on the cluster_store_file with "*.kml".
+    /// file extension on the fires_store_file with "*.kml".
     #[clap(short, long)]
     kml_file: Option<PathBuf>,
 
@@ -112,9 +109,9 @@ fn parse_datetime(dt_str: &str) -> SatFireResult<DateTime<Utc>> {
 }
 
 #[derive(Debug)]
-struct ShowClustersOptionsChecked {
+struct ShowFiresOptionsChecked {
     /// The path to the database file.
-    cluster_store_file: PathBuf,
+    fires_store_file: PathBuf,
 
     /// The path to a KML file to produce from this run.
     kml_file: PathBuf,
@@ -132,10 +129,10 @@ struct ShowClustersOptionsChecked {
     bbox: BoundingBox,
 }
 
-impl Display for ShowClustersOptionsChecked {
+impl Display for ShowFiresOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
-        writeln!(f, "    Database: {}", self.cluster_store_file.display())?;
+        writeln!(f, "    Database: {}", self.fires_store_file.display())?;
         writeln!(f, "  Output KML: {}", self.kml_file.display())?;
         writeln!(f, "       Start: {}", self.start)?;
         writeln!(f, "         End: {}", self.end)?;
@@ -153,27 +150,27 @@ impl Display for ShowClustersOptionsChecked {
 /// Get the command line arguments and check them.
 ///
 /// If there is missing data, try to fill it in with environment variables.
-fn parse_args() -> SatFireResult<ShowClustersOptionsChecked> {
-    let ShowClustersOptionsInit {
-        cluster_store_file,
+fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
+    let ShowFiresOptionsInit {
+        fires_store_file,
         kml_file,
         start,
         end,
         bbox,
         verbose,
-    } = ShowClustersOptionsInit::parse();
+    } = ShowFiresOptionsInit::parse();
 
     let kml_file = match kml_file {
         Some(v) => v,
         None => {
-            let mut clone = cluster_store_file.clone();
+            let mut clone = fires_store_file.clone();
             clone.set_extension("kml");
             clone
         }
     };
 
-    let checked = ShowClustersOptionsChecked {
-        cluster_store_file,
+    let checked = ShowFiresOptionsChecked {
+        fires_store_file,
         kml_file,
         start,
         end,
@@ -194,40 +191,73 @@ fn parse_args() -> SatFireResult<ShowClustersOptionsChecked> {
 fn main() -> SatFireResult<()> {
     let opts = parse_args()?;
 
-    let db = ClusterDatabase::connect(&opts.cluster_store_file)?;
+    let db = FiresDatabase::connect(&opts.fires_store_file)?;
     let mut kfile = KmlFile::start_document(&opts.kml_file)?;
+
+    kfile.start_style(Some("fire"))?;
+    kfile.create_icon_style(
+        Some("http://maps.google.com/mapfiles/kml/shapes/firedept.png"),
+        0.5,
+    )?;
+    kfile.finish_style()?;
+
+    let mut name = String::new();
+    let mut description = String::new();
+    let mut duration_buf = String::new();
 
     for sat in Satellite::iter() {
         kfile.start_folder(Some(sat.name()), None, false)?;
 
-        for sector in Sector::iter() {
-            kfile.start_folder(Some(sector.name()), None, false)?;
+        let mut query = db.query_fires(Some(sat), opts.start, opts.end, opts.bbox)?;
 
-            let mut query =
-                db.query_clusters(Some(sat), Some(sector), opts.start, opts.end, opts.bbox)?;
+        for fire_res in query.rows()? {
+            match fire_res {
+                Ok(fire) => {
+                    let pixels = fire.pixels();
+                    let Coord { lat, lon } = fire.centroid();
 
-            for row_res in query.rows()? {
-                let ClusterDatabaseClusterRow {
-                    start, end, pixels, ..
-                } = match row_res {
-                    Ok(row) => row,
-                    Err(err) => {
-                        if opts.verbose {
-                            println!("Error reading cluster from database: {}", err);
-                        }
-                        continue;
+                    name.clear();
+                    write!(&mut name as &mut dyn std::fmt::Write, "{}", fire.id())?;
+
+                    kfile.start_folder(Some(&name), None, false)?;
+
+                    kfile.timespan(fire.first_observed(), fire.last_observed())?;
+
+                    fire.format_duration(&mut duration_buf);
+                    description.clear();
+
+                    write!(
+                        &mut description as &mut dyn std::fmt::Write,
+                        concat!(
+                            "ID: {}<br/>",
+                            "First Observed: {}<br/>",
+                            "Last Observed: {}<br/>",
+                            "Duration: {}<br/>",
+                            "Max Power: {:.0} MW<br/>",
+                            "Max Temperature: {:.0}K<br/>",
+                        ),
+                        fire.id(),
+                        fire.first_observed(),
+                        fire.last_observed(),
+                        &duration_buf,
+                        fire.max_power(),
+                        fire.max_temperature(),
+                    )?;
+
+                    kfile.start_placemark(Some(&name), Some(&description), Some("#fire"))?;
+                    kfile.create_point(lat, lon, 0.0)?;
+                    kfile.finish_placemark()?;
+
+                    pixels.kml_write(&mut kfile);
+
+                    kfile.finish_folder()?;
+                }
+                Err(err) => {
+                    if opts.verbose {
+                        println!("Error reading fire from database: {}", err);
                     }
-                };
-
-                kfile.start_folder(Some("Folder"), None, false)?;
-
-                kfile.timespan(start, end)?;
-                pixels.kml_write(&mut kfile);
-
-                kfile.finish_folder()?;
+                }
             }
-
-            kfile.finish_folder()?;
         }
 
         kfile.finish_folder()?;

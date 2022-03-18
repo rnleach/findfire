@@ -47,3 +47,12 @@ some similar key in the time series database.
 Once this program is complete, the data it creates can be queried to produce a time series of fire
 power for a given fire.
 
+## showfires
+
+Select fires from the database created by connectfire and output them in a KML format. 
+
+This is a command line application that will select fires based on a given start time, end time,
+and geographic bounding box and then output them in KML. It is analagous to showclusters, however, 
+showclusters only selects clusters that are within the given start and end times, wheres showfires 
+selects any fire that overlaps the start and end times.
+

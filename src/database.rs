@@ -518,6 +518,58 @@ impl FiresDatabase {
             associations,
         })
     }
+
+    /// Query fires from the database
+    pub fn query_fires(
+        &self,
+        sat: Option<Satellite>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        area: BoundingBox,
+    ) -> SatFireResult<FiresDatabaseQueryFires<'_>> {
+        let sat_select = if let Some(sat) = sat {
+            format!("AND satellite = '{}'", sat.name())
+        } else {
+            String::new()
+        };
+
+        let query = &format!(
+            r#"SELECT
+                 fire_id,
+                 satellite,
+                 first_observed,
+                 last_observed,
+                 lat,
+                 lon,
+                 max_power,
+                 max_temperature,
+                 pixels
+               FROM fires
+               WHERE
+                 ((first_observed <= {} AND last_observed >= {})
+                 OR (first_observed >= {} AND first_observed <= {})
+                 OR (last_observed >= {} AND last_observed <= {}))
+                 AND
+                 lat >= {} AND lat <= {} AND
+                 lon >= {} AND lon <= {} {} 
+               ORDER BY first_observed ASC"#,
+            start.timestamp(),
+            end.timestamp(),
+            start.timestamp(),
+            end.timestamp(),
+            start.timestamp(),
+            end.timestamp(),
+            area.ll.lat,
+            area.ur.lat,
+            area.ll.lon,
+            area.ur.lon,
+            sat_select,
+        );
+
+        let stmt = self.conn.prepare(query)?;
+
+        Ok(FiresDatabaseQueryFires { stmt })
+    }
 }
 
 pub struct FiresDatabaseAddFire<'a> {
@@ -569,5 +621,57 @@ impl<'a> FiresDatabaseAddFire<'a> {
     pub fn add_association(&mut self, fireid: u64, clusterid: u64) {
         let cluster_ids = self.associations.entry(fireid).or_insert(vec![]);
         cluster_ids.push(clusterid);
+    }
+}
+
+pub struct FiresDatabaseQueryFires<'a> {
+    stmt: rusqlite::Statement<'a>,
+}
+
+impl<'a> FiresDatabaseQueryFires<'a> {
+    /// Get an iterator over the rows
+    pub fn rows(&mut self) -> SatFireResult<impl Iterator<Item = SatFireResult<Fire>> + '_> {
+        Ok(self.stmt.query_and_then([], |row| -> SatFireResult<Fire> {
+            let id: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
+
+            let sat = match row.get_ref(1)? {
+                rusqlite::types::ValueRef::Text(txt) => {
+                    let txt = unsafe { std::str::from_utf8_unchecked(txt) };
+                    Satellite::string_contains_satellite(txt).ok_or("Invalid sattelite")
+                }
+                _ => Err("sattelite not text"),
+            }?;
+
+            let first_observed: DateTime<Utc> =
+                DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(2)?, 0), Utc);
+            let last_observed: DateTime<Utc> =
+                DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
+
+            let lat: f64 = row.get(4)?;
+            let lon: f64 = row.get(5)?;
+            let centroid = Coord { lat, lon };
+
+            let max_power: f64 = row.get(6)?;
+            let max_temperature: f64 = row.get(7)?;
+
+            let area = match row.get_ref(8)? {
+                rusqlite::types::ValueRef::Blob(bytes) => {
+                    let mut cursor = std::io::Cursor::new(bytes);
+                    Ok(PixelList::binary_deserialize(&mut cursor))
+                }
+                _ => Err("Invalid type in pixels column"),
+            }?;
+
+            Ok(Fire {
+                id,
+                area,
+                first_observed,
+                last_observed,
+                max_power,
+                max_temperature,
+                centroid,
+                sat,
+            })
+        })?)
     }
 }
