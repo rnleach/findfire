@@ -7,7 +7,7 @@ use crate::{
     SatFireResult,
 };
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
-use rusqlite::{Connection, OpenFlags, OptionalExtension, ToSql};
+use rusqlite::{Connection, OpenFlags, ToSql};
 use rustc_hash::FxHashMap as HashMap;
 use std::path::Path;
 
