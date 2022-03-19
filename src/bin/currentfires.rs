@@ -1,9 +1,9 @@
 use clap::Parser;
 use satfire::{FireList, FiresDatabase, SatFireResult, Satellite};
 use std::{
+    cmp::Reverse,
     fmt::{self, Display},
     path::PathBuf,
-    cmp::Reverse,
 };
 
 /*-------------------------------------------------------------------------------------------------
