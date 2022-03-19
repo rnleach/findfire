@@ -44,6 +44,23 @@ impl Display for BoundingBox {
     }
 }
 
+impl Default for BoundingBox {
+    fn default() -> Self {
+        // By making this a point at infinity, it should never compare as overlapping with
+        // any other bounding box.
+        BoundingBox {
+            ll: Coord {
+                lat: f64::INFINITY,
+                lon: f64::INFINITY,
+            },
+            ur: Coord {
+                lat: f64::INFINITY,
+                lon: f64::INFINITY,
+            },
+        }
+    }
+}
+
 impl BoundingBox {
     /// Check to see if a Coord is inside of a BoundingBox.
     ///
@@ -261,6 +278,9 @@ pub(crate) struct IntersectResult {
     pub intersect_is_endpoints: bool,
 }
 
+mod hilbert_rtree;
+pub(crate) use hilbert_rtree::Hilbert2DRTreeView;
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -282,5 +302,49 @@ mod test {
         assert!(right.is_close(left, 1.0e-6));
 
         assert!(!left.is_close(right, 1.0e-8));
+    }
+
+    #[test]
+    fn test_default_bounding_boxes_do_not_overlap() {
+        let b1 = BoundingBox::default();
+        let b2 = BoundingBox::default();
+
+        let b3 = BoundingBox {
+            ll: Coord { lat: 0.0, lon: 0.0 },
+            ur: Coord { lat: 1.0, lon: 1.0 },
+        };
+        let b4 = BoundingBox {
+            ll: Coord { lat: 0.0, lon: 0.0 },
+            ur: Coord { lat: 1.0, lon: 1.0 },
+        };
+        let b5 = BoundingBox {
+            ll: Coord { lat: 0.5, lon: 0.5 },
+            ur: Coord { lat: 1.5, lon: 1.5 },
+        };
+        let b6 = BoundingBox {
+            ll: Coord { lat: 2.5, lon: 2.5 },
+            ur: Coord { lat: 3.5, lon: 3.5 },
+        };
+
+        assert!(!b1.overlap(&b2, 1.0e-9));
+
+        assert!(!b1.overlap(&b3, 1.0e-9));
+        assert!(!b1.overlap(&b4, 1.0e-9));
+        assert!(!b1.overlap(&b5, 1.0e-9));
+        assert!(!b1.overlap(&b6, 1.0e-9));
+
+        assert!(!b2.overlap(&b3, 1.0e-9));
+        assert!(!b2.overlap(&b4, 1.0e-9));
+        assert!(!b2.overlap(&b5, 1.0e-9));
+        assert!(!b2.overlap(&b6, 1.0e-9));
+
+        assert!(b3.overlap(&b4, 1.0e-9));
+        assert!(b3.overlap(&b5, 1.0e-9));
+        assert!(!b3.overlap(&b6, 1.0e-9));
+
+        assert!(b4.overlap(&b5, 1.0e-9));
+        assert!(!b4.overlap(&b6, 1.0e-9));
+
+        assert!(!b5.overlap(&b6, 1.0e-9));
     }
 }

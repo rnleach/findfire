@@ -269,6 +269,7 @@ impl FireList {
     /// `clust` was consumed, then it returns `None`.
     pub fn update(&mut self, row: ClusterDatabaseClusterRow) -> FireListUpdateResult {
         let cluster_pixels: &PixelList = &row.pixels;
+        // TODO: Use iteration over Hilbert R-Tree here to speed things up.
         for fire in self.0.iter_mut() {
             if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
                 fire.update(&row);
@@ -296,6 +297,14 @@ impl FireList {
     /// # Returns
     /// The number of mergers that occurred.
     pub fn merge_fires(&mut self, merged_away: &mut Self) -> usize {
+        //
+        // TODO: Totally reimplement this method taking advandage of a Hilbert R-Tree for searching
+        // the list.
+        //
+        // Keep a list of fires that have been merged away. Skip them when checking for other
+        // merges. When all the merging is done, iterate backwards through the list and remove the
+        // items at the indexes marked as merge.
+        //
         let mut i = 0;
         let mut len = self.0.len();
         let starting_size = self.0.len();
