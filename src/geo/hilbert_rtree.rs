@@ -1,220 +1,185 @@
 use super::*;
-use std::marker::PhantomData;
 
+const RTREE_CHILDREN_PER_NODE: usize = 4;
+const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-5;
+
+#[derive(Debug)]
+enum RTreeNode {
+    Node {
+        bbox: BoundingBox,
+        children: Vec<RTreeNode>,
+    },
+    Leaf {
+        bbox: BoundingBox,
+        hilbert_num: u64,
+        index: usize,
+    },
+}
+
+impl RTreeNode {
+    fn bounding_box(&self) -> BoundingBox {
+        match self {
+            Self::Node { bbox, .. } => *bbox,
+            Self::Leaf { bbox, .. } => *bbox,
+        }
+    }
+
+    fn max_hilbert_num(&self) -> u64 {
+        match self {
+            Self::Leaf { hilbert_num, .. } => *hilbert_num,
+            Self::Node { children, .. } => children
+                .iter()
+                .map(|node| node.max_hilbert_num())
+                .max()
+                .unwrap_or(0),
+        }
+    }
+
+    fn new_nodes(children: Vec<Self>) -> Self {
+        let mut bbox = BoundingBox {
+            ll: Coord {
+                lat: f64::INFINITY,
+                lon: f64::INFINITY,
+            },
+            ur: Coord {
+                lat: -f64::INFINITY,
+                lon: -f64::INFINITY,
+            },
+        };
+
+        for child in &children {
+            let child_box = child.bounding_box();
+
+            bbox.ll.lat = bbox.ll.lat.min(child_box.ll.lat);
+            bbox.ll.lon = bbox.ll.lon.min(child_box.ll.lon);
+            bbox.ur.lat = bbox.ur.lat.max(child_box.ur.lat);
+            bbox.ur.lon = bbox.ur.lon.max(child_box.ur.lon);
+        }
+
+        Self::Node { bbox, children }
+    }
+
+    fn num_children(&self) -> usize {
+        match self {
+            Self::Node { children, .. } => children.len(),
+            Self::Leaf { .. } => 1,
+        }
+    }
+
+    fn foreach<T: Geo>(
+        &mut self,
+        data: &mut [T],
+        region: &BoundingBox,
+        update: &dyn Fn(&mut T) -> bool,
+    ) -> bool {
+        if self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
+            let mut updated = false;
+
+            match self {
+                Self::Leaf { index, bbox, .. } => {
+                    updated = update(&mut data[*index]);
+
+                    if updated {
+                        *bbox = data[*index].bounding_box();
+                    }
+                }
+                Self::Node { children, bbox } => {
+                    for child in children {
+                        let local_updated = child.foreach(data, region, update);
+
+                        if local_updated {
+                            let child_box = child.bounding_box();
+
+                            bbox.ll.lat = bbox.ll.lat.min(child_box.ll.lat);
+                            bbox.ll.lon = bbox.ll.lon.min(child_box.ll.lon);
+                            bbox.ur.lat = bbox.ur.lat.max(child_box.ur.lat);
+                            bbox.ur.lon = bbox.ur.lon.max(child_box.ur.lon);
+
+                            updated = true;
+                        }
+                    }
+                }
+            }
+
+            updated
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Hilbert2DRTreeView<'a, T> {
-    leaves: Vec<RTreeLeaf>,
-    nodes: Vec<RTreeNode>,
+    root: RTreeNode,
     hc: HilbertCurve,
-    dummy: PhantomData<&'a [T]>,
+    data: &'a mut [T],
 }
 
 impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     /// Build a view into the provided list.
-    pub fn build_for(data: &'a [T], precomputed_domain: Option<BoundingBox>) -> Self {
+    pub fn build_for(data: &'a mut [T], precomputed_domain: Option<BoundingBox>) -> Option<Self> {
+        if data.is_empty() {
+            return None;
+        }
+
         let data_domain = precomputed_domain.unwrap_or_else(|| Self::build_domain(data));
 
         let hc = HilbertCurve::new(16, data_domain);
 
-        // Build the leaf nodes
+        // Build the leaf nodes - level 0
         let mut leaves = Vec::with_capacity(data.len());
         for item in data.into_iter().enumerate() {
             let (index, item) = item;
             let bbox = item.bounding_box();
             let hilbert_num = hc.translate_to_curve_distance(item.centroid());
-            leaves.push(RTreeLeaf {
-                index,
-                hilbert_num,
+            leaves.push(RTreeNode::Leaf {
                 bbox,
+                hilbert_num,
+                index,
             });
         }
 
         // Sort the leaf nodes by Hilbert number. This is how we get locality for the parent nodes.
-        leaves.sort_unstable_by_key(|a| a.hilbert_num);
+        leaves.sort_unstable_by_key(RTreeNode::max_hilbert_num);
 
-        // Calculate the number of RTreeNode objects we'll need.
-        let num_nodes_with_leaf_children = if data.len() % RTREE_CHILDREN_PER_NODE > 0 {
-            data.len() / RTREE_CHILDREN_PER_NODE + 1
-        } else {
-            data.len() / RTREE_CHILDREN_PER_NODE
-        };
-        let mut num_nodes = num_nodes_with_leaf_children;
-        let mut level_nodes = num_nodes;
-        while level_nodes > 1 {
-            level_nodes = if level_nodes % RTREE_CHILDREN_PER_NODE > 0 {
-                level_nodes / RTREE_CHILDREN_PER_NODE + 1
-            } else {
-                level_nodes / RTREE_CHILDREN_PER_NODE
-            };
-            num_nodes += level_nodes;
-        }
-        let num_nodes = num_nodes;
+        let mut num_level_nodes = leaves.len();
+        let mut level_nodes = leaves;
+        while num_level_nodes > 1 {
+            let child_nodes = level_nodes;
+            level_nodes = Vec::with_capacity(child_nodes.len() / RTREE_CHILDREN_PER_NODE + 1);
 
-        let mut nodes = vec![RTreeNode::default(); num_nodes];
+            let mut children = Vec::with_capacity(RTREE_CHILDREN_PER_NODE);
+            for child_node in child_nodes.into_iter() {
+                children.push(child_node);
 
-        //
-        // Initialize the group nodes to point down the tree and have the correct minimum bounding
-        // rectangles.
-        //
-
-        // Fill in the nodes whose children are leaves, call these level 1 nodes.
-        // (Leaf nodes are level 0 nodes.)
-        let first_level_1_node_index = num_nodes - num_nodes_with_leaf_children;
-        let mut num_leaves_left_to_process = leaves.len();
-        let mut next_leaf = 0;
-        for i in first_level_1_node_index..num_nodes {
-            // Safe because we forced i to be less than num_nodes above.
-            let node: &mut RTreeNode = unsafe { nodes.get_unchecked_mut(i) };
-
-            let num_leaves_to_process = if num_leaves_left_to_process < RTREE_CHILDREN_PER_NODE {
-                num_leaves_left_to_process
-            } else {
-                RTREE_CHILDREN_PER_NODE
-            };
-
-            debug_assert!(num_leaves_to_process > 0);
-
-            // Initialize the minimum bounding rectangle to values that will certainly be
-            // overwritten.
-            node.bbox = BoundingBox {
-                ll: Coord {
-                    lat: f64::INFINITY,
-                    lon: f64::INFINITY,
-                },
-                ur: Coord {
-                    lat: -f64::INFINITY,
-                    lon: -f64::INFINITY,
-                },
-            };
-
-            node.children = RTreeNodeChildren::Leaf([0; 4]);
-            for j in 0..num_leaves_to_process {
-                match node.children {
-                    RTreeNodeChildren::Leaf(ref mut leaves) => unsafe {
-                        //leaves[j] = next_leaf;
-                        *(leaves.get_unchecked_mut(j)) = next_leaf;
-                    },
-                    _ => unreachable!(),
+                if children.len() == RTREE_CHILDREN_PER_NODE {
+                    let node = RTreeNode::new_nodes(children);
+                    level_nodes.push(node);
+                    children = Vec::with_capacity(RTREE_CHILDREN_PER_NODE);
                 }
-
-                let leaf: &RTreeLeaf = unsafe { leaves.get_unchecked_mut(next_leaf) };
-                node.bbox.ll.lat = node.bbox.ll.lat.min(leaf.bbox.ll.lat);
-                node.bbox.ll.lon = node.bbox.ll.lon.min(leaf.bbox.ll.lon);
-                node.bbox.ur.lat = node.bbox.ur.lat.max(leaf.bbox.ur.lat);
-                node.bbox.ur.lon = node.bbox.ur.lon.max(leaf.bbox.ur.lon);
-
-                next_leaf += 1;
-                num_leaves_left_to_process -= 1;
-            }
-            node.num_children = num_leaves_to_process;
-        }
-
-        // Fill in the nodes whose children are not leaves
-        level_nodes = num_nodes_with_leaf_children;
-        let mut num_filled_so_far = num_nodes_with_leaf_children;
-        while num_filled_so_far < num_nodes {
-            let num_children_at_level_below = level_nodes;
-            let num_children_left_to_process = num_children_at_level_below;
-
-            level_nodes = if level_nodes % RTREE_CHILDREN_PER_NODE > 0 {
-                level_nodes / RTREE_CHILDREN_PER_NODE + 1
-            } else {
-                level_nodes / RTREE_CHILDREN_PER_NODE
-            };
-
-            let first_node_at_level = num_nodes - num_filled_so_far - level_nodes;
-            for i in first_node_at_level..(num_nodes - num_filled_so_far) {
-                let node: &mut RTreeNode =
-                    unsafe { &mut *(nodes.get_unchecked_mut(i) as *mut RTreeNode) };
-
-                let num_to_fill = if num_children_left_to_process < RTREE_CHILDREN_PER_NODE {
-                    num_children_left_to_process
-                } else {
-                    RTREE_CHILDREN_PER_NODE
-                };
-
-                debug_assert!(num_to_fill > 0);
-
-                // Initialize the minimum bounding rectangle to values that will certainly be
-                // overwritten.
-                node.bbox = BoundingBox {
-                    ll: Coord {
-                        lat: f64::INFINITY,
-                        lon: f64::INFINITY,
-                    },
-                    ur: Coord {
-                        lat: -f64::INFINITY,
-                        lon: -f64::INFINITY,
-                    },
-                };
-
-                node.children = RTreeNodeChildren::Node([0; 4]);
-                for j in 0..num_to_fill {
-                    let child_index = first_node_at_level
-                        + level_nodes
-                        + (i - first_node_at_level) * RTREE_CHILDREN_PER_NODE
-                        + j;
-
-                    match node.children {
-                        RTreeNodeChildren::Node(ref mut children) => unsafe {
-                            *(children.get_unchecked_mut(j)) = child_index;
-                        },
-                        _ => unreachable!(),
-                    }
-
-                    let child_node: &RTreeNode =
-                        unsafe { &mut *(nodes.get_unchecked_mut(child_index) as *mut RTreeNode) };
-                    node.bbox.ll.lat = node.bbox.ll.lat.min(child_node.bbox.ll.lat);
-                    node.bbox.ll.lon = node.bbox.ll.lon.min(child_node.bbox.ll.lon);
-                    node.bbox.ur.lat = node.bbox.ur.lat.max(child_node.bbox.ur.lat);
-                    node.bbox.ur.lon = node.bbox.ur.lon.max(child_node.bbox.ur.lon);
-                }
-                node.num_children = num_to_fill;
             }
 
-            num_filled_so_far += level_nodes;
+            if !children.is_empty() {
+                let node = RTreeNode::new_nodes(children);
+                level_nodes.push(node);
+            }
+
+            num_level_nodes = level_nodes.len();
         }
 
-        Hilbert2DRTreeView {
-            leaves,
-            nodes,
-            hc,
-            dummy: PhantomData,
-        }
+        debug_assert_eq!(level_nodes.len(), 1);
+        let root = level_nodes.into_iter().nth(0).unwrap();
+
+        Some(Hilbert2DRTreeView { root, hc, data })
     }
 
-    /// Get a list of indexes for items that overlap the provided BoundingBox
-    pub fn get_indexes_of_overlapping_items(&self, area: BoundingBox, buffer: &mut Vec<usize>) {
-        buffer.clear();
-        self.get_indexes_of_overlapping_children(0, area, buffer);
-    }
-
-    fn get_indexes_of_overlapping_children(
-        &self,
-        idx: usize,
-        bbox: BoundingBox,
-        buffer: &mut Vec<usize>,
-    ) {
-        let node: &RTreeNode = unsafe { self.nodes.get_unchecked(idx) };
-
-        if node.bbox.overlap(&bbox, 1.0e-5) {
-            match node.children {
-                RTreeNodeChildren::Leaf(ref child_leaves) => {
-                    for i in 0..node.num_children {
-                        let leaf: &RTreeLeaf =
-                            unsafe { self.leaves.get_unchecked(child_leaves[i]) };
-                        if leaf.bbox.overlap(&bbox, 1.0e-5) {
-                            buffer.push(leaf.index);
-                        }
-                    }
-                }
-                RTreeNodeChildren::Node(ref nodes) => {
-                    for i in 0..node.num_children {
-                        let next_idx = nodes[i];
-                        self.get_indexes_of_overlapping_children(next_idx, bbox, buffer);
-                    }
-                }
-                RTreeNodeChildren::Uninitialized => unreachable!(),
-            }
+    /// Apply a function to all elements with boundaries that overlap.
+    ///
+    /// If the closure returns `true`, then an element was updated and we need to update the upper
+    /// levels of the bounding boxes.
+    fn foreach(&mut self, region: BoundingBox, update: &dyn Fn(&mut T) -> bool) {
+        if self.root.num_children() > 0 {
+            self.root.foreach(self.data, &region, update);
         }
     }
 
@@ -243,46 +208,7 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     }
 }
 
-const RTREE_CHILDREN_PER_NODE: usize = 4;
-
-struct RTreeLeaf {
-    index: usize,
-    hilbert_num: u64,
-    bbox: BoundingBox,
-}
-
-#[derive(Debug, Clone)]
-enum RTreeNodeChildren {
-    Leaf([usize; RTREE_CHILDREN_PER_NODE]), // Indexes into the leaves Vec
-    Node([usize; RTREE_CHILDREN_PER_NODE]), // Indexes into the nodes Vec
-    Uninitialized,                          // Not yet initialized
-}
-
-impl Default for RTreeNodeChildren {
-    fn default() -> Self {
-        RTreeNodeChildren::Uninitialized
-    }
-}
-
-#[derive(Debug, Clone)]
-struct RTreeNode {
-    children: RTreeNodeChildren,
-    num_children: usize,
-    bbox: BoundingBox,
-}
-
-impl Default for RTreeNode {
-    fn default() -> Self {
-        RTreeNode {
-            children: RTreeNodeChildren::default(),
-            num_children: 0,
-            bbox: BoundingBox::default(),
-        }
-    }
-}
-
-impl RTreeNode {}
-
+#[derive(Debug)]
 struct HilbertCurve {
     // The number of iterations to use for this curve.
     //
@@ -465,7 +391,292 @@ impl HilbertCurve {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct HilbertCoord {
     x: u32,
     y: u32,
+}
+
+#[cfg(test)]
+mod test {
+    use super::Geo;
+    use super::*;
+
+    #[test]
+    fn test_integer_coordinat_converstions() {
+        let domain = BoundingBox {
+            ll: Coord { lat: 0.0, lon: 0.0 },
+            ur: Coord { lat: 1.0, lon: 1.0 },
+        };
+
+        let test_coords_i1 = [
+            HilbertCoord { x: 0, y: 0 },
+            HilbertCoord { x: 0, y: 1 },
+            HilbertCoord { x: 1, y: 1 },
+            HilbertCoord { x: 1, y: 0 },
+        ];
+
+        let test_coords_i2 = [
+            HilbertCoord { x: 0, y: 0 },
+            HilbertCoord { x: 1, y: 0 },
+            HilbertCoord { x: 1, y: 1 },
+            HilbertCoord { x: 0, y: 1 },
+            HilbertCoord { x: 0, y: 2 },
+            HilbertCoord { x: 0, y: 3 },
+            HilbertCoord { x: 1, y: 3 },
+            HilbertCoord { x: 1, y: 2 },
+            HilbertCoord { x: 2, y: 2 },
+            HilbertCoord { x: 2, y: 3 },
+            HilbertCoord { x: 3, y: 3 },
+            HilbertCoord { x: 3, y: 2 },
+            HilbertCoord { x: 3, y: 1 },
+            HilbertCoord { x: 2, y: 1 },
+            HilbertCoord { x: 2, y: 0 },
+            HilbertCoord { x: 3, y: 0 },
+        ];
+
+        let test_dist = [0u64, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+        let hc = HilbertCurve::new(1, domain);
+        for h in 0..4 {
+            let coords = hc.integer_to_coords(test_dist[h]);
+            assert_eq!(coords, test_coords_i1[h]);
+
+            let h2 = hc.coords_to_integer(test_coords_i1[h]);
+            assert_eq!(h2, test_dist[h]);
+        }
+
+        let hc = HilbertCurve::new(2, domain);
+        for h in 0..16 {
+            let coords = hc.integer_to_coords(test_dist[h]);
+            assert_eq!(coords, test_coords_i2[h]);
+
+            let h2 = hc.coords_to_integer(test_coords_i2[h]);
+            assert_eq!(h2, test_dist[h]);
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_domain_mapping(){
+        let domain = BoundingBox{ll : Coord{lon: 0.0, lat: 0.0}, ur : Coord{lon: 1.0, lat: 1.0}};
+
+        // Test values for the N=1 Hilbert curve on the unit square.
+        let n1_pairs = [
+            (Coord{lon: 0.25, lat: 0.25},  0u64),
+            (Coord{lon: 0.25, lat: 0.75},  1),
+            (Coord{lon: 0.75, lat: 0.75},  2),
+            (Coord{lon: 0.75, lat: 0.25},  3),
+
+            // Corners.
+            (Coord{lon: 0.00, lat: 0.00},  0),
+            (Coord{lon: 0.00, lat: 1.00},  1),
+            (Coord{lon: 1.00, lat: 1.00},  2),
+            (Coord{lon: 1.00, lat: 0.00},  3),
+        ];
+
+        let hc = HilbertCurve::new(1, domain);
+        for i in 0..n1_pairs.len() {
+            let hilbert_dist = n1_pairs[i].1;
+            let coord = n1_pairs[i].0;
+
+            let hd_calc = hc.translate_to_curve_distance(coord);
+
+            assert_eq!(hd_calc, hilbert_dist);
+        }
+
+        let domain = BoundingBox{ll: Coord{lon: 0.0, lat: 0.0}, ur: Coord{lon: 10.0, lat: 10.0}};
+
+        // Test values for the N=1 Hilbert curve on a square with edges of 10.0
+        let n1_pairs_b = [
+            (Coord{lon:  2.5, lat: 2.5},  0),
+            (Coord{lon:  2.5, lat: 7.5},  1),
+            (Coord{lon:  7.5, lat: 7.5},  2),
+            (Coord{lon:  7.5, lat: 2.5},  3),
+
+            // Corners.
+            (Coord{lon:  0.0, lat:  0.0},  0),
+            (Coord{lon:  0.0, lat: 10.0},  1),
+            (Coord{lon: 10.0, lat: 10.0},  2),
+            (Coord{lon: 10.0, lat:  0.0},  3),
+        ];
+
+        let hc = HilbertCurve::new(1, domain);
+        for i in 0..n1_pairs_b.len() {
+            let hilbert_dist = n1_pairs_b[i].1;
+            let coord = n1_pairs_b[i].0;
+
+            let hd_calc = hc.translate_to_curve_distance(coord);
+
+            assert_eq!(hd_calc, hilbert_dist);
+        }
+
+        let domain = BoundingBox{ll: Coord{lon: -2.0, lat: 5.0},
+                                 ur: Coord{lon: 10.0, lat: 17.0}};
+
+        // Test values for the N=2 Hilbert curve on a square with edges of 12.0
+        let n2_pairs = [
+            (Coord{lon:  -0.5, lat:  5.5},   0),
+            (Coord{lon:   2.5, lat:  5.5},   1),
+            (Coord{lon:   2.5, lat:  9.5},   2),
+            (Coord{lon:  -0.5, lat:  9.5},   3),
+            (Coord{lon:  -0.5, lat: 12.5},   4),
+            (Coord{lon:  -0.5, lat: 15.5},   5),
+            (Coord{lon:   2.5, lat: 15.5},   6),
+            (Coord{lon:   2.5, lat: 12.5},   7),
+            (Coord{lon:   5.5, lat: 12.5},   8),
+            (Coord{lon:   5.5, lat: 15.5},   9),
+            (Coord{lon:   8.5, lat: 15.5},  10),
+            (Coord{lon:   8.5, lat: 12.5},  11),
+            (Coord{lon:   8.5, lat:  9.5},  12),
+            (Coord{lon:   5.5, lat:  9.5},  13),
+            (Coord{lon:   5.5, lat:  5.5},  14),
+            (Coord{lon:   8.5, lat:  5.5},  15),
+
+            // Corners.
+            (Coord{lon: -2.0, lat:  5.0},   0),
+            (Coord{lon: -2.0, lat: 17.0},   5),
+            (Coord{lon: 10.0, lat: 17.0},  10),
+            (Coord{lon: 10.0, lat:  5.0},  15),
+        ];
+
+        let hc = HilbertCurve::new(2, domain);
+        for i in 0..n2_pairs.len() {
+            let hilbert_dist = n2_pairs[i].1;
+            let coord = n2_pairs[i].0;
+
+            let hd_calc = hc.translate_to_curve_distance(coord);
+
+            assert_eq!(hd_calc, hilbert_dist);
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct LabeledBB {
+        rect: BoundingBox,
+        label: String,
+        hit_count: u32,
+    }
+
+    impl LabeledBB {
+        fn new(min_x: u32, min_y: u32) -> Self {
+            //
+            // All rects have width & height of 1
+            let label = format!("{}x{}", min_x, min_y);
+            let rect = BoundingBox {
+                ll: Coord {
+                    lon: min_x as f64,
+                    lat: min_y as f64,
+                },
+                ur: Coord {
+                    lon: (min_x + 1) as f64,
+                    lat: (min_y + 1) as f64,
+                },
+            };
+
+            LabeledBB {
+                rect,
+                label,
+                hit_count: 0,
+            }
+        }
+    }
+
+    impl Geo for LabeledBB {
+        fn centroid(&self) -> Coord {
+            let lat = (self.rect.ll.lat + self.rect.ur.lat) / 2.0;
+            let lon = (self.rect.ll.lon + self.rect.ur.lon) / 2.0;
+            Coord { lat, lon }
+        }
+
+        fn bounding_box(&self) -> BoundingBox {
+            self.rect
+        }
+    }
+
+    fn create_rectangles_for_rtree_view_test() -> Vec<LabeledBB> {
+        let mut rects = Vec::with_capacity(40);
+        for i in 1..=15 {
+            if i % 2 == 0 {
+                continue;
+            }
+            for j in 1..=9 {
+                if j % 2 == 0 {
+                    continue;
+                }
+                rects.push(LabeledBB::new(i, j));
+            }
+        }
+
+        rects
+    }
+
+    fn test_bb_for_hits(mut rectangles: &mut [LabeledBB], bbox: BoundingBox, num_hits: usize) {
+        println!("Target Area: {} Expected Hits: {}", bbox, num_hits);
+
+        // Ensure hit count is zero before starting.
+        rectangles.iter_mut().for_each(|r| r.hit_count = 0);
+        let hits: u32 = rectangles.iter().map(|r| r.hit_count).sum();
+        assert_eq!(hits as usize, 0);
+
+        // Create the view.
+        let mut view = Hilbert2DRTreeView::build_for(&mut rectangles, None).unwrap();
+
+        // Count the hits.
+        view.foreach(bbox, &|labeled_rect| {
+            labeled_rect.hit_count += 1;
+            println!("{:?} overlaps {:?}", bbox, labeled_rect);
+            false
+        });
+
+        let hits: u32 = rectangles
+            .iter()
+            .map(|r| r.hit_count)
+            .inspect(|v| assert!(*v == 0 || *v == 1))
+            .sum();
+        assert_eq!(hits as usize, num_hits);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn rtree_test_query_whole_domain() {
+        let mut rectangles = create_rectangles_for_rtree_view_test();
+
+        // Check the whole domain
+        let whole_domain = 
+            BoundingBox {ll: Coord { lat: 0.0, lon: 0.0 }, ur: Coord {lat: 20.0, lon: 20.0}};
+
+        let len = rectangles.len();
+        test_bb_for_hits(&mut rectangles, whole_domain, len);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn rtree_test_query() {
+        let mut rectangles = create_rectangles_for_rtree_view_test();
+
+        for rec in &rectangles {
+            println!("{:?}", rec);
+        }
+
+        // Check for several sub-rectangles
+        let test_pairs = [
+          (BoundingBox {ll: Coord { lat:   0.0, lon:   0.0}, ur: Coord {lat:  4.5, lon:  4.5}}, 4),
+          (BoundingBox {ll: Coord { lat:   0.0, lon:   0.0}, ur: Coord {lat:  5.5, lon:  5.5}}, 9),
+          (BoundingBox {ll: Coord { lat: -10.0, lon: -10.0}, ur: Coord {lat:  5.5, lon:  5.5}}, 9),
+          (BoundingBox {ll: Coord { lat:   5.5, lon:   7.5}, ur: Coord {lat:  7.5, lon:  9.5}}, 4),
+          (BoundingBox {ll: Coord { lat:   8.5, lon:  14.5}, ur: Coord {lat: 99.0, lon: 99.0}}, 1),
+          (BoundingBox {ll: Coord { lat:   3.0, lon:   0.0}, ur: Coord {lat:  4.5, lon:  4.5}}, 2),
+          (BoundingBox {ll: Coord { lat:   0.0, lon:   3.0}, ur: Coord {lat:  4.5, lon:  4.5}}, 2),
+
+          // Just graze the edges
+          (BoundingBox {ll: Coord { lat:   4.0, lon:   4.0}, ur: Coord {lat:  5.0, lon:  5.0}}, 4),
+          // Hit nothing!
+          (BoundingBox {ll: Coord { lat:   4.1, lon:   4.1}, ur: Coord {lat:  4.9, lon:  4.9}}, 0),
+        ];
+
+        for (bb, num_hit) in test_pairs{
+            test_bb_for_hits(&mut rectangles, bb, num_hit);
+        }
+    }
 }

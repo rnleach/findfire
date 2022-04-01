@@ -87,45 +87,61 @@ impl BoundingBox {
     /// * `eps` - is a fuzzy factor. In any point comparisons, any point within 'eps' close to the
     ///    box `self` will be considered as overlapping.
     pub fn overlap(&self, other: &BoundingBox, eps: f64) -> bool {
-        let other_coords = [
-            other.ll,
-            other.ur,
-            Coord {
-                lat: other.ll.lat,
-                lon: other.ur.lon,
+        let BoundingBox {
+            ll: Coord {
+                lat: lly1,
+                lon: llx1,
             },
-            Coord {
-                lat: other.ur.lat,
-                lon: other.ll.lon,
+            ur: Coord {
+                lat: ury1,
+                lon: urx1,
             },
-        ];
+        } = self;
+        let BoundingBox {
+            ll: Coord {
+                lat: lly2,
+                lon: llx2,
+            },
+            ur: Coord {
+                lat: ury2,
+                lon: urx2,
+            },
+        } = other;
 
-        let self_coords = [
-            self.ll,
-            self.ur,
-            Coord {
-                lat: self.ll.lat,
-                lon: self.ur.lon,
-            },
-            Coord {
-                lat: self.ur.lat,
-                lon: self.ll.lon,
-            },
-        ];
-
-        for coord in other_coords {
-            if self.contains_coord(coord, eps) {
-                return true;
-            }
+        if llx1 - urx2 > eps {
+            // self (rectangle 1) is totally to the right of other (rectangle 2) in the plane
+            return false;
         }
 
-        for coord in self_coords {
-            if other.contains_coord(coord, eps) {
-                return true;
-            }
+        if llx2 - urx1 > eps {
+            // other (rectangle 2) is totally to the right of self (rectangle 1) in the plane
+            return false;
         }
 
-        false
+        if lly1 - ury2 > eps {
+            // self (rectangle 1) is totally to the above of other (rectangle 2) in the plane
+            return false;
+        }
+
+        if lly2 - ury1 > eps {
+            // other (rectangle 2) is totally to the above of self (rectangle 1) in the plane
+            return false;
+        }
+
+        if !lly1.is_finite()
+            || !llx1.is_finite()
+            || !urx1.is_finite()
+            || !ury1.is_finite()
+            || !lly2.is_finite()
+            || !llx2.is_finite()
+            || !urx2.is_finite()
+            || !ury2.is_finite()
+        {
+            // Any rectangles at NaN or Infinity do not overlap anything.
+            return false;
+        }
+
+        true
     }
 }
 
