@@ -257,72 +257,82 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
 
     let mut num_absorbed = 0;
     let mut num_new = 0;
-    for cluster in rows {
-        let cluster = cluster?;
+    let current_group = vec![];
+    for (group_time, group) in rows
+        .map(|cluster| cluster.expect("Database error getting row."))
+        .scan(current_group, |group, cluster| {
+            let start = cluster.start;
 
-        let start = cluster.start;
+            if start != current_time_step {
+                let mut next_group = vec![];
+                std::mem::swap(&mut next_group, group);
 
-        if start != current_time_step {
-            if current_time_step - last_merge > Duration::hours(1) {
-                // Only merge once per hour to speed things up.
-                let num_merged = current_fires.merge_fires(&mut old_fires);
-                let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
-                last_merge = current_time_step;
+                let group_time = current_time_step;
+                current_time_step = start;
 
-                if verbose {
-                    println!(
-                        concat!(
-                            "Satellite {} at {}:",
-                            " Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4}",
-                            " Total Active = {:6}"
-                        ),
-                        sat,
-                        current_time_step,
-                        num_absorbed,
-                        num_merged,
-                        num_old,
-                        num_new,
-                        current_fires.len()
-                    );
-                }
+                Some(Some((group_time, next_group)))
+            } else {
+                group.push(cluster);
+                Some(None)
+            }
+        })
+        .filter_map(|val| val)
+    {
+        if group_time - last_merge > Duration::hours(1) {
+            // Only merge once per hour to speed things up.
+            let num_merged = current_fires.merge_fires(&mut old_fires);
+            let num_old = current_fires.drain_stale_fires(&mut old_fires, group_time);
+            last_merge = group_time;
 
-                num_absorbed = 0;
-                num_new = 0;
-
-                match to_db_filler.send(DatabaseMessage::Fires(std::mem::take(&mut old_fires))) {
-                    Ok(_) => {}
-                    Err(err) => {
-                        eprintln!("Error sending Fires message to database: {}", err);
-                        return Err(err.into());
-                    }
-                }
+            if verbose {
+                println!(
+                    concat!(
+                        "Satellite {} at {}:",
+                        " Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4}",
+                        " Total Active = {:6}"
+                    ),
+                    sat,
+                    group_time,
+                    num_absorbed,
+                    num_merged,
+                    num_old,
+                    num_new,
+                    current_fires.len()
+                );
             }
 
-            num_new += current_fires.extend(&mut new_fires);
+            num_absorbed = 0;
+            num_new = 0;
 
-            current_time_step = start;
-
-            stats.update(&current_fires);
+            to_db_filler
+                .send(DatabaseMessage::Fires(std::mem::take(&mut old_fires)))
+                .expect("Error sending Fires message to database:");
         }
 
-        let clusterid = cluster.rowid;
-        let fireid = match current_fires.update(cluster) {
-            FireListUpdateResult::NoMatch(cluster) => {
-                let fireid = NEXT_WILDFIRE_ID.fetch_add(1, Ordering::SeqCst);
-                new_fires.create_add_fire(fireid, cluster);
-                fireid
-            }
-            FireListUpdateResult::Match(fireid) => {
-                num_absorbed += 1;
-                fireid
-            }
-        };
+        num_new += current_fires.extend(&mut new_fires);
 
-        match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
-            Ok(_) => {}
-            Err(err) => {
-                eprintln!("Error sending Association message to database: {}", err);
-                return Err(err.into());
+        stats.update(&current_fires);
+
+        for cluster in group {
+            let clusterid = cluster.rowid;
+            let fireid = match current_fires.update(cluster) {
+                FireListUpdateResult::NoMatch(cluster) => {
+                    let fireid = NEXT_WILDFIRE_ID.fetch_add(1, Ordering::SeqCst);
+                    new_fires.create_add_fire(fireid, cluster);
+                    fireid
+                }
+                FireListUpdateResult::Match(fireid) => {
+                    num_absorbed += 1;
+                    fireid
+                }
+            };
+
+            match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
+                Ok(_) => {}
+                Err(err) => {
+                    eprintln!("Error sending Association message to database: {}", err);
+                    return Err(err.into());
+                }
             }
         }
     }
