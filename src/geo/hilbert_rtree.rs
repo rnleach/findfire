@@ -1,4 +1,5 @@
 use super::*;
+use std::ops::ControlFlow;
 
 const RTREE_CHILDREN_PER_NODE: usize = 4;
 const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-5;
@@ -66,26 +67,54 @@ impl RTreeNode {
         }
     }
 
-    fn foreach<T: Geo>(
+    /// Recursively apply `update` to objects in `data` that have bounding boxes that overlap
+    /// `region`.
+    ///
+    /// ## Parameters
+    ///
+    /// data - is managed by the parent Hilbert2DRTreeView object. Indexes of `Self::Leaf{..}`
+    /// nodes index into this slice.
+    ///
+    /// region - is the region of interest.
+    ///
+    /// update - is a `Fn` to apply to any items that overlap `region`. If it returns `Break(..)`,
+    /// then further iteration should stop. If it returns `Continue(..)`, then iteration should
+    /// carry on. If the `bool` in the return value is `true`, then something was updated and the
+    /// bounding boxes need to be checked for expansion.
+    ///
+    /// user_data - will be passed from call to call of `update` in case you want to accumulate
+    /// some data while iterating.
+    ///
+    /// ## Returns
+    ///
+    /// The first element of the returned tuple indicates if anything was updated. The second is
+    /// any value you may want to return from the iteration.
+    fn foreach<T: Geo, V: Copy>(
         &mut self,
         data: &mut [T],
         region: &BoundingBox,
-        update: &dyn Fn(&mut T) -> bool,
-    ) -> bool {
+        update: &dyn Fn(&mut T, V) -> (bool, ControlFlow<V, V>),
+        user_data: V,
+    ) -> (bool, ControlFlow<V, V>) {
         if self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
             let mut updated = false;
+            let mut inner_user_data = ControlFlow::Continue(user_data);
 
             match self {
                 Self::Leaf { index, bbox, .. } => {
-                    updated = update(&mut data[*index]);
+                    let (local_updated, rv) = update(&mut data[*index], user_data);
+                    inner_user_data = rv;
 
-                    if updated {
+                    if local_updated {
                         *bbox = data[*index].bounding_box();
+                        updated = true
                     }
                 }
                 Self::Node { children, bbox } => {
+                    let mut user_data = user_data;
                     for child in children {
-                        let local_updated = child.foreach(data, region, update);
+                        let (local_updated, rv) = child.foreach(data, region, update, user_data);
+                        inner_user_data = rv;
 
                         if local_updated {
                             let child_box = child.bounding_box();
@@ -97,13 +126,18 @@ impl RTreeNode {
 
                             updated = true;
                         }
+
+                        match &inner_user_data {
+                            ControlFlow::Continue(value) => user_data = *value,
+                            ControlFlow::Break(..) => break,
+                        }
                     }
                 }
             }
 
-            updated
+            (updated, inner_user_data)
         } else {
-            false
+            (false, ControlFlow::Continue(user_data))
         }
     }
 }
@@ -178,12 +212,21 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     /// If the closure returns `true`, then an element was updated and we need to update the upper
     /// levels of the bounding boxes.
     ///
-    /// Returns `true` if `update` EVER returns `true`, that is if anything was ever updated. 
-    fn foreach(&mut self, region: BoundingBox, update: &dyn Fn(&mut T) -> bool) -> bool {
+    /// Returns `true` if `update` EVER returns `true`, that is if anything was ever updated.
+    pub fn foreach<V: Copy>(
+        &mut self,
+        region: BoundingBox,
+        user_data: V,
+        update: &dyn Fn(&mut T, V) -> (bool, ControlFlow<V, V>),
+    ) -> V {
         if self.root.num_children() > 0 {
-            self.root.foreach(self.data, &region, update)
+            let (_, rv) = self.root.foreach(self.data, &region, update, user_data);
+            match rv {
+                ControlFlow::Break(value) => value,
+                ControlFlow::Continue(value) => value,
+            }
         } else {
-            false
+            user_data
         }
     }
 
@@ -559,7 +602,6 @@ mod test {
     struct LabeledBB {
         rect: BoundingBox,
         label: String,
-        hit_count: u32,
     }
 
     impl LabeledBB {
@@ -578,11 +620,7 @@ mod test {
                 },
             };
 
-            LabeledBB {
-                rect,
-                label,
-                hit_count: 0,
-            }
+            LabeledBB { rect, label }
         }
     }
 
@@ -618,27 +656,16 @@ mod test {
     fn test_bb_for_hits(mut rectangles: &mut [LabeledBB], bbox: BoundingBox, num_hits: usize) {
         println!("Target Area: {} Expected Hits: {}", bbox, num_hits);
 
-        // Ensure hit count is zero before starting.
-        rectangles.iter_mut().for_each(|r| r.hit_count = 0);
-        let hits: u32 = rectangles.iter().map(|r| r.hit_count).sum();
-        assert_eq!(hits as usize, 0);
-
         // Create the view.
         let mut view = Hilbert2DRTreeView::build_for(&mut rectangles, None).unwrap();
 
         // Count the hits.
-        view.foreach(bbox, &|labeled_rect| {
-            labeled_rect.hit_count += 1;
+        let hits = view.foreach(bbox, 0, &|labeled_rect, hits_so_far| {
             println!("{:?} overlaps {:?}", bbox, labeled_rect);
-            false
+            (false, ControlFlow::Continue(hits_so_far + 1))
         });
 
-        let hits: u32 = rectangles
-            .iter()
-            .map(|r| r.hit_count)
-            .inspect(|v| assert!(*v == 0 || *v == 1))
-            .sum();
-        assert_eq!(hits as usize, num_hits);
+        assert_eq!(hits, num_hits);
     }
 
     #[test]
