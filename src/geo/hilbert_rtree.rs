@@ -177,9 +177,13 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     ///
     /// If the closure returns `true`, then an element was updated and we need to update the upper
     /// levels of the bounding boxes.
-    fn foreach(&mut self, region: BoundingBox, update: &dyn Fn(&mut T) -> bool) {
+    ///
+    /// Returns `true` if `update` EVER returns `true`, that is if anything was ever updated. 
+    fn foreach(&mut self, region: BoundingBox, update: &dyn Fn(&mut T) -> bool) -> bool {
         if self.root.num_children() > 0 {
-            self.root.foreach(self.data, &region, update);
+            self.root.foreach(self.data, &region, update)
+        } else {
+            false
         }
     }
 
