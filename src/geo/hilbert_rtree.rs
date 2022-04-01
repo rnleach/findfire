@@ -89,7 +89,7 @@ impl RTreeNode {
     ///
     /// The first element of the returned tuple indicates if anything was updated. The second is
     /// any value you may want to return from the iteration.
-    fn foreach<T: Geo, V: Copy>(
+    fn foreach<T: Geo, V>(
         &mut self,
         data: &mut [T],
         region: &BoundingBox,
@@ -97,24 +97,21 @@ impl RTreeNode {
         user_data: V,
     ) -> (bool, ControlFlow<V, V>) {
         if self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
-            let mut updated = false;
-            let mut inner_user_data = ControlFlow::Continue(user_data);
-
             match self {
                 Self::Leaf { index, bbox, .. } => {
-                    let (local_updated, rv) = update(&mut data[*index], user_data);
-                    inner_user_data = rv;
+                    let (updated, rv) = update(&mut data[*index], user_data);
 
-                    if local_updated {
+                    if updated {
                         *bbox = data[*index].bounding_box();
-                        updated = true
                     }
+                    (updated, rv)
                 }
                 Self::Node { children, bbox } => {
                     let mut user_data = user_data;
+                    let mut updated = false;
+                    let mut keep_going = true;
                     for child in children {
                         let (local_updated, rv) = child.foreach(data, region, update, user_data);
-                        inner_user_data = rv;
 
                         if local_updated {
                             let child_box = child.bounding_box();
@@ -127,15 +124,25 @@ impl RTreeNode {
                             updated = true;
                         }
 
-                        match &inner_user_data {
-                            ControlFlow::Continue(value) => user_data = *value,
-                            ControlFlow::Break(..) => break,
+                        match rv {
+                            ControlFlow::Continue(value) => user_data = value,
+                            ControlFlow::Break(value) => {
+                                user_data = value;
+                                keep_going = false;
+                                break;
+                            }
                         }
                     }
+
+                    let user_data = if keep_going {
+                        ControlFlow::Continue(user_data)
+                    } else {
+                        ControlFlow::Break(user_data)
+                    };
+
+                    (updated, user_data)
                 }
             }
-
-            (updated, inner_user_data)
         } else {
             (false, ControlFlow::Continue(user_data))
         }
@@ -213,7 +220,7 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     /// levels of the bounding boxes.
     ///
     /// Returns `true` if `update` EVER returns `true`, that is if anything was ever updated.
-    pub fn foreach<V: Copy>(
+    pub fn foreach<V>(
         &mut self,
         region: BoundingBox,
         user_data: V,
