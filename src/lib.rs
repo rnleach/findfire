@@ -8,7 +8,7 @@ pub use database::{
     ClusterDatabaseQueryClusterPresent, ClusterDatabaseQueryClusters, FiresDatabase,
     FiresDatabaseAddFire,
 };
-pub use fire::{Fire, FireList, FireListUpdateResult};
+pub use fire::{Fire, FireList, FireListUpdateResult, FireListView};
 pub use geo::{BoundingBox, Coord, Geo};
 pub use kml::KmlFile;
 pub use pixel::{Pixel, PixelList};

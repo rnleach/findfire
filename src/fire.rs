@@ -215,7 +215,7 @@ impl Geo for Fire {
     }
 
     fn bounding_box(&self) -> BoundingBox {
-        unimplemented!()
+        self.area.bounding_box()
     }
 }
 
@@ -271,7 +271,6 @@ impl FireList {
     /// `clust` was consumed, then it returns `None`.
     pub fn update(&mut self, row: ClusterDatabaseClusterRow) -> FireListUpdateResult {
         let cluster_pixels: &PixelList = &row.pixels;
-        // TODO: Use iteration over Hilbert R-Tree here to speed things up.
         for fire in self.0.iter_mut() {
             if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
                 fire.update(&row);
@@ -434,7 +433,7 @@ pub struct FireListView<'a> {
 
 impl<'a> FireListView<'a> {
     /// Create a new view of a FireList.
-    fn new(fire_list: &'a mut FireList) -> Option<Self> {
+    pub fn new(fire_list: &'a mut FireList) -> Option<Self> {
         let view_opt = Hilbert2DRTreeView::build_for(&mut fire_list.0, None);
 
         view_opt.map(|view| Self { view })

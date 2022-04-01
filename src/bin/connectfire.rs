@@ -2,8 +2,8 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use satfire::{
-    BoundingBox, ClusterDatabase, Coord, Fire, FireList, FireListUpdateResult, FiresDatabase,
-    SatFireResult, Satellite,
+    BoundingBox, ClusterDatabase, Coord, Fire, FireList, FireListUpdateResult, FireListView,
+    FiresDatabase, SatFireResult, Satellite,
 };
 use std::{
     fmt::{self, Display},
@@ -313,25 +313,41 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
 
         stats.update(&current_fires);
 
-        for cluster in group {
-            let clusterid = cluster.rowid;
-            let fireid = match current_fires.update(cluster) {
-                FireListUpdateResult::NoMatch(cluster) => {
-                    let fireid = NEXT_WILDFIRE_ID.fetch_add(1, Ordering::SeqCst);
-                    new_fires.create_add_fire(fireid, cluster);
-                    fireid
-                }
-                FireListUpdateResult::Match(fireid) => {
-                    num_absorbed += 1;
-                    fireid
-                }
-            };
+        if let Some(mut view) = FireListView::new(&mut current_fires) {
+            for cluster in group {
+                let clusterid = cluster.rowid;
+                let fireid = match view.update(cluster) {
+                    FireListUpdateResult::NoMatch(cluster) => {
+                        let fireid = NEXT_WILDFIRE_ID.fetch_add(1, Ordering::SeqCst);
+                        new_fires.create_add_fire(fireid, cluster);
+                        fireid
+                    }
+                    FireListUpdateResult::Match(fireid) => {
+                        num_absorbed += 1;
+                        fireid
+                    }
+                };
 
-            match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
-                Ok(_) => {}
-                Err(err) => {
-                    eprintln!("Error sending Association message to database: {}", err);
-                    return Err(err.into());
+                match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("Error sending Association message to database: {}", err);
+                        return Err(err.into());
+                    }
+                }
+            }
+        } else {
+            for cluster in group {
+                let clusterid = cluster.rowid;
+                let fireid = NEXT_WILDFIRE_ID.fetch_add(1, Ordering::SeqCst);
+                new_fires.create_add_fire(fireid, cluster);
+
+                match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("Error sending Association message to database: {}", err);
+                        return Err(err.into());
+                    }
                 }
             }
         }
