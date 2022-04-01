@@ -346,6 +346,7 @@ impl<'a> ClusterDatabaseQueryClusters<'a> {
 }
 
 /// All the data about a cluster retrieved from the database.
+#[derive(Debug, Clone)]
 pub struct ClusterDatabaseClusterRow {
     pub rowid: u64,
     pub start: DateTime<Utc>,

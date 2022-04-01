@@ -1,6 +1,6 @@
 use crate::{
     database::ClusterDatabaseClusterRow,
-    geo::{BoundingBox, Coord, Geo},
+    geo::{BoundingBox, Coord, Geo, Hilbert2DRTreeView},
     pixel::PixelList,
     satellite::Satellite,
     KmlFile, SatFireResult,
@@ -8,6 +8,7 @@ use crate::{
 use chrono::{DateTime, Duration, Utc};
 use std::{
     fmt::{self, Display, Write},
+    ops::ControlFlow,
     path::Path,
 };
 
@@ -221,6 +222,7 @@ impl Geo for Fire {
 /// A list of [Fire] objects.
 pub struct FireList(Vec<Fire>);
 
+#[derive(Debug, Clone)]
 pub enum FireListUpdateResult {
     NoMatch(ClusterDatabaseClusterRow),
     Match(u64),
@@ -423,6 +425,53 @@ impl FireList {
         }
 
         Ok(())
+    }
+}
+
+pub struct FireListView<'a> {
+    view: Hilbert2DRTreeView<'a, Fire>,
+}
+
+impl<'a> FireListView<'a> {
+    /// Create a new view of a FireList.
+    fn new(fire_list: &'a mut FireList) -> Option<Self> {
+        let view_opt = Hilbert2DRTreeView::build_for(&mut fire_list.0, None);
+
+        view_opt.map(|view| Self { view })
+    }
+
+    /// Update the underlying list with the provided cluster.
+    ///
+    /// Matches the cluster to a wildfire in the list and then updates that wildfire.
+    ///
+    /// # Returns
+    ///
+    /// `Some(clust)` if `clust` was not matched to a fire and used to update it. If the
+    /// `clust` was consumed, then it returns `None`.
+    pub fn update(&mut self, row: ClusterDatabaseClusterRow) -> FireListUpdateResult {
+        let bbox = row.pixels.bounding_box();
+
+        self.view.foreach(
+            bbox,
+            FireListUpdateResult::NoMatch(row),
+            &|fire, matched| match matched {
+                FireListUpdateResult::NoMatch(row) => {
+                    if row.pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
+                        fire.update(&row);
+                        (
+                            true,
+                            ControlFlow::Break(FireListUpdateResult::Match(fire.id())),
+                        )
+                    } else {
+                        (
+                            false,
+                            ControlFlow::Continue(FireListUpdateResult::NoMatch(row)),
+                        )
+                    }
+                }
+                found @ FireListUpdateResult::Match(..) => (false, ControlFlow::Break(found)),
+            },
+        )
     }
 }
 
