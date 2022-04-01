@@ -128,7 +128,7 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
 
         // Build the leaf nodes - level 0
         let mut leaves = Vec::with_capacity(data.len());
-        for item in data.into_iter().enumerate() {
+        for item in data.iter_mut().enumerate() {
             let (index, item) = item;
             let bbox = item.bounding_box();
             let hilbert_num = hc.translate_to_curve_distance(item.centroid());
@@ -168,7 +168,7 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
         }
 
         debug_assert_eq!(level_nodes.len(), 1);
-        let root = level_nodes.into_iter().nth(0).unwrap();
+        let root = level_nodes.into_iter().next().unwrap();
 
         Some(Hilbert2DRTreeView { root, hc, data })
     }
