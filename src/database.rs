@@ -62,12 +62,20 @@ impl ClusterDatabase {
         const QUERY: &str = include_str!("database/query_newest_cluster.sql");
         let mut stmt = self.conn.prepare(QUERY)?;
 
-        let res: DateTime<Utc> = stmt.query_row([satellite.name(), sector.name()], |row| {
-            let timestamp: i64 = row.get(0)?;
-            let naive = chrono::NaiveDateTime::from_timestamp(timestamp, 0);
-            let value = DateTime::<Utc>::from_utc(naive, Utc);
-            Ok(value)
-        })?;
+        let res: DateTime<Utc> = stmt.query_row(
+            [
+                satellite.name(),
+                sector.name(),
+                satellite.name(),
+                sector.name(),
+            ],
+            |row| {
+                let timestamp: i64 = row.get(0)?;
+                let naive = chrono::NaiveDateTime::from_timestamp(timestamp, 0);
+                let value = DateTime::<Utc>::from_utc(naive, Utc);
+                Ok(value)
+            },
+        )?;
 
         Ok(res)
     }
