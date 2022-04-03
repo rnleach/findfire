@@ -453,7 +453,7 @@ impl<'a> FireListView<'a> {
         self.view.foreach(
             bbox,
             FireListUpdateResult::NoMatch(row),
-            &|fire, matched| match matched {
+            |fire, matched| match matched {
                 FireListUpdateResult::NoMatch(row) => {
                     if row.pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
                         fire.update(&row);

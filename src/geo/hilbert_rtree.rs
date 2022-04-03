@@ -83,19 +83,24 @@ impl RTreeNode {
     /// bounding boxes need to be checked for expansion.
     ///
     /// user_data - will be passed from call to call of `update` in case you want to accumulate
-    /// some data while iterating.
+    /// some data while iterating. This behaves similar to the accumulator on the fold method of
+    /// iterators.
     ///
     /// ## Returns
     ///
     /// The first element of the returned tuple indicates if anything was updated. The second is
     /// any value you may want to return from the iteration.
-    fn foreach<T: Geo, V>(
+    fn foreach<T, V, F>(
         &mut self,
         data: &mut [T],
         region: &BoundingBox,
-        update: &dyn Fn(&mut T, V) -> (bool, ControlFlow<V, V>),
+        update: F,
         user_data: V,
-    ) -> (bool, ControlFlow<V, V>) {
+    ) -> (bool, ControlFlow<V, V>)
+    where
+        T: Geo,
+        F: Fn(&mut T, V) -> (bool, ControlFlow<V, V>) + Copy,
+    {
         if self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
             match self {
                 Self::Leaf { index, bbox, .. } => {
@@ -220,12 +225,10 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     /// levels of the bounding boxes.
     ///
     /// Returns `true` if `update` EVER returns `true`, that is if anything was ever updated.
-    pub fn foreach<V>(
-        &mut self,
-        region: BoundingBox,
-        user_data: V,
-        update: &dyn Fn(&mut T, V) -> (bool, ControlFlow<V, V>),
-    ) -> V {
+    pub fn foreach<V, F>(&mut self, region: BoundingBox, user_data: V, update: F) -> V
+    where
+        F: Fn(&mut T, V) -> (bool, ControlFlow<V, V>) + Copy,
+    {
         if self.root.num_children() > 0 {
             let (_, rv) = self.root.foreach(self.data, &region, update, user_data);
             match rv {
@@ -667,7 +670,7 @@ mod test {
         let mut view = Hilbert2DRTreeView::build_for(&mut rectangles, None).unwrap();
 
         // Count the hits.
-        let hits = view.foreach(bbox, 0, &|labeled_rect, hits_so_far| {
+        let hits = view.foreach(bbox, 0, |labeled_rect, hits_so_far| {
             println!("{:?} overlaps {:?}", bbox, labeled_rect);
             (false, ControlFlow::Continue(hits_so_far + 1))
         });
