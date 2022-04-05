@@ -167,12 +167,8 @@ impl Fire {
     }
 
     /// Merge two wildfires.
-    fn merge_with(&mut self, right: &mut Self) {
+    fn merge_with(&mut self, right: &Self) {
         debug_assert_eq!(self.sat, right.sat);
-
-        if self.area.len() < right.area.len() {
-            std::mem::swap(&mut self.area, &mut right.area);
-        }
 
         if right.first_observed < self.first_observed {
             self.first_observed = right.first_observed;
@@ -298,35 +294,72 @@ impl FireList {
     /// # Returns
     /// The number of mergers that occurred.
     pub fn merge_fires(&mut self, merged_away: &mut Self) -> usize {
-        //
-        // TODO: Totally reimplement this method taking advandage of a Hilbert R-Tree for searching
-        // the list.
-        //
-        // Keep a list of fires that have been merged away. Skip them when checking for other
-        // merges. When all the merging is done, iterate backwards through the list and remove the
-        // items at the indexes marked as merge.
-        //
-        let mut i = 0;
-        let mut len = self.0.len();
+        const FULL_DOMAIN: BoundingBox = BoundingBox {
+            ll: Coord {
+                lat: -90.0,
+                lon: -180.0,
+            },
+            ur: Coord {
+                lat: 90.0,
+                lon: 180.0,
+            },
+        };
+
         let starting_size = self.0.len();
-        while i < len {
-            // safe because i < len as checked by the while condition
-            let ifire = unsafe { &mut *(self.0.get_unchecked_mut(i) as *mut Fire) };
-            let mut j = i + 1;
-            while j < len {
-                // safe because i != j, j > i and j < len as checked by while condition
-                let jfire = unsafe { &mut *(self.0.get_unchecked_mut(j) as *mut Fire) };
-                if ifire.area.adjacent_to_or_overlaps(&jfire.area, 1.0e-5) {
-                    ifire.merge_with(jfire);
-                    let temp = self.0.swap_remove(j);
-                    len -= 1;
-                    merged_away.0.push(temp);
-                } else {
-                    j += 1;
+        let mut to_delete = std::collections::HashSet::<usize>::new();
+
+        let mut size_change = usize::MAX;
+
+        // Repeat until we stop finding mergers.
+        while size_change > 0 {
+            let iteration_size = self.0.len();
+
+            // Safety: Doing this so I can have 2 mutable pointers at the same time to an element
+            // within the slice. I never modify it, which is checked for by comparing the fire id's in
+            // the closure.
+            unsafe {
+                let secret_slice =
+                    std::slice::from_raw_parts_mut(self.0.as_mut_ptr(), self.0.len());
+
+                if let Some(mut view) =
+                    Hilbert2DRTreeView::build_for(secret_slice, Some(FULL_DOMAIN))
+                {
+                    for index in 0..iteration_size {
+                        // Safe because index is in range as defined by iteration_size.
+                        let fire = &mut *(self.0.get_unchecked_mut(index) as *mut Fire);
+
+                        let region = fire.bounding_box();
+                        (to_delete, _) = view.foreach(
+                            region,
+                            (to_delete, fire),
+                            |candidate_fire, candidate_index, (mut to_del_set, fire)| {
+                                if fire.id() == candidate_fire.id()
+                                    || to_del_set.contains(&index)
+                                    || to_del_set.contains(&candidate_index)
+                                    || !fire
+                                        .area
+                                        .adjacent_to_or_overlaps(&candidate_fire.area, 1.0e-5)
+                                {
+                                    (false, ControlFlow::Continue((to_del_set, fire)))
+                                } else {
+                                    fire.merge_with(candidate_fire);
+                                    to_del_set.insert(candidate_index);
+                                    (true, ControlFlow::Continue((to_del_set, fire)))
+                                }
+                            },
+                        );
+                    }
                 }
             }
 
-            i += 1;
+            let mut to_delete_vec: Vec<_> = to_delete.drain().collect();
+            to_delete_vec.sort_unstable_by_key(|v| std::cmp::Reverse(*v));
+
+            for idx in to_delete_vec {
+                let temp = self.0.swap_remove(idx);
+                merged_away.0.push(temp);
+            }
+            size_change = iteration_size - self.0.len();
         }
 
         starting_size - self.0.len()
@@ -453,7 +486,7 @@ impl<'a> FireListView<'a> {
         self.view.foreach(
             bbox,
             FireListUpdateResult::NoMatch(row),
-            |fire, matched| match matched {
+            |fire, _fire_idx, matched| match matched {
                 FireListUpdateResult::NoMatch(row) => {
                     if row.pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
                         fire.update(&row);

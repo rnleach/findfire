@@ -80,7 +80,10 @@ impl RTreeNode {
     /// update - is a `Fn` to apply to any items that overlap `region`. If it returns `Break(..)`,
     /// then further iteration should stop. If it returns `Continue(..)`, then iteration should
     /// carry on. If the `bool` in the return value is `true`, then something was updated and the
-    /// bounding boxes need to be checked for expansion.
+    /// bounding boxes need to be checked for expansion. The arguments to this function are a
+    /// mutable reference to an item stored in the underlying array whose bounding box overlaps
+    /// `region`, the index of that item in the underlying array, and the `user_data` passed in
+    /// below.
     ///
     /// user_data - will be passed from call to call of `update` in case you want to accumulate
     /// some data while iterating. This behaves similar to the accumulator on the fold method of
@@ -94,17 +97,17 @@ impl RTreeNode {
         &mut self,
         data: &mut [T],
         region: &BoundingBox,
-        update: F,
+        mut update: F,
         user_data: V,
     ) -> (bool, ControlFlow<V, V>)
     where
         T: Geo,
-        F: Fn(&mut T, V) -> (bool, ControlFlow<V, V>) + Copy,
+        F: FnMut(&mut T, usize, V) -> (bool, ControlFlow<V, V>) + Copy,
     {
         if self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
             match self {
                 Self::Leaf { index, bbox, .. } => {
-                    let (updated, rv) = update(&mut data[*index], user_data);
+                    let (updated, rv) = update(&mut data[*index], *index, user_data);
 
                     if updated {
                         *bbox = data[*index].bounding_box();
@@ -227,7 +230,7 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
     /// Returns `true` if `update` EVER returns `true`, that is if anything was ever updated.
     pub fn foreach<V, F>(&mut self, region: BoundingBox, user_data: V, update: F) -> V
     where
-        F: Fn(&mut T, V) -> (bool, ControlFlow<V, V>) + Copy,
+        F: FnMut(&mut T, usize, V) -> (bool, ControlFlow<V, V>) + Copy,
     {
         if self.root.num_children() > 0 {
             let (_, rv) = self.root.foreach(self.data, &region, update, user_data);
@@ -670,7 +673,7 @@ mod test {
         let mut view = Hilbert2DRTreeView::build_for(&mut rectangles, None).unwrap();
 
         // Count the hits.
-        let hits = view.foreach(bbox, 0, |labeled_rect, hits_so_far| {
+        let hits = view.foreach(bbox, 0, |labeled_rect, _rect_idx, hits_so_far| {
             println!("{:?} overlaps {:?}", bbox, labeled_rect);
             (false, ControlFlow::Continue(hits_so_far + 1))
         });
