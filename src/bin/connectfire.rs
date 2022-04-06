@@ -232,8 +232,10 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     let mut current_fires = db.ongoing_fires(sat)?;
 
     if verbose {
-        info!(target: "startup", "Retrieved {} ongoing fires for satellite {}.", current_fires.len(), sat.name());
-        info!(target: sat.name(), "{:23}, {:8}, {:6}, {:4}, {:4}, {:6}", "scan start time", "Absorbed", "Merged", "Old", "New", "Active");
+        info!(target: "startup", "Retrieved {} ongoing fires for satellite {}.", 
+            current_fires.len(), sat.name());
+        info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
+            "scan start time", "Absorbed", "Merged", "Old", "New", "Active");
     }
 
     let mut new_fires = FireList::new();
@@ -284,7 +286,8 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
             last_merge = group_time;
 
             if verbose {
-                info!(target: sat.name(), "{:23}, {:8}, {:6}, {:4}, {:4}, {:6}", group_time, num_absorbed, num_merged, num_old, num_new, current_fires.len());
+                info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
+                    group_time, num_absorbed, num_merged, num_old, num_new, current_fires.len());
             }
 
             num_absorbed = 0;
@@ -346,7 +349,8 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     current_fires.save_kml(kml_path)?;
 
     if verbose {
-        info!(target: sat.name(), "{:23}, {:8}, {:6}, {:4}, {:4}, {:6}", current_time_step, num_absorbed, num_merged, num_old, num_new, current_fires.len());
+        info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
+            current_time_step, num_absorbed, num_merged, num_old, num_new, current_fires.len());
     }
 
     old_fires.extend(&mut current_fires);
