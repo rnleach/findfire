@@ -1,5 +1,7 @@
 use clap::Parser;
+use log::info;
 use satfire::{FireList, FiresDatabase, SatFireResult, Satellite};
+use simple_logger::SimpleLogger;
 use std::{
     cmp::Reverse,
     fmt::{self, Display},
@@ -108,7 +110,7 @@ fn parse_args() -> SatFireResult<CurrentFiresOptionsChecked> {
     };
 
     if verbose {
-        println!("{}", checked);
+        info!("{}", checked);
     }
 
     Ok(checked)
@@ -118,6 +120,8 @@ fn parse_args() -> SatFireResult<CurrentFiresOptionsChecked> {
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
 fn main() -> SatFireResult<()> {
+    SimpleLogger::new().init()?;
+
     let opts = parse_args()?;
 
     //
@@ -132,7 +136,7 @@ fn main() -> SatFireResult<()> {
     let active_fires = FireList::from(active_fires);
 
     if opts.verbose {
-        println!("Retrieved {} fires.", active_fires.len());
+        info!("Retrieved {} fires.", active_fires.len());
     }
 
     active_fires.save_kml(&opts.kml_file)?;

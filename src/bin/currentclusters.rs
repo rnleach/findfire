@@ -1,7 +1,9 @@
 use clap::Parser;
+use log::info;
 use satfire::{
     BoundingBox, ClusterDatabase, Coord, Geo, KmlFile, SatFireResult, Satellite, Sector,
 };
+use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display, Write},
     path::PathBuf,
@@ -129,7 +131,7 @@ fn parse_args() -> SatFireResult<CurrentClustersOptionsChecked> {
     };
 
     if verbose {
-        println!("{}", checked);
+        info!("{}", checked);
     }
 
     Ok(checked)
@@ -139,6 +141,8 @@ fn parse_args() -> SatFireResult<CurrentClustersOptionsChecked> {
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
 fn main() -> SatFireResult<()> {
+    SimpleLogger::new().init()?;
+
     let opts = parse_args()?;
 
     //
@@ -178,7 +182,7 @@ fn main() -> SatFireResult<()> {
     clusters.sort_unstable_by(|a, b| a.power.partial_cmp(&b.power).unwrap());
 
     if opts.verbose {
-        println!("Retrieved {} clusters.", clusters.len());
+        info!("Retrieved {} clusters.", clusters.len());
     }
 
     //

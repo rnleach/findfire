@@ -363,6 +363,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "log"
+version = "0.4.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6389c490849ff5bc16be905ae24bc913a9c8892e19b2341dbc175e14c341c2b8"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "memchr"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -548,9 +557,11 @@ dependencies = [
  "chrono",
  "clap",
  "crossbeam-channel",
+ "log",
  "once_cell",
  "rusqlite",
  "rustc-hash",
+ "simple_logger",
  "static_assertions",
  "strum",
  "walkdir",
@@ -577,6 +588,17 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "simple_logger"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75a9723083573ace81ad0cdfc50b858aa3c366c48636edb4109d73122a0c0ea"
+dependencies = [
+ "atty",
+ "log",
+ "winapi",
 ]
 
 [[package]]

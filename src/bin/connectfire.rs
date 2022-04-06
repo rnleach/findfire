@@ -1,10 +1,12 @@
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
+use log::{error, info};
 use satfire::{
     BoundingBox, ClusterDatabase, Coord, Fire, FireList, FireListUpdateResult, FireListView,
     FiresDatabase, SatFireResult, Satellite,
 };
+use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display},
     path::{Path, PathBuf},
@@ -79,7 +81,7 @@ fn parse_args() -> SatFireResult<ConnectFireOptions> {
     let opts = ConnectFireOptions::parse();
 
     if opts.verbose {
-        println!("{}", opts);
+        info!(target:"startup", "{}", opts);
     }
 
     Ok(opts)
@@ -230,11 +232,8 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     let mut current_fires = db.ongoing_fires(sat)?;
 
     if verbose {
-        println!(
-            "Retrieved {} ongoing fires for satellite {}.",
-            current_fires.len(),
-            sat.name()
-        );
+        info!(target: "startup", "Retrieved {} ongoing fires for satellite {}.", current_fires.len(), sat.name());
+        info!(target: sat.name(), "{:23}, {:8}, {:6}, {:4}, {:4}, {:6}", "scan start time", "Absorbed", "Merged", "Old", "New", "Active");
     }
 
     let mut new_fires = FireList::new();
@@ -285,20 +284,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
             last_merge = group_time;
 
             if verbose {
-                println!(
-                    concat!(
-                        "Satellite {} at {}:",
-                        " Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4}",
-                        " Total Active = {:6}"
-                    ),
-                    sat,
-                    group_time,
-                    num_absorbed,
-                    num_merged,
-                    num_old,
-                    num_new,
-                    current_fires.len()
-                );
+                info!(target: sat.name(), "{:23}, {:8}, {:6}, {:4}, {:4}, {:6}", group_time, num_absorbed, num_merged, num_old, num_new, current_fires.len());
             }
 
             num_absorbed = 0;
@@ -331,7 +317,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
                 match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
                     Ok(_) => {}
                     Err(err) => {
-                        eprintln!("Error sending Association message to database: {}", err);
+                        error!("Error sending Association message to database: {}", err);
                         return Err(err.into());
                     }
                 }
@@ -345,7 +331,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
                 match to_db_filler.send(DatabaseMessage::Association((fireid, clusterid))) {
                     Ok(_) => {}
                     Err(err) => {
-                        eprintln!("Error sending Association message to database: {}", err);
+                        error!("Error sending Association message to database: {}", err);
                         return Err(err.into());
                     }
                 }
@@ -360,20 +346,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     current_fires.save_kml(kml_path)?;
 
     if verbose {
-        println!(
-            concat!(
-                "Satellite {} at {}:",
-                " Absorbed = {:4} Merged = {:4} Aged out = {:4} New = {:4}",
-                " Total Active = {:6}"
-            ),
-            sat,
-            current_time_step,
-            num_absorbed,
-            num_merged,
-            num_old,
-            num_new,
-            current_fires.len()
-        );
+        info!(target: sat.name(), "{:23}, {:8}, {:6}, {:4}, {:4}, {:6}", current_time_step, num_absorbed, num_merged, num_old, num_new, current_fires.len());
     }
 
     old_fires.extend(&mut current_fires);
@@ -385,7 +358,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     to_db_filler.send(DatabaseMessage::Fires(old_fires))?;
 
     if verbose {
-        println!("{}", stats);
+        info!(target: "stats", "{}", stats);
     }
 
     Ok(())
@@ -424,6 +397,8 @@ fn database_filler(
  *                                             Main
  *-----------------------------------------------------------------------------------------------*/
 fn main() -> SatFireResult<()> {
+    SimpleLogger::new().init()?;
+
     let opts = parse_args()?;
 
     FiresDatabase::initialize(&opts.fires_store_file)?;
@@ -433,7 +408,7 @@ fn main() -> SatFireResult<()> {
     drop(fires_db);
 
     if opts.verbose {
-        println!("Next fire ID {}", next_id);
+        info!(target: "startup", "Next fire ID {}", next_id);
     }
 
     let area = BoundingBox {

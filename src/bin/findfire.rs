@@ -3,9 +3,11 @@
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
+use log::{debug, info, warn};
 use satfire::{
     Cluster, ClusterDatabase, ClusterList, Geo, KmlFile, SatFireResult, Satellite, Sector,
 };
+use simple_logger::SimpleLogger;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
@@ -129,10 +131,12 @@ fn parse_args() -> SatFireResult<FindFireOptionsChecked> {
 const NUM_LOADER_THREADS: u8 = 4;
 
 fn main() -> SatFireResult<()> {
+    SimpleLogger::new().init()?;
+
     let opts = parse_args()?;
 
     if opts.verbose {
-        println!("{:#?}", opts);
+        info!(target: "startup", "{:#?}", opts);
     }
 
     ClusterDatabase::initialize(&opts.cluster_store_file)?;
@@ -195,7 +199,7 @@ fn dir_walker<P: AsRef<Path>>(
                 inner.insert(sector, latest);
 
                 if verbose {
-                    println!("Most Recent {} {}: {}", sat, sector, latest);
+                    info!(target: "startup", "Most Recent {} {}: {}", sat, sector, latest);
                 }
             }
         }
@@ -255,18 +259,13 @@ fn filter_already_processed<P: AsRef<Path>>(
                 }) {
                     if !is_present.present(sat, sector, start, end)? {
                         if verbose {
-                            println!(
-                                "processing {} {} {} - {}",
-                                sat,
-                                sector,
-                                start,
-                                path.display()
-                            );
+                            info!(target: "filter", "processing {} {} {}", sat, sector, start);
+                            debug!(target: "filter", "processing {} {} {} - {}", sat, sector, start, path.display());
                         }
 
                         to_loader.send(path)?;
                     } else if verbose {
-                        println!("already in db: {}", path.display());
+                        info!(target: "filter", "already in db: {}", path.display());
                     }
                 }
             }
@@ -295,7 +294,7 @@ fn loader_threads(
                         Ok(clist) => clist,
                         Err(err) => {
                             if verbose {
-                                println!("Error loading: {}\n     {}", path.display(), err);
+                                warn!(target: "loading", "({}) {}", err, path.display());
                             }
 
                             continue;
@@ -345,8 +344,8 @@ fn db_filler_thread<P: AsRef<Path>>(
             {
                 save_cluster_stats_kml(kml_path, cluster_stats)?;
                 if verbose {
-                    println!("{}", cluster_stats);
-                    println!("{}", cluster_list_stats);
+                    info!(target: "stats", "{}", cluster_stats);
+                    info!(target: "stats", "{}", cluster_list_stats);
                 }
             }
 
@@ -722,7 +721,7 @@ fn create_standard_dir_filter(
                                 match year {
                                     x if x < mr_year => {
                                         if verbose {
-                                            println!("skipping {}", entry.path().display());
+                                            info!(target:"directory-filter", "skipping {}", entry.path().display());
                                         }
                                         return false;
                                     }
@@ -745,7 +744,7 @@ fn create_standard_dir_filter(
                                 // Return early if we can
                                 if year == mr_year && doy < mr_doy {
                                     if verbose {
-                                        println!("skipping {}", entry.path().display());
+                                        info!(target:"directory-filter", "skipping {}", entry.path().display());
                                     }
                                     return false;
                                 } else if year == mr_year && doy > mr_doy {
@@ -768,7 +767,7 @@ fn create_standard_dir_filter(
                                 // We have all the info we need, we should be able to return
                                 if year == mr_year && doy == mr_doy && hour < mr_hour {
                                     if verbose {
-                                        println!("skipping {}", entry.path().display());
+                                        info!(target:"directory-filter", "skipping {}", entry.path().display());
                                     }
                                     return false;
                                 } else {

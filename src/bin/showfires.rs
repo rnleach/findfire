@@ -1,6 +1,8 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
+use log::info;
 use satfire::{BoundingBox, Coord, FiresDatabase, Geo, KmlFile, SatFireResult, Satellite};
+use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display},
     path::PathBuf,
@@ -179,7 +181,7 @@ fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
     };
 
     if verbose {
-        println!("{}", checked);
+        info!("{}", checked);
     }
 
     Ok(checked)
@@ -189,6 +191,8 @@ fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
 fn main() -> SatFireResult<()> {
+    SimpleLogger::new().init()?;
+
     let opts = parse_args()?;
 
     let db = FiresDatabase::connect(&opts.fires_store_file)?;
@@ -254,7 +258,7 @@ fn main() -> SatFireResult<()> {
                 }
                 Err(err) => {
                     if opts.verbose {
-                        println!("Error reading fire from database: {}", err);
+                        info!("Error reading fire from database: {}", err);
                     }
                 }
             }

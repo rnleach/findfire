@@ -1,9 +1,11 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
+use log::info;
 use satfire::{
     BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlFile, SatFireResult,
     Satellite, Sector,
 };
+use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display},
     path::PathBuf,
@@ -182,7 +184,7 @@ fn parse_args() -> SatFireResult<ShowClustersOptionsChecked> {
     };
 
     if verbose {
-        println!("{}", checked);
+        info!("{}", checked);
     }
 
     Ok(checked)
@@ -192,6 +194,8 @@ fn parse_args() -> SatFireResult<ShowClustersOptionsChecked> {
  *                                             MAIN
  *-----------------------------------------------------------------------------------------------*/
 fn main() -> SatFireResult<()> {
+    SimpleLogger::new().init()?;
+
     let opts = parse_args()?;
 
     let db = ClusterDatabase::connect(&opts.cluster_store_file)?;
@@ -213,7 +217,7 @@ fn main() -> SatFireResult<()> {
                     Ok(row) => row,
                     Err(err) => {
                         if opts.verbose {
-                            println!("Error reading cluster from database: {}", err);
+                            info!("Error reading cluster from database: {}", err);
                         }
                         continue;
                     }
