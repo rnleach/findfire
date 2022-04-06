@@ -4,11 +4,11 @@ use crate::{
     satellite::{DataQualityFlagCode, MaskCode},
     SatFireResult,
 };
-use libc::{c_char, c_double, c_int, c_short, c_void, size_t};
 use once_cell::sync::OnceCell;
 use std::{
     ffi::{CStr, CString},
     io::Read,
+    os::raw::{c_char, c_double, c_int, c_short, c_void},
     path::Path,
     sync::Mutex,
 };
@@ -155,7 +155,7 @@ impl SatFireImage {
                 &mut xdimid as *mut c_int,
             );
             check_error!(status)?;
-            status = nc_inq_dimlen(h, xdimid, &mut xlen as *mut size_t);
+            status = nc_inq_dimlen(h, xdimid, &mut xlen as *mut usize);
             check_error!(status)?;
 
             let mut ydimid: c_int = -1;
@@ -165,7 +165,7 @@ impl SatFireImage {
                 &mut ydimid as *mut c_int,
             );
             check_error!(status)?;
-            status = nc_inq_dimlen(h, ydimid, &mut ylen as *mut size_t);
+            status = nc_inq_dimlen(h, ydimid, &mut ylen as *mut usize);
             check_error!(status)?;
 
             let mut x: c_int = -1;
@@ -308,8 +308,8 @@ impl SatFireImage {
             let mut status = nc_inq_varid(fid, vname, &mut varid as *mut c_int);
             check_error!(status)?;
 
-            let start: [size_t; 2] = [0, 0];
-            let counts: [size_t; 2] = [self.ylen, self.xlen];
+            let start: [usize; 2] = [0, 0];
+            let counts: [usize; 2] = [self.ylen, self.xlen];
             let (start, counts) = (start.as_ptr(), counts.as_ptr());
             status = nc_get_vara_double(fid, varid, start, counts, vals.as_mut_ptr());
             check_error!(status)?;
@@ -356,8 +356,8 @@ impl SatFireImage {
             let mut status = nc_inq_varid(self.nc_file_id, vname, &mut varid as *mut c_int);
             check_error!(status)?;
 
-            let start: [size_t; 2] = [0, 0];
-            let counts: [size_t; 2] = [self.ylen, self.xlen];
+            let start: [usize; 2] = [0, 0];
+            let counts: [usize; 2] = [self.ylen, self.xlen];
 
             status = nc_get_vara_short(
                 self.nc_file_id,
@@ -522,7 +522,7 @@ extern "C" {
     fn nc_open_mem(
         name: *const c_char,
         mode: c_int,
-        buf_size: size_t,
+        buf_size: usize,
         buf: *mut c_void,
         ncidp: *mut c_int,
     ) -> c_int;
@@ -531,7 +531,7 @@ extern "C" {
     fn nc_strerror(code: c_int) -> *const c_char;
 
     fn nc_inq_dimid(handle: c_int, name: *const c_char, rv: *mut c_int) -> c_int;
-    fn nc_inq_dimlen(handle: c_int, dimid: c_int, rv: *mut size_t) -> c_int;
+    fn nc_inq_dimlen(handle: c_int, dimid: c_int, rv: *mut usize) -> c_int;
     fn nc_inq_varid(handle: c_int, name: *const c_char, varid: *mut c_int) -> c_int;
     fn nc_get_att_double(
         handle: c_int,
@@ -542,15 +542,15 @@ extern "C" {
     fn nc_get_vara_short(
         handle: c_int,
         varid: c_int,
-        start: *const size_t,
-        counts: *const size_t,
+        start: *const usize,
+        counts: *const usize,
         vals: *mut c_short,
     ) -> c_int;
     fn nc_get_vara_double(
         handle: c_int,
         varid: c_int,
-        start: *const size_t,
-        counts: *const size_t,
+        start: *const usize,
+        counts: *const usize,
         vals: *mut c_double,
     ) -> c_int;
 }
