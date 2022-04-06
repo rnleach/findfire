@@ -7,6 +7,7 @@ use crate::{
     SatFireResult,
 };
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use log::{info, warn};
 use rusqlite::{Connection, OpenFlags, ToSql};
 use rustc_hash::FxHashMap as HashMap;
 use std::path::Path;
@@ -451,6 +452,8 @@ impl FiresDatabase {
         let latest: DateTime<Utc> = DateTime::from_utc(NaiveDateTime::from_timestamp(ts, 0), Utc);
         let earliest = latest - Duration::days(175);
 
+        info!(target: sat.name(), "Latest fire observation => {}", latest);
+
         const QUERY: &str = include_str!("database/query_most_recent_fires.sql");
         let mut stmt = self.conn.prepare(QUERY)?;
 
@@ -501,12 +504,23 @@ impl FiresDatabase {
                 })
             },
         )?
-        .filter_map(Result::ok)
+        .filter_map(|res| match res {
+            Ok(fire) => Some(fire),
+            Err(err) => {
+                warn!(target: sat.name(), "Error retrieving fire - {}", err);
+                None
+            }
+        })
         .for_each(|fire| fires.add_fire(fire));
 
         let mut waste = FireList::default();
 
+        info!(target: sat.name(), "Retrieved {} fires from database.", fires.len());
+
         fires.drain_stale_fires(&mut waste, latest);
+
+        info!(target: sat.name(), "Retrieved {} fires from database after filtering out stale fires.",
+            fires.len());
 
         Ok(fires)
     }
