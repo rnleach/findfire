@@ -511,11 +511,13 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     let duration_since_last_observed = current_time - fire.last_observed;
     let wildfire_duration = fire.duration();
 
-    if duration_since_last_observed < Duration::days(4) {
-        // Give it at least four days to come back to life again.
+    if duration_since_last_observed < Duration::days(3) {
+        // Give it at least three days to come back to life again.
         return false;
     }
 
-    duration_since_last_observed > Duration::days(30)
+    // If it's been gone for 2 weeks, let it be gone. Otherwise, if it's been gone longer than it
+    // was ever here, let it go. 
+    duration_since_last_observed > Duration::days(14)
         || wildfire_duration < duration_since_last_observed
 }
