@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use log::{error, info};
+use log::{error, info, warn};
 use satfire::{
     BoundingBox, ClusterDatabase, Coord, Fire, FireList, FireListUpdateResult, FireListView,
     FiresDatabase, SatFireResult, Satellite,
@@ -10,7 +10,7 @@ use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, AtomicBool, Ordering},
     thread::{self, JoinHandle},
 };
 
@@ -20,6 +20,7 @@ use strum::IntoEnumIterator;
  *                                        Global State
  *-----------------------------------------------------------------------------------------------*/
 static NEXT_WILDFIRE_ID: AtomicU64 = AtomicU64::new(0);
+static SHUT_DOWN: AtomicBool = AtomicBool::new(false);
 
 /*-------------------------------------------------------------------------------------------------
  *                                     Command Line Options
@@ -296,6 +297,11 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
             to_db_filler
                 .send(DatabaseMessage::Fires(std::mem::take(&mut old_fires)))
                 .expect("Error sending Fires message to database:");
+
+            if SHUT_DOWN.load(Ordering::SeqCst) {
+                warn!(target: sat.name(), "Shutting down early.");
+                break;
+            }
         }
 
         num_new += current_fires.extend(&mut new_fires);
@@ -397,10 +403,30 @@ fn database_filler(
     })
 }
 
+
+/*-------------------------------------------------------------------------------------------------
+ *                                       Signal Handlers
+ *-----------------------------------------------------------------------------------------------*/
+fn register_signal_handlers() {
+    unsafe {
+        libc::signal(libc::SIGTERM, handle_shutdown_signal as usize);
+        libc::signal(libc::SIGQUIT, handle_shutdown_signal as usize);
+        libc::signal(libc::SIGINT, handle_shutdown_signal as usize);
+    }
+}
+
+fn handle_shutdown_signal(_signal: libc::c_int) {
+    register_signal_handlers();
+
+    SHUT_DOWN.store(true, Ordering::SeqCst);
+}
+
 /*-------------------------------------------------------------------------------------------------
  *                                             Main
  *-----------------------------------------------------------------------------------------------*/
 fn main() -> SatFireResult<()> {
+    register_signal_handlers();
+
     SimpleLogger::new().init()?;
 
     let opts = parse_args()?;
