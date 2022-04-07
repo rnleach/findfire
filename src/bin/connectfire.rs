@@ -10,7 +10,7 @@ use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     thread::{self, JoinHandle},
 };
 
@@ -402,7 +402,6 @@ fn database_filler(
         Ok(())
     })
 }
-
 
 /*-------------------------------------------------------------------------------------------------
  *                                       Signal Handlers

@@ -517,7 +517,7 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     }
 
     // If it's been gone for 2 weeks, let it be gone. Otherwise, if it's been gone longer than it
-    // was ever here, let it go. 
+    // was ever here, let it go.
     duration_since_last_observed > Duration::days(14)
         || wildfire_duration < duration_since_last_observed
 }
