@@ -1,13 +1,14 @@
 use super::*;
 use std::ops::ControlFlow;
 
-const RTREE_CHILDREN_PER_NODE: usize = 4;
+const RTREE_CHILDREN_PER_NODE: usize = 8;
 const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-5;
 
 #[derive(Debug)]
 enum RTreeNode {
     Node {
         bbox: BoundingBox,
+        children_overlap: bool,
         children: Vec<RTreeNode>,
     },
     Leaf {
@@ -48,16 +49,34 @@ impl RTreeNode {
             },
         };
 
-        for child in &children {
-            let child_box = child.bounding_box();
-
+        let mut children_overlap = false;
+        for (i, child_box) in children.iter().map(|c| c.bounding_box()).enumerate() {
             bbox.ll.lat = bbox.ll.lat.min(child_box.ll.lat);
             bbox.ll.lon = bbox.ll.lon.min(child_box.ll.lon);
             bbox.ur.lat = bbox.ur.lat.max(child_box.ur.lat);
             bbox.ur.lon = bbox.ur.lon.max(child_box.ur.lon);
+
+            // Only check if we haven't already found an overlap.
+            if !children_overlap {
+                for other_child_box in children
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| *j != i) // Don't check a box for overlap against itself!
+                    .map(|(_, c)| c.bounding_box())
+                {
+                    if child_box.overlap(&other_child_box, OVERLAP_FUDGE_FACTOR) {
+                        children_overlap = true;
+                        break;
+                    }
+                }
+            }
         }
 
-        Self::Node { bbox, children }
+        Self::Node {
+            bbox,
+            children,
+            children_overlap,
+        }
     }
 
     fn num_children(&self) -> usize {
@@ -104,55 +123,97 @@ impl RTreeNode {
         T: Geo,
         F: FnMut(&mut T, usize, V) -> (bool, ControlFlow<V, V>) + Copy,
     {
-        if self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
-            match self {
-                Self::Leaf { index, bbox, .. } => {
-                    let (updated, rv) = update(&mut data[*index], *index, user_data);
+        if !self.bounding_box().overlap(region, OVERLAP_FUDGE_FACTOR) {
+            return (false, ControlFlow::Continue(user_data));
+        }
 
-                    if updated {
-                        *bbox = data[*index].bounding_box();
-                    }
-                    (updated, rv)
+        match self {
+            Self::Leaf { index, bbox, .. } => {
+                let (updated, rv) = update(&mut data[*index], *index, user_data);
+
+                if updated {
+                    *bbox = data[*index].bounding_box();
                 }
-                Self::Node { children, bbox } => {
-                    let mut user_data = user_data;
-                    let mut updated = false;
-                    let mut keep_going = true;
-                    for child in children {
-                        let (local_updated, rv) = child.foreach(data, region, update, user_data);
+                (updated, rv)
+            }
+            Self::Node {
+                children,
+                children_overlap,
+                bbox,
+            } => {
+                let mut user_data = user_data;
+                let mut updated = false;
+                let mut keep_going = true;
+                for child in children.iter_mut() {
+                    let (local_updated, rv) = child.foreach(data, region, update, user_data);
 
-                        if local_updated {
-                            let child_box = child.bounding_box();
+                    if local_updated {
+                        let child_box = child.bounding_box();
 
-                            bbox.ll.lat = bbox.ll.lat.min(child_box.ll.lat);
-                            bbox.ll.lon = bbox.ll.lon.min(child_box.ll.lon);
-                            bbox.ur.lat = bbox.ur.lat.max(child_box.ur.lat);
-                            bbox.ur.lon = bbox.ur.lon.max(child_box.ur.lon);
+                        bbox.ll.lat = bbox.ll.lat.min(child_box.ll.lat);
+                        bbox.ll.lon = bbox.ll.lon.min(child_box.ll.lon);
+                        bbox.ur.lat = bbox.ur.lat.max(child_box.ur.lat);
+                        bbox.ur.lon = bbox.ur.lon.max(child_box.ur.lon);
 
-                            updated = true;
+                        updated = true;
+                    }
+
+                    match rv {
+                        ControlFlow::Continue(value) => user_data = value,
+                        ControlFlow::Break(value) => {
+                            user_data = value;
+                            keep_going = false;
+                            break;
                         }
+                    }
+                }
 
-                        match rv {
-                            ControlFlow::Continue(value) => user_data = value,
-                            ControlFlow::Break(value) => {
-                                user_data = value;
-                                keep_going = false;
+                // Check to see if expanding has caused any children to overlap.
+                if !*children_overlap && updated {
+                    for (i, child_box) in children.iter().map(|c| c.bounding_box()).enumerate() {
+                        for other_child_box in children
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, _)| i != *j)
+                            .map(|(_, c)| c.bounding_box())
+                        {
+                            if child_box.overlap(&other_child_box, OVERLAP_FUDGE_FACTOR) {
+                                *children_overlap = true;
                                 break;
                             }
                         }
+
+                        if *children_overlap {
+                            break;
+                        }
                     }
+                }
 
-                    let user_data = if keep_going {
-                        ControlFlow::Continue(user_data)
-                    } else {
-                        ControlFlow::Break(user_data)
-                    };
+                let user_data = if keep_going {
+                    ControlFlow::Continue(user_data)
+                } else {
+                    ControlFlow::Break(user_data)
+                };
 
-                    (updated, user_data)
+                (updated, user_data)
+            }
+        }
+    }
+
+    fn get_indexes_of_potential_overlap(&self, buffer: &mut Vec<usize>) {
+        match self {
+            Self::Leaf { index, .. } => buffer.push(*index),
+            Self::Node {
+                children,
+                children_overlap,
+                ..
+            } => {
+                if *children_overlap {
+                    for child in children {
+                        child.get_indexes_of_potential_overlap(buffer);
+                    }
                 }
             }
-        } else {
-            (false, ControlFlow::Continue(user_data))
         }
     }
 }
@@ -241,6 +302,17 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
         } else {
             user_data
         }
+    }
+
+    /// Get the indexes of items which potentially overlap other items.
+    pub fn indexes_of_potential_overlap(&self) -> Vec<usize> {
+        let mut buffer = Vec::with_capacity(self.data.len() / 1_000);
+
+        if self.root.num_children() > 0 {
+            self.root.get_indexes_of_potential_overlap(&mut buffer);
+        }
+
+        buffer
     }
 
     fn build_domain(data: &[T]) -> BoundingBox {

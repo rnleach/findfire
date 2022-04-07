@@ -324,7 +324,9 @@ impl FireList {
                 if let Some(mut view) =
                     Hilbert2DRTreeView::build_for(secret_slice, Some(FULL_DOMAIN))
                 {
-                    for index in 0..iteration_size {
+                    let potential_overlaps = view.indexes_of_potential_overlap();
+
+                    for index in potential_overlaps {
                         // Safe because index is in range as defined by iteration_size.
                         let fire = &mut *(self.0.get_unchecked_mut(index) as *mut Fire);
 
