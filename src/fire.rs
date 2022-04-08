@@ -515,14 +515,24 @@ impl<'a> FireListView<'a> {
 
 fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     let duration_since_last_observed = current_time - fire.last_observed;
-    let wildfire_duration = fire.duration();
 
+    // Minimum time to stick around.
     if duration_since_last_observed < Duration::days(4) {
         return false;
     }
 
-    // If it's been gone for this long, let it be gone. Otherwise, if it's been gone longer than it
-    // was ever here, let it go.
-    duration_since_last_observed > Duration::days(30)
-        || wildfire_duration < duration_since_last_observed
+    // Maximum time to stick around after being last observed.
+    if duration_since_last_observed > Duration::days(30) {
+        return true;
+    }
+
+    // Let larger fires stick around longer.
+    let num_pixels = fire.area.len() as i64;
+    if Duration::days(2 * num_pixels) > duration_since_last_observed {
+        return false;
+    }
+
+    // If it's been out longer than it burned, let it go.
+    let wildfire_duration = fire.duration();
+    wildfire_duration < duration_since_last_observed
 }
