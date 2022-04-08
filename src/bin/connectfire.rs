@@ -324,7 +324,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
         }
         (None, None) => sat.operational(),
     };
-    let end = end.unwrap_or_else(||Utc::now());
+    let end = end.unwrap_or_else(|| Utc::now());
 
     drop(db);
 
