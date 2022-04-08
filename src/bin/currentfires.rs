@@ -1,5 +1,5 @@
-use clap::Parser;
 use chrono::Duration;
+use clap::Parser;
 use log::info;
 use satfire::{FireList, FiresDatabase, SatFireResult, Satellite};
 use simple_logger::SimpleLogger;
