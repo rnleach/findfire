@@ -1,4 +1,5 @@
 use clap::Parser;
+use chrono::Duration;
 use log::info;
 use satfire::{FireList, FiresDatabase, SatFireResult, Satellite};
 use simple_logger::SimpleLogger;
@@ -139,7 +140,7 @@ fn main() -> SatFireResult<()> {
         info!("Retrieved {} fires.", active_fires.len());
     }
 
-    active_fires.save_kml(&opts.kml_file)?;
+    active_fires.save_kml(Duration::days(1), &opts.kml_file)?;
 
     Ok(())
 }
