@@ -425,7 +425,7 @@ impl FiresDatabase {
     }
 
     /// Get the most recent start time
-    pub fn last_observed(&self, sat: Satellite) -> DateTime<Utc> {
+    pub fn last_observed(&self, sat: Satellite) -> Option<DateTime<Utc>> {
         self.conn
             .query_row(
                 "SELECT MAX(last_observed) FROM fires WHERE satellite = ?",
@@ -435,7 +435,7 @@ impl FiresDatabase {
             .map(|time_stamp| {
                 DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(time_stamp, 0), Utc)
             })
-            .unwrap_or_else(|_| sat.operational())
+            .ok()
     }
 
     /// Get the fires that are still going.

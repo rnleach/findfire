@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{NaiveDateTime, DateTime, Duration, NaiveDate, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{error, info, warn};
@@ -39,6 +39,11 @@ static SHUT_DOWN: AtomicBool = AtomicBool::new(false);
 #[clap(bin_name = "connectfire")]
 #[clap(author, version, about)]
 struct ConnectFireOptions {
+    /// The start date, do not try to connect fire before this date. 
+    #[clap(short, long)]
+    #[clap(parse(try_from_str=parse_datetime))]
+    start: Option<DateTime<Utc>>,
+
     /// The path to the database file with the clusters.
     ///
     /// If this is not specified, then the program will check for it in the "CLUSTER_DB"
@@ -58,6 +63,15 @@ struct ConnectFireOptions {
     /// Verbose output
     #[clap(short, long)]
     verbose: bool,
+}
+
+/// Parse a command line datetime
+fn parse_datetime(dt_str: &str) -> SatFireResult<DateTime<Utc>> {
+    const TIME_FORMAT: &str = "%Y-%m-%d-%H:%M:%S";
+    let t_str = format!("{}:00:00", dt_str);
+
+    let naive = NaiveDateTime::parse_from_str(&t_str, TIME_FORMAT)?;
+    Ok(DateTime::from_utc(naive, Utc))
 }
 
 impl Display for ConnectFireOptions {
@@ -224,6 +238,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     clusters_db_store: P2,
     sat: Satellite,
     area: BoundingBox,
+    start: Option<DateTime<Utc>>,
     kml_path: P3,
     to_db_filler: Sender<DatabaseMessage>,
     verbose: bool,
@@ -242,7 +257,19 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     let mut new_fires = FireList::new();
     let mut old_fires = FireList::new();
 
-    let start = db.last_observed(sat);
+    let start = if let (Some(start), Some(last_observed)) = (start, db.last_observed(sat)) {
+        if last_observed < start {
+            panic!("Database already started before but not complete up to: {}", start);
+        }
+
+        if last_observed > start {
+            last_observed
+        } else {
+            start
+        }
+    } else {
+        sat.operational()
+    };
     let end = Utc::now();
 
     drop(db);
@@ -469,6 +496,7 @@ fn main() -> SatFireResult<()> {
                 clusters_store_file,
                 sat,
                 area,
+                opts.start,
                 kml_path,
                 send_to_db_filler,
                 opts.verbose,
