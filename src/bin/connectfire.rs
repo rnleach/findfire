@@ -352,7 +352,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
     let num_new = current_fires.extend(&mut new_fires);
 
-    current_fires.save_kml(kml_path)?;
+    current_fires.save_kml(Duration::days(1), kml_path)?;
 
     if verbose {
         info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",

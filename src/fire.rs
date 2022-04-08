@@ -409,7 +409,11 @@ impl FireList {
     }
 
     /// Save this list in a KML file.
-    pub fn save_kml<P: AsRef<Path>>(&self, kml_path: P) -> SatFireResult<()> {
+    pub fn save_kml<P: AsRef<Path>>(
+        &self,
+        minimum_duration: Duration,
+        kml_path: P,
+    ) -> SatFireResult<()> {
         let mut kml = KmlFile::start_document(kml_path)?;
 
         kml.start_style(Some("fire"))?;
@@ -422,7 +426,7 @@ impl FireList {
         let mut name = String::with_capacity(32);
         let mut description = String::with_capacity(256);
         let mut duration_buf = String::with_capacity(64);
-        for fire in self.iter() {
+        for fire in self.iter().filter(|f| f.duration() >= minimum_duration) {
             name.clear();
             let _ = write!(&mut name, "{}", fire.id());
 
@@ -513,8 +517,8 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     let duration_since_last_observed = current_time - fire.last_observed;
     let wildfire_duration = fire.duration();
 
-    if duration_since_last_observed < Duration::days(3) {
-        // Give it at least three days to come back to life again.
+    if duration_since_last_observed < Duration::hours(36) {
+        // Give it at least a day and a half
         return false;
     }
 

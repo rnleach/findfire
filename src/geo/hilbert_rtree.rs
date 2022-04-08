@@ -1,7 +1,7 @@
 use super::*;
 use std::ops::ControlFlow;
 
-const RTREE_CHILDREN_PER_NODE: usize = 8;
+const RTREE_CHILDREN_PER_NODE: usize = 4;
 const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-5;
 
 #[derive(Debug)]
@@ -306,7 +306,7 @@ impl<'a, T: Geo> Hilbert2DRTreeView<'a, T> {
 
     /// Get the indexes of items which potentially overlap other items.
     pub fn indexes_of_potential_overlap(&self) -> Vec<usize> {
-        let mut buffer = Vec::with_capacity(self.data.len() / 1_000);
+        let mut buffer = Vec::with_capacity(self.data.len() / 100);
 
         if self.root.num_children() > 0 {
             self.root.get_indexes_of_potential_overlap(&mut buffer);
