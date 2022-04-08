@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{error, info, warn};
@@ -39,10 +39,20 @@ static SHUT_DOWN: AtomicBool = AtomicBool::new(false);
 #[clap(bin_name = "connectfire")]
 #[clap(author, version, about)]
 struct ConnectFireOptions {
-    /// The start date, do not try to connect fire before this date. 
+    /// The start date, do not try to connect clusters before this date.
     #[clap(short, long)]
     #[clap(parse(try_from_str=parse_datetime))]
     start: Option<DateTime<Utc>>,
+
+    /// The end date, do not try to connect clusters after this date.
+    #[clap(short, long)]
+    #[clap(parse(try_from_str=parse_datetime))]
+    end: Option<DateTime<Utc>>,
+
+    /// Bounding Box where as bottom_lat,left_lon,top_lat,right_lon
+    #[clap(parse(try_from_str=parse_bbox))]
+    #[clap(default_value_t=BoundingBox{ll:Coord{lat: -90.0, lon: -180.0}, ur:Coord{lat: 90.0, lon: 180.0}})]
+    bbox: BoundingBox,
 
     /// The path to the database file with the clusters.
     ///
@@ -63,6 +73,53 @@ struct ConnectFireOptions {
     /// Verbose output
     #[clap(short, long)]
     verbose: bool,
+}
+
+/// Parse a bounding box argument.
+fn parse_bbox(bbox_str: &str) -> SatFireResult<BoundingBox> {
+    let corners: Vec<_> = bbox_str.split(',').collect();
+
+    if corners.len() < 4 {
+        return Err("Invalid number of coords".into());
+    }
+
+    let min_lat = corners[0].parse()?;
+    let min_lon = corners[1].parse()?;
+    let max_lat = corners[2].parse()?;
+    let max_lon = corners[3].parse()?;
+
+    if min_lat >= max_lat || min_lon >= max_lon {
+        return Err(format!(
+            concat!(
+                "Minimum Lat/Lon must be less than Maximum Lat/Lon:",
+                " min_lat={} max_lat={} min_lon={} max_lon={}"
+            ),
+            min_lat, max_lat, min_lon, max_lon
+        )
+        .into());
+    }
+
+    if min_lat < -90.0 || max_lat > 90.0 || min_lon < -180.0 || max_lon > 180.0 {
+        return Err(format!(
+            concat!(
+                "Lat/Lon are out of range (-90.0 to 90.0 and -180.0 to 180.0):",
+                " min_lat={} max_lat={} min_lon={} max_lon={}"
+            ),
+            min_lat, max_lat, min_lon, max_lon
+        )
+        .into());
+    }
+
+    let ll = Coord {
+        lat: min_lat,
+        lon: min_lon,
+    };
+    let ur = Coord {
+        lat: max_lat,
+        lon: max_lon,
+    };
+
+    Ok(BoundingBox { ll, ur })
 }
 
 /// Parse a command line datetime
@@ -239,6 +296,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     sat: Satellite,
     area: BoundingBox,
     start: Option<DateTime<Utc>>,
+    end: Option<DateTime<Utc>>,
     kml_path: P3,
     to_db_filler: Sender<DatabaseMessage>,
     verbose: bool,
@@ -247,32 +305,38 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
 
     let mut current_fires = db.ongoing_fires(sat)?;
 
+    let start = match (start, db.last_observed(sat)) {
+        (Some(start), None) => start,
+        (None, Some(last_observed)) => last_observed,
+        (Some(start), Some(last_observed)) => {
+            if last_observed < start {
+                panic!(
+                    "Database already started before but not complete up to: {}",
+                    start
+                );
+            }
+
+            if last_observed > start {
+                last_observed
+            } else {
+                start
+            }
+        }
+        (None, None) => sat.operational(),
+    };
+    let end = end.unwrap_or_else(||Utc::now());
+
+    drop(db);
+
     if verbose {
-        info!(target: "startup", "Retrieved {} ongoing fires for satellite {}.", 
-            current_fires.len(), sat.name());
-        info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
-            "scan start time", "Absorbed", "Merged", "Old", "New", "Active");
+        info!(target: sat.name(), "Using start time of {}", start);
+        info!(target: sat.name(), "Using end time of {}", end);
+        info!(target: sat.name(), "Using bounding box of {}", area);
+        info!(target: sat.name(), "Retrieved {} ongoing fires.", current_fires.len());
     }
 
     let mut new_fires = FireList::new();
     let mut old_fires = FireList::new();
-
-    let start = if let (Some(start), Some(last_observed)) = (start, db.last_observed(sat)) {
-        if last_observed < start {
-            panic!("Database already started before but not complete up to: {}", start);
-        }
-
-        if last_observed > start {
-            last_observed
-        } else {
-            start
-        }
-    } else {
-        sat.operational()
-    };
-    let end = Utc::now();
-
-    drop(db);
 
     let db = ClusterDatabase::connect(clusters_db_store.as_ref())?;
     let mut stats = FireStats::new(sat);
@@ -467,20 +531,14 @@ fn main() -> SatFireResult<()> {
         info!(target: "startup", "Next fire ID {}", next_id);
     }
 
-    let area = BoundingBox {
-        ll: Coord {
-            lat: -90.0,
-            lon: -180.0,
-        },
-        ur: Coord {
-            lat: 90.0,
-            lon: 180.0,
-        },
-    };
-
     let (send_to_db_filler, from_processing) = bounded(1024);
 
     let mut jh_processing = Vec::with_capacity(Satellite::iter().count());
+
+    if opts.verbose {
+        info!(target: "startup", "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
+            "scan start time", "Absorbed", "Merged", "Old", "New", "Active");
+    }
 
     for sat in Satellite::iter() {
         let mut kml_path = opts.clusters_store_file.clone();
@@ -495,8 +553,9 @@ fn main() -> SatFireResult<()> {
                 fires_store_file,
                 clusters_store_file,
                 sat,
-                area,
+                opts.bbox,
                 opts.start,
+                opts.end,
                 kml_path,
                 send_to_db_filler,
                 opts.verbose,
