@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use clap::Parser;
 use log::info;
 use satfire::{BoundingBox, Coord, FiresDatabase, Geo, KmlFile, SatFireResult, Satellite};
@@ -48,6 +48,11 @@ struct ShowFiresOptionsInit {
     #[clap(parse(try_from_str=parse_bbox))]
     #[clap(default_value_t=BoundingBox{ll:Coord{lat: 44.0, lon: -116.5}, ur:Coord{lat: 49.5, lon: -104.0}})]
     bbox: BoundingBox,
+
+    /// The minimum duration for which to output a fire. Shorter fires will not be shown. Days.
+    #[clap(short, long)]
+    #[clap(default_value_t = 0)]
+    minimum_days: i64,
 
     /// Verbose output
     #[clap(short, long)]
@@ -127,6 +132,9 @@ struct ShowFiresOptionsChecked {
     /// Verbose output
     verbose: bool,
 
+    /// The minimum duration of a fire in days in order for it to be output.
+    minimum_days: Duration,
+
     /// Bounding Box
     bbox: BoundingBox,
 }
@@ -134,13 +142,14 @@ struct ShowFiresOptionsChecked {
 impl Display for ShowFiresOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
-        writeln!(f, "    Database: {}", self.fires_store_file.display())?;
-        writeln!(f, "  Output KML: {}", self.kml_file.display())?;
-        writeln!(f, "       Start: {}", self.start)?;
-        writeln!(f, "         End: {}", self.end)?;
+        writeln!(f, "        Database: {}", self.fires_store_file.display())?;
+        writeln!(f, "      Output KML: {}", self.kml_file.display())?;
+        writeln!(f, "           Start: {}", self.start)?;
+        writeln!(f, "             End: {}", self.end)?;
+        writeln!(f, "Minimum Duration: {}", self.minimum_days)?;
         writeln!(
             f,
-            "Bounding Box: ({:.6}, {:.6}) <---> ({:.6}, {:.6})",
+            "    Bounding Box: ({:.6}, {:.6}) <---> ({:.6}, {:.6})",
             self.bbox.ll.lat, self.bbox.ll.lon, self.bbox.ur.lat, self.bbox.ur.lon
         )?;
         writeln!(f, "\n")?; // yes, two blank lines.
@@ -158,6 +167,7 @@ fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
         kml_file,
         start,
         end,
+        minimum_days,
         bbox,
         verbose,
     } = ShowFiresOptionsInit::parse();
@@ -176,6 +186,7 @@ fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
         kml_file,
         start,
         end,
+        minimum_days: Duration::days(minimum_days),
         bbox,
         verbose,
     };
@@ -217,6 +228,10 @@ fn main() -> SatFireResult<()> {
         for fire_res in query.rows()? {
             match fire_res {
                 Ok(fire) => {
+                    if fire.duration() < opts.minimum_days {
+                        continue;
+                    }
+
                     let pixels = fire.pixels();
                     let Coord { lat, lon } = fire.centroid();
 
