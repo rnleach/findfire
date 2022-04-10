@@ -123,6 +123,11 @@ impl Fire {
         self.id
     }
 
+    /// Get the id of the fire this was merged into. 
+    pub fn merged_into(&self) -> u64  {
+        self.merged_into
+    }
+
     /// Get the time this fire was first observed.
     pub fn first_observed(&self) -> DateTime<Utc> {
         self.first_observed
@@ -485,7 +490,18 @@ pub struct FireListView<'a> {
 impl<'a> FireListView<'a> {
     /// Create a new view of a FireList.
     pub fn new(fire_list: &'a mut FireList) -> Option<Self> {
-        let view_opt = Hilbert2DRTreeView::build_for(&mut fire_list.0, None);
+        const FULL_DOMAIN: BoundingBox = BoundingBox {
+            ll: Coord {
+                lat: -90.0,
+                lon: -180.0,
+            },
+            ur: Coord {
+                lat: 90.0,
+                lon: 180.0,
+            },
+        };
+
+        let view_opt = Hilbert2DRTreeView::build_for(&mut fire_list.0, Some(FULL_DOMAIN));
 
         view_opt.map(|view| Self { view })
     }

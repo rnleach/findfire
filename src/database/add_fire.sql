@@ -1,5 +1,6 @@
 INSERT OR REPLACE INTO fires (
     fire_id,
+    merged_into,
     satellite,
     first_observed,
     last_observed,
@@ -8,5 +9,5 @@ INSERT OR REPLACE INTO fires (
     max_power,
     max_temperature,
     pixels)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 

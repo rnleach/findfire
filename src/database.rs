@@ -619,6 +619,7 @@ impl<'a> FiresDatabaseAddFire<'a> {
 
             self.fire_stmt.execute([
                 &fire.id() as &dyn ToSql,
+                &fire.merged_into(),
                 &fire.satellite().name(),
                 &fire.first_observed().timestamp(),
                 &fire.last_observed().timestamp(),
