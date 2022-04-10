@@ -9,4 +9,4 @@ SELECT
   max_temperature, 
   pixels 
 FROM fires 
-WHERE last_observed > ? AND satellite = ?
+WHERE last_observed > ? AND satellite = ? AND merged_into = 0

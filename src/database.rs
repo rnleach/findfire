@@ -494,6 +494,7 @@ impl FiresDatabase {
 
                 Ok(Fire {
                     id,
+                    merged_into: 0,
                     area,
                     first_observed,
                     last_observed,
@@ -559,6 +560,7 @@ impl FiresDatabase {
         let query = &format!(
             r#"SELECT
                  fire_id,
+                 merged_into,
                  satellite,
                  first_observed,
                  last_observed,
@@ -657,7 +659,9 @@ impl<'a> FiresDatabaseQueryFires<'a> {
         Ok(self.stmt.query_and_then([], |row| -> SatFireResult<Fire> {
             let id: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
 
-            let sat = match row.get_ref(1)? {
+            let merged_into: u64 = u64::try_from(row.get::<_, i64>(1)?)?;
+
+            let sat = match row.get_ref(2)? {
                 rusqlite::types::ValueRef::Text(txt) => {
                     let txt = unsafe { std::str::from_utf8_unchecked(txt) };
                     Satellite::string_contains_satellite(txt).ok_or("Invalid sattelite")
@@ -666,18 +670,18 @@ impl<'a> FiresDatabaseQueryFires<'a> {
             }?;
 
             let first_observed: DateTime<Utc> =
-                DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(2)?, 0), Utc);
-            let last_observed: DateTime<Utc> =
                 DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
+            let last_observed: DateTime<Utc> =
+                DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
 
-            let lat: f64 = row.get(4)?;
-            let lon: f64 = row.get(5)?;
+            let lat: f64 = row.get(5)?;
+            let lon: f64 = row.get(6)?;
             let centroid = Coord { lat, lon };
 
-            let max_power: f64 = row.get(6)?;
-            let max_temperature: f64 = row.get(7)?;
+            let max_power: f64 = row.get(7)?;
+            let max_temperature: f64 = row.get(8)?;
 
-            let area = match row.get_ref(8)? {
+            let area = match row.get_ref(9)? {
                 rusqlite::types::ValueRef::Blob(bytes) => {
                     let mut cursor = std::io::Cursor::new(bytes);
                     Ok(PixelList::binary_deserialize(&mut cursor))
@@ -687,6 +691,7 @@ impl<'a> FiresDatabaseQueryFires<'a> {
 
             Ok(Fire {
                 id,
+                merged_into,
                 area,
                 first_observed,
                 last_observed,

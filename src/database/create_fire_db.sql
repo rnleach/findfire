@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS fires (
   fire_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  merged_into     INTEGER NOT NULL,
   satellite       TEXT    NOT NULL,
   first_observed  INTEGER NOT NULL,  --unix timestamp
   last_observed   INTEGER NOT NULL,  --unix timestamp

@@ -53,6 +53,9 @@ pub struct Fire {
     pub(crate) area: PixelList,
     /// The satellite the Clusters that were a part of this fire were observed with.
     pub(crate) sat: Satellite,
+    /// If this fire was merged into another, what was the identity of that fire. The value 0
+    /// implies it has not yet been merged into another fire. 
+    pub(crate) merged_into: u64,
 }
 
 impl Display for Fire {
@@ -111,6 +114,7 @@ impl Fire {
             id,
             area: initial.pixels,
             sat: initial.sat,
+            merged_into: 0,
         }
     }
 
@@ -167,8 +171,14 @@ impl Fire {
     }
 
     /// Merge two wildfires.
-    fn merge_with(&mut self, right: &Self) {
+    fn merge_with(&mut self, right: &mut Self) {
         debug_assert_eq!(self.sat, right.sat);
+
+        // The fire with the lower valued for the id was created first, so prefer to keep it
+        // around.
+        if self.id > right.id {
+            std::mem::swap(self, right);
+        }
 
         if right.first_observed < self.first_observed {
             self.first_observed = right.first_observed;
@@ -184,6 +194,8 @@ impl Fire {
         self.centroid = self.area.centroid();
         self.max_power = self.max_power.max(right.max_power);
         self.max_temperature = self.max_temperature.max(right.max_temperature);
+
+        right.merged_into = self.id;
     }
 
     /// Format the duration in an easy to read way.
