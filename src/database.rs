@@ -615,6 +615,7 @@ impl<'a> FiresDatabaseAddFire<'a> {
                 &lon,
                 &fire.max_power(),
                 &fire.max_temperature(),
+                &fire.pixels().len(),
                 &pixels,
             ])?;
         }

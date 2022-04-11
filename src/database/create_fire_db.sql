@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS fires (
   lon             REAL    NOT NULL,
   max_power       REAL    NOT NULL,
   max_temperature REAL    NOT NULL,
+  num_pixels      INTEGER NOT NULL,  -- number of pixels in the pixels object.
   pixels          BLOB    NOT NULL);
 
 -- These are associations between fires and clusters.
