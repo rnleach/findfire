@@ -8,6 +8,8 @@ use std::{
     mem::size_of,
 };
 
+const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-2;
+
 /// The coordinates describing the area of a pixel viewed from a GOES satellite.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -569,7 +571,7 @@ impl PixelList {
             let mut is_new = true;
 
             for pixel in self.0.iter_mut() {
-                if pixel.approx_equal(other_pixel, 1.0e-5) {
+                if pixel.approx_equal(other_pixel, OVERLAP_FUDGE_FACTOR) {
                     pixel.max_merge(other_pixel);
                     is_new = false;
                     break;

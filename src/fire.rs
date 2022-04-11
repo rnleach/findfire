@@ -13,6 +13,8 @@ use std::{
     path::Path,
 };
 
+const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-2;
+
 /**
  * The aggregate properties of a temporally connected group of [Cluster](crate::Cluster) objects.
  *
@@ -318,8 +320,8 @@ impl FireList {
         let cluster_bbox = cluster_pixels.bounding_box();
 
         for fire in self.0.iter_mut() {
-            if cluster_bbox.overlap(&fire.bounding_box(), 1.0e-5) {
-                if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
+            if cluster_bbox.overlap(&fire.bounding_box(), OVERLAP_FUDGE_FACTOR) {
+                if cluster_pixels.adjacent_to_or_overlaps(&fire.area, OVERLAP_FUDGE_FACTOR) {
                     fire.update(&row);
                     return FireListUpdateResult::Match(fire.id);
                 }
@@ -392,7 +394,7 @@ impl FireList {
                                     || to_del_set.contains(&candidate_index)
                                     || !fire
                                         .area
-                                        .adjacent_to_or_overlaps(&candidate_fire.area, 1.0e-5)
+                                        .adjacent_to_or_overlaps(&candidate_fire.area, OVERLAP_FUDGE_FACTOR)
                                 {
                                     (false, ControlFlow::Continue((to_del_set, fire)))
                                 } else {
@@ -557,7 +559,7 @@ impl<'a> FireListView<'a> {
             FireListUpdateResult::NoMatch(row),
             |fire, _fire_idx, matched| match matched {
                 FireListUpdateResult::NoMatch(row) => {
-                    if row.pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
+                    if row.pixels.adjacent_to_or_overlaps(&fire.area, OVERLAP_FUDGE_FACTOR) {
                         fire.update(&row);
                         (
                             true,

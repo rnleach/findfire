@@ -2,7 +2,7 @@ use super::*;
 use std::ops::ControlFlow;
 
 const RTREE_CHILDREN_PER_NODE: usize = 4;
-const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-5;
+const OVERLAP_FUDGE_FACTOR: f64 = 1.0e-2;
 
 #[derive(Debug)]
 enum RTreeNode {
