@@ -3,8 +3,6 @@ SELECT
   satellite,
   first_observed, 
   last_observed, 
-  lat, 
-  lon, 
   max_power, 
   max_temperature, 
   pixels 

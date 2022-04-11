@@ -357,7 +357,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
             let start = cluster.start;
 
             if start != current_time_step {
-                let mut next_group = vec![];
+                let mut next_group = Vec::with_capacity(group.capacity());
                 std::mem::swap(&mut next_group, group);
 
                 let group_time = current_time_step;
@@ -418,7 +418,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
                     Ok(_) => {}
                     Err(err) => {
                         error!("Error sending Association message to database: {}", err);
-                        return Err(err.into());
+                        return Err("Unable to send to_db_filler".into());
                     }
                 }
             }
@@ -432,7 +432,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
                     Ok(_) => {}
                     Err(err) => {
                         error!("Error sending Association message to database: {}", err);
-                        return Err(err.into());
+                        return Err("Unable to send to_db_filler".into());
                     }
                 }
             }
@@ -456,7 +456,9 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     assert!(current_fires.is_empty());
     assert!(new_fires.is_empty());
 
-    to_db_filler.send(DatabaseMessage::Fires(old_fires))?;
+    to_db_filler
+        .send(DatabaseMessage::Fires(old_fires))
+        .map_err(|_| "Undable to send to_db_filler".to_owned())?;
 
     if verbose {
         info!(target: "stats", "{}", stats);

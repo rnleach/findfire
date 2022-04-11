@@ -7,6 +7,7 @@ use crate::{
 };
 use chrono::{DateTime, Duration, Utc};
 use std::{
+    cell::Cell,
     fmt::{self, Display, Write},
     ops::ControlFlow,
     path::Path,
@@ -30,92 +31,109 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Fire {
     /// The scan start time of the first Cluster where this fire was detected.
-    pub(crate) first_observed: DateTime<Utc>,
+    first_observed: DateTime<Utc>,
     /// The scan end time of the last Cluster where this fire was detected.
-    pub(crate) last_observed: DateTime<Utc>,
-    /// The centroid of all the combined Clusters that contributed to this fire.
-    pub(crate) centroid: Coord,
+    last_observed: DateTime<Utc>,
     /// The power of the most powerful Cluster that was associated with this fire. Note that
     /// several clusters may be associated with a fire at any given scan time, but they might be
     /// spatially separated (e.g. on different ends of the original fire). The powers of those
     /// different Clusters are NOT combined to come up with a total power for the time. This
     /// represents the single most powerful Cluster aggregated into this fire.
-    pub(crate) max_power: f64,
+    max_power: f64,
     /// The maximum temperature of any Pixel that was ever associated with this fire.
-    pub(crate) max_temperature: f64,
+    max_temperature: f64,
     /// An unique ID number for this fire that will be used identify this fire in a database that
     /// will also be used to associate this fire with Clusters which are a part of it.
-    pub(crate) id: u64,
+    id: u64,
     /// Each Pixel in this contains the maximum power, area, and temperature observed in it's
     /// area during the fire. Since all the data for each satellite is projected to a common grid
     /// before being published online, throughout the life of the fire the Pixels will perfectly
     /// overlap. This is kind of a composite of the properties of the fire over it's lifetime.
-    pub(crate) area: PixelList,
+    area: PixelList,
     /// The satellite the Clusters that were a part of this fire were observed with.
-    pub(crate) sat: Satellite,
+    sat: Satellite,
     /// If this fire was merged into another, what was the identity of that fire. The value 0
-    /// implies it has not yet been merged into another fire. 
-    pub(crate) merged_into: u64,
+    /// implies it has not yet been merged into another fire.
+    merged_into: u64,
+
+    /// Make a cache for items expensive to calculate.
+    cache_up_to_date: Cell<bool>,
+    /// Cache the centroid
+    centroid: Cell<Coord>,
+    /// Cache for Bounding Box
+    bbox: Cell<BoundingBox>,
 }
 
 impl Display for Fire {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let duration = self.duration();
         let mut duration_buf = String::with_capacity(64);
         let weeks = duration.num_weeks();
         if weeks > 0 {
-            let _ = write!(
-                &mut duration_buf as &mut dyn std::fmt::Write,
-                "{} weeks ",
-                weeks
-            );
+            let _ = write!(&mut duration_buf as &mut dyn std::fmt::Write, "{} weeks ", weeks);
         }
 
         let days = duration.num_days() % 7;
         if days > 0 {
-            let _ = write!(
-                &mut duration_buf as &mut dyn std::fmt::Write,
-                "{} days ",
-                days
-            );
+            let _ = write!(&mut duration_buf as &mut dyn std::fmt::Write, "{} days ", days);
         }
 
         let hours = duration.num_hours() % 24;
-        let _ = write!(
-            &mut duration_buf as &mut dyn std::fmt::Write,
-            "{} hours",
-            hours
-        );
+        let _ = write!(&mut duration_buf as &mut dyn std::fmt::Write, "{} hours", hours);
+
+        let centroid = self.centroid();
 
         writeln!(f, "               ID: {:9}", self.id)?;
         writeln!(f, "        Satellite: {}", self.sat)?;
         writeln!(f, "   First Observed: {}", self.first_observed)?;
         writeln!(f, "    Last Observed: {}", self.last_observed)?;
         writeln!(f, "         Duration: {}", duration_buf)?;
-        writeln!(
-            f,
-            "         Centroid: {:.6},{:.6}",
-            self.centroid.lat, self.centroid.lon
-        )?;
+        writeln!(f, "         Centroid: {:.6},{:.6}", centroid.lat, centroid.lon)?;
         writeln!(f, "        Max Power: {:.0} MW", self.max_power)?;
         writeln!(f, "  Max Temperature: {:.0}K", self.max_temperature)
     }
 }
 
 impl Fire {
-    /// Create a new wildfire.
-    pub fn new(id: u64, initial: ClusterDatabaseClusterRow) -> Self {
+    /// Create a new fire from the raw parts.
+    pub(crate) fn new(
+        first_observed: DateTime<Utc>,
+        last_observed: DateTime<Utc>,
+        max_power: f64,
+        max_temperature: f64,
+        id: u64,
+        area: PixelList,
+        sat: Satellite,
+        merged_into: u64,
+    ) -> Self {
         Fire {
-            first_observed: initial.start,
-            last_observed: initial.end,
-            centroid: initial.centroid,
-            max_power: initial.power,
-            max_temperature: initial.max_temperature,
+            first_observed,
+            last_observed,
+            max_power,
+            max_temperature,
             id,
-            area: initial.pixels,
-            sat: initial.sat,
-            merged_into: 0,
+            area,
+            sat,
+            merged_into,
+            cache_up_to_date: Cell::new(false),
+            centroid: Cell::new(Coord { lat: 0.0, lon: 0.0 }),
+            bbox: Cell::new(BoundingBox::default()),
         }
+    }
+
+    /// Create a new fire from a cluster.
+    pub fn create_from_cluster(id: u64, initial: ClusterDatabaseClusterRow) -> Self {
+        Self::new(
+            initial.start,
+            initial.end,
+            initial.power,
+            initial.max_temperature,
+            id,
+            initial.pixels,
+            initial.sat,
+            0,
+        )
     }
 
     /// Get the id number of the fire.
@@ -123,8 +141,8 @@ impl Fire {
         self.id
     }
 
-    /// Get the id of the fire this was merged into. 
-    pub fn merged_into(&self) -> u64  {
+    /// Get the id of the fire this was merged into.
+    pub fn merged_into(&self) -> u64 {
         self.merged_into
     }
 
@@ -171,15 +189,15 @@ impl Fire {
         self.max_power = self.max_power.max(row.power);
         self.max_temperature = self.max_temperature.max(row.max_temperature);
 
+        self.invalidate_cache();
         self.area.max_merge(&row.pixels);
-        self.centroid = self.area.centroid();
     }
 
     /// Merge two wildfires.
     fn merge_with(&mut self, right: &mut Self) {
         debug_assert_eq!(self.sat, right.sat);
 
-        // The fire with the lower valued for the id was created first, so prefer to keep it
+        // The fire with the lower value for the id was created first, so prefer to keep it
         // around.
         if self.id > right.id {
             std::mem::swap(self, right);
@@ -193,10 +211,9 @@ impl Fire {
             self.last_observed = right.last_observed;
         }
 
-        // MUST DO THIS BEFORE UPDATING CENTROID
+        self.invalidate_cache();
         self.area.max_merge(&right.area);
 
-        self.centroid = self.area.centroid();
         self.max_power = self.max_power.max(right.max_power);
         self.max_temperature = self.max_temperature.max(right.max_temperature);
 
@@ -220,15 +237,29 @@ impl Fire {
         let hours = duration.num_hours() % 24;
         let _ = write!(buffer as &mut dyn std::fmt::Write, "{} hours", hours);
     }
+
+    fn update_cache(&self) {
+        if !self.cache_up_to_date.get() {
+            self.bbox.set(self.area.bounding_box());
+            self.centroid.set(self.area.centroid());
+            self.cache_up_to_date.set(true);
+        }
+    }
+
+    fn invalidate_cache(&self) {
+        self.cache_up_to_date.set(false)
+    }
 }
 
 impl Geo for Fire {
     fn centroid(&self) -> Coord {
-        self.centroid
+        self.update_cache();
+        self.centroid.get()
     }
 
     fn bounding_box(&self) -> BoundingBox {
-        self.area.bounding_box()
+        self.update_cache();
+        self.bbox.get()
     }
 }
 
@@ -271,7 +302,7 @@ impl FireList {
 
     /// Create a new fire and add it to the list.
     pub fn create_add_fire(&mut self, id: u64, cluster_row: ClusterDatabaseClusterRow) {
-        self.add_fire(Fire::new(id, cluster_row))
+        self.add_fire(Fire::create_from_cluster(id, cluster_row))
     }
 
     /// Update the list with the provided cluster.
@@ -284,10 +315,14 @@ impl FireList {
     /// `clust` was consumed, then it returns `None`.
     pub fn update(&mut self, row: ClusterDatabaseClusterRow) -> FireListUpdateResult {
         let cluster_pixels: &PixelList = &row.pixels;
+        let cluster_bbox = cluster_pixels.bounding_box();
+
         for fire in self.0.iter_mut() {
-            if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
-                fire.update(&row);
-                return FireListUpdateResult::Match(fire.id);
+            if cluster_bbox.overlap(&fire.bounding_box(), 1.0e-5) {
+                if cluster_pixels.adjacent_to_or_overlaps(&fire.area, 1.0e-5) {
+                    fire.update(&row);
+                    return FireListUpdateResult::Match(fire.id);
+                }
             }
         }
 

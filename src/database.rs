@@ -440,16 +440,11 @@ impl FiresDatabase {
 
     /// Get the fires that are still going.
     pub fn ongoing_fires(&self, sat: Satellite) -> SatFireResult<FireList> {
-        let ts = match self.conn.query_row(
-            "SELECT MAX(last_observed) FROM fires WHERE satellite = ?",
-            [sat.name()],
-            |row| row.get::<_, i64>(0),
-        ) {
-            Ok(time_stamp) => time_stamp,
-            Err(_) => return Ok(FireList::new()),
+        let latest = match self.last_observed(sat) {
+            Some(ts) => ts,
+            None => return Ok(FireList::new()),
         };
 
-        let latest: DateTime<Utc> = DateTime::from_utc(NaiveDateTime::from_timestamp(ts, 0), Utc);
         let earliest = latest - Duration::days(175);
 
         info!(target: sat.name(), "Latest fire observation => {}", latest);
@@ -477,14 +472,10 @@ impl FiresDatabase {
                 let last_observed: DateTime<Utc> =
                     DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
 
-                let lat: f64 = row.get(4)?;
-                let lon: f64 = row.get(5)?;
-                let centroid = Coord { lat, lon };
+                let max_power: f64 = row.get(4)?;
+                let max_temperature: f64 = row.get(5)?;
 
-                let max_power: f64 = row.get(6)?;
-                let max_temperature: f64 = row.get(7)?;
-
-                let area = match row.get_ref(8)? {
+                let area = match row.get_ref(6)? {
                     rusqlite::types::ValueRef::Blob(bytes) => {
                         let mut cursor = std::io::Cursor::new(bytes);
                         Ok(PixelList::binary_deserialize(&mut cursor))
@@ -492,17 +483,16 @@ impl FiresDatabase {
                     _ => Err("Invalid type in pixels column"),
                 }?;
 
-                Ok(Fire {
-                    id,
-                    merged_into: 0,
-                    area,
+                Ok(Fire::new(
                     first_observed,
                     last_observed,
                     max_power,
                     max_temperature,
-                    centroid,
+                    id,
+                    area,
                     sat,
-                })
+                    0,
+                ))
             },
         )?
         .filter_map(|res| match res {
@@ -564,8 +554,6 @@ impl FiresDatabase {
                  satellite,
                  first_observed,
                  last_observed,
-                 lat,
-                 lon,
                  max_power,
                  max_temperature,
                  pixels
@@ -614,7 +602,7 @@ impl<'a> FiresDatabaseAddFire<'a> {
         for fire in fires.iter() {
             ids.push(fire.id());
 
-            let Coord { lat, lon } = fire.pixels().centroid();
+            let Coord { lat, lon } = fire.centroid();
             let pixels = fire.pixels().binary_serialize();
 
             self.fire_stmt.execute([
@@ -675,14 +663,10 @@ impl<'a> FiresDatabaseQueryFires<'a> {
             let last_observed: DateTime<Utc> =
                 DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
 
-            let lat: f64 = row.get(5)?;
-            let lon: f64 = row.get(6)?;
-            let centroid = Coord { lat, lon };
+            let max_power: f64 = row.get(5)?;
+            let max_temperature: f64 = row.get(6)?;
 
-            let max_power: f64 = row.get(7)?;
-            let max_temperature: f64 = row.get(8)?;
-
-            let area = match row.get_ref(9)? {
+            let area = match row.get_ref(7)? {
                 rusqlite::types::ValueRef::Blob(bytes) => {
                     let mut cursor = std::io::Cursor::new(bytes);
                     Ok(PixelList::binary_deserialize(&mut cursor))
@@ -690,17 +674,16 @@ impl<'a> FiresDatabaseQueryFires<'a> {
                 _ => Err("Invalid type in pixels column"),
             }?;
 
-            Ok(Fire {
-                id,
-                merged_into,
-                area,
+            Ok(Fire::new(
                 first_observed,
                 last_observed,
                 max_power,
                 max_temperature,
-                centroid,
+                id,
+                area,
                 sat,
-            })
+                merged_into,
+            ))
         })?)
     }
 }
