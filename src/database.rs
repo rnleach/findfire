@@ -599,7 +599,7 @@ impl<'a> FiresDatabaseAddFire<'a> {
 
         self.conn.execute("BEGIN TRANSACTION", [])?;
 
-        for fire in fires.iter() {
+        for fire in fires.iter().filter(|f| f.duration() > Duration::hours(1)) {
             ids.push(fire.id());
 
             let Coord { lat, lon } = fire.centroid();

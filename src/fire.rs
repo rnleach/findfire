@@ -392,9 +392,10 @@ impl FireList {
                                 if fire.id() == candidate_fire.id()
                                     || to_del_set.contains(&index)
                                     || to_del_set.contains(&candidate_index)
-                                    || !fire
-                                        .area
-                                        .adjacent_to_or_overlaps(&candidate_fire.area, OVERLAP_FUDGE_FACTOR)
+                                    || !fire.area.adjacent_to_or_overlaps(
+                                        &candidate_fire.area,
+                                        OVERLAP_FUDGE_FACTOR,
+                                    )
                                 {
                                     (false, ControlFlow::Continue((to_del_set, fire)))
                                 } else {
@@ -559,7 +560,10 @@ impl<'a> FireListView<'a> {
             FireListUpdateResult::NoMatch(row),
             |fire, _fire_idx, matched| match matched {
                 FireListUpdateResult::NoMatch(row) => {
-                    if row.pixels.adjacent_to_or_overlaps(&fire.area, OVERLAP_FUDGE_FACTOR) {
+                    if row
+                        .pixels
+                        .adjacent_to_or_overlaps(&fire.area, OVERLAP_FUDGE_FACTOR)
+                    {
                         fire.update(&row);
                         (
                             true,
@@ -582,7 +586,7 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     let duration_since_last_observed = current_time - fire.last_observed;
 
     // Minimum time to stick around.
-    if duration_since_last_observed < Duration::days(4) {
+    if duration_since_last_observed < Duration::hours(6) {
         return false;
     }
 
