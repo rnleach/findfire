@@ -92,6 +92,7 @@ impl Display for Fire {
         writeln!(f, "    Last Observed: {}", self.last_observed)?;
         writeln!(f, "         Duration: {}", duration_buf)?;
         writeln!(f, "         Centroid: {:.6},{:.6}", centroid.lat, centroid.lon)?;
+        writeln!(f, "Pixel List Length: {}", self.area.len())?;
         writeln!(f, "        Max Power: {:.0} MW", self.max_power)?;
         writeln!(f, "  Max Temperature: {:.0}K", self.max_temperature)
     }

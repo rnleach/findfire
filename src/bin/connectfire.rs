@@ -163,8 +163,9 @@ fn parse_args() -> SatFireResult<ConnectFireOptions> {
  *                                    Stats for this run.
  *-----------------------------------------------------------------------------------------------*/
 struct FireStats {
-    longest: Option<Fire>,
+    longest_duration: Option<Fire>,
     hottest: Option<Fire>,
+    longest_pixel_list: Option<Fire>,
     sat: Satellite,
     max_active: usize,
     largest_pixels_list: usize,
@@ -176,12 +177,20 @@ impl Display for FireStats {
         writeln!(f, " ---- Summary Stats for Connect Fire {} ----\n", self.sat)?;
         writeln!(f, "      Maximum Number of Active Fires {:9}", self.max_active)?;
         writeln!(f, "                  Largest Pixel List {:9} pixels", self.largest_pixels_list)?;
+        writeln!(f)?;
 
-        if let Some(ref longest) = self.longest {
+        if let Some(ref longest) = self.longest_duration {
             writeln!(f, "   -- Longest Duration Fire --")?;
             writeln!(f, "{}", longest)?;
         } else {
             writeln!(f, "No longest duration fire for stats.")?;
+        }
+
+        if let Some(ref longest) = self.longest_pixel_list {
+            writeln!(f, "   -- Longest PixelList Fire --")?;
+            writeln!(f, "{}", longest)?;
+        } else {
+            writeln!(f, "No longest PixelList fire for stats.")?;
         }
 
         if let Some(ref hottest) = self.hottest {
@@ -198,7 +207,8 @@ impl Display for FireStats {
 impl FireStats {
     fn new(sat: Satellite) -> Self {
         FireStats {
-            longest: None,
+            longest_duration: None,
+            longest_pixel_list: None,
             hottest: None,
             sat,
             max_active: 0,
@@ -221,6 +231,9 @@ impl FireStats {
         let mut fires_hottest_temp = -f64::INFINITY;
         let mut fires_hottest: Option<&Fire> = None;
 
+        let mut fires_longest_pixel_list_size = 0;
+        let mut fires_longest_pixel_list = None;
+
         for fire in fires.iter() {
             if fire.duration() > fires_longest_dur {
                 fires_longest_dur = fire.duration();
@@ -232,18 +245,33 @@ impl FireStats {
                 fires_hottest = Some(fire);
             }
 
+            if fire.pixels().len() > fires_longest_pixel_list_size {
+                fires_longest_pixel_list_size = fire.pixels().len();
+                fires_longest_pixel_list = Some(fire);
+            }
+
             self.largest_pixels_list = self.largest_pixels_list.max(fire.pixels().len());
         }
 
         self.max_active = self.max_active.max(fires.len());
 
         if let Some(fires_longest) = fires_longest {
-            if let Some(ref mut longest) = self.longest {
+            if let Some(ref mut longest) = self.longest_duration {
                 if fires_longest_dur > longest.duration() {
                     *longest = fires_longest.clone();
                 }
             } else {
-                self.longest = Some(fires_longest.clone());
+                self.longest_duration = Some(fires_longest.clone());
+            }
+        }
+
+        if let Some(fires_longest) = fires_longest_pixel_list {
+            if let Some(ref mut longest) = self.longest_pixel_list {
+                if fires_longest_pixel_list_size > longest.pixels().len() {
+                    *longest = fires_longest.clone();
+                }
+            } else {
+                self.longest_pixel_list = Some(fires_longest.clone());
             }
         }
 
@@ -424,9 +452,16 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
 
     current_fires.save_kml(Duration::days(1), kml_path)?;
 
+    let largest_pixel_list_size = current_fires
+        .iter()
+        .map(|f| f.pixels().len())
+        .max()
+        .unwrap_or(0);
+
     if verbose {
-        info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
-            current_time_step, num_absorbed, num_merged, num_old, num_new, current_fires.len());
+        info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}, {:>6}",
+            current_time_step, num_absorbed, num_merged, num_old, num_new, current_fires.len(), 
+            largest_pixel_list_size);
     }
 
     old_fires.extend(&mut current_fires);
