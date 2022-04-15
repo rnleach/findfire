@@ -164,34 +164,24 @@ fn parse_args() -> SatFireResult<ConnectFireOptions> {
  *-----------------------------------------------------------------------------------------------*/
 struct FireStats {
     longest: Option<Fire>,
-    most_powerful: Option<Fire>,
     hottest: Option<Fire>,
     sat: Satellite,
-    count: usize,
     max_active: usize,
+    largest_pixels_list: usize,
 }
 
 impl Display for FireStats {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        writeln!(f, " ---- Summary Stats for Connect Fire {} ----", self.sat)?;
-        writeln!(f, "\n           Processed {:9} Fires", self.count)?;
-        writeln!(
-            f,
-            "      Maximum Number of Active Fires {:9}\n",
-            self.max_active
-        )?;
+        writeln!(f, " ---- Summary Stats for Connect Fire {} ----\n", self.sat)?;
+        writeln!(f, "      Maximum Number of Active Fires {:9}", self.max_active)?;
+        writeln!(f, "                  Largest Pixel List {:9} pixels", self.largest_pixels_list)?;
+
         if let Some(ref longest) = self.longest {
             writeln!(f, "   -- Longest Duration Fire --")?;
             writeln!(f, "{}", longest)?;
         } else {
             writeln!(f, "No longest duration fire for stats.")?;
-        }
-
-        if let Some(ref most_powerful) = self.most_powerful {
-            writeln!(f, "   -- Most Powerful Fire --")?;
-            writeln!(f, "{}", most_powerful)?;
-        } else {
-            writeln!(f, "No most powerful fire for stats.")?;
         }
 
         if let Some(ref hottest) = self.hottest {
@@ -209,11 +199,10 @@ impl FireStats {
     fn new(sat: Satellite) -> Self {
         FireStats {
             longest: None,
-            most_powerful: None,
             hottest: None,
             sat,
-            count: 0,
             max_active: 0,
+            largest_pixels_list: 0,
         }
     }
 
@@ -229,9 +218,6 @@ impl FireStats {
         let mut fires_longest_dur = Duration::minutes(0);
         let mut fires_longest: Option<&Fire> = None;
 
-        let mut fires_most_power_power = -f64::INFINITY;
-        let mut fires_most_power: Option<&Fire> = None;
-
         let mut fires_hottest_temp = -f64::INFINITY;
         let mut fires_hottest: Option<&Fire> = None;
 
@@ -241,19 +227,15 @@ impl FireStats {
                 fires_longest = Some(fire);
             }
 
-            if fire.max_power() > fires_most_power_power {
-                fires_most_power_power = fire.max_power();
-                fires_most_power = Some(fire);
-            }
-
             if fire.max_temperature() > fires_hottest_temp {
                 fires_hottest_temp = fire.max_temperature();
                 fires_hottest = Some(fire);
             }
 
-            self.count += 1;
-            self.max_active = self.max_active.max(fires.len());
+            self.largest_pixels_list = self.largest_pixels_list.max(fire.pixels().len());
         }
+
+        self.max_active = self.max_active.max(fires.len());
 
         if let Some(fires_longest) = fires_longest {
             if let Some(ref mut longest) = self.longest {
@@ -262,16 +244,6 @@ impl FireStats {
                 }
             } else {
                 self.longest = Some(fires_longest.clone());
-            }
-        }
-
-        if let Some(fires_most_power) = fires_most_power {
-            if let Some(ref mut most_powerful) = self.most_powerful {
-                if fires_most_power_power > most_powerful.max_power() {
-                    *most_powerful = fires_most_power.clone();
-                }
-            } else {
-                self.most_powerful = Some(fires_most_power.clone());
             }
         }
 
@@ -377,9 +349,16 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
             let num_old = current_fires.drain_stale_fires(&mut old_fires, group_time);
             last_merge = group_time;
 
+            let largest_pixel_list_size = current_fires
+                .iter()
+                .map(|f| f.pixels().len())
+                .max()
+                .unwrap_or(0);
+
             if verbose {
-                info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
-                    group_time, num_absorbed, num_merged, num_old, num_new, current_fires.len());
+                info!(target: sat.name(), "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}, {:>6}",
+                    group_time, num_absorbed, num_merged, num_old, num_new, current_fires.len(), 
+                    largest_pixel_list_size);
             }
 
             num_absorbed = 0;
@@ -538,8 +517,8 @@ fn main() -> SatFireResult<()> {
     let mut jh_processing = Vec::with_capacity(Satellite::iter().count());
 
     if opts.verbose {
-        info!(target: "startup", "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}",
-            "scan start time", "Absorbed", "Merged", "Old", "New", "Active");
+        info!(target: "startup", "{:>23}, {:>8}, {:>6}, {:>4}, {:>4}, {:>6}, {:>6}",
+            "scan start time", "Absorbed", "Merged", "Old", "New", "Active", "Most Pixels");
     }
 
     for sat in Satellite::iter() {
