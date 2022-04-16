@@ -1,7 +1,7 @@
 use clap::Parser;
 use log::info;
 use satfire::{
-    BoundingBox, ClusterDatabase, Coord, Geo, KmlFile, SatFireResult, Satellite, Sector,
+    BoundingBox, ClusterDatabase, Coord, Geo, KmlFile, KmlWriter, SatFireResult, Satellite, Sector,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -188,7 +188,7 @@ fn main() -> SatFireResult<()> {
     //
     // Output the KML
     //
-    let mut kfile = KmlFile::start_document(&opts.kml_file)?;
+    let mut kfile = KmlFile::new(&opts.kml_file)?;
 
     kfile.start_style(Some("fire"))?;
     kfile.create_icon_style(

@@ -5,7 +5,8 @@ use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{debug, info, warn};
 use satfire::{
-    Cluster, ClusterDatabase, ClusterList, Geo, KmlFile, SatFireResult, Satellite, Sector,
+    Cluster, ClusterDatabase, ClusterList, Geo, KmlFile, KmlWriter, SatFireResult, Satellite,
+    Sector,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -822,7 +823,7 @@ fn save_cluster_stats_kml<P: AsRef<Path>>(
     path: P,
     cluster_stats: &ClusterStats,
 ) -> SatFireResult<()> {
-    let mut kml = KmlFile::start_document(path)?;
+    let mut kml = KmlFile::new(path)?;
 
     kml.start_style(Some("fire"))?;
     kml.create_poly_style(Some("880000FF"), true, true)?;

@@ -1,6 +1,6 @@
 use crate::{
     geo::{BoundingBox, Coord, Geo},
-    kml::KmlFile,
+    kml::{KmlWriter},
     satellite::{DataQualityFlagCode, MaskCode},
 };
 use std::{
@@ -626,7 +626,7 @@ impl PixelList {
  *-----------------------------------------------------------------------------------------------*/
 
 impl PixelList {
-    fn kml_write_pixel_style(kml: &mut KmlFile, mut power: f64) {
+    fn kml_write_pixel_style<K: KmlWriter>(kml: &mut K, mut power: f64) {
         const MAX_POWER: f64 = 3_000.0;
         const MAX_GREEN_FOR_ORANGE: f64 = 0.647;
         const FULL_RED_POWER: f64 = MAX_POWER / 2.0;
@@ -674,7 +674,7 @@ impl PixelList {
     /// that outputs a KML file where that higher function adds style information and the rest of the
     /// document.
     ///
-    pub fn kml_write(&self, kml: &mut KmlFile) {
+    pub fn kml_write<K: KmlWriter>(&self, kml: &mut K) {
         for pixel in &self.0 {
             let mut desc: [u8; 256] = [0; 256];
             let mut cursor = std::io::Cursor::new(&mut desc[..]);

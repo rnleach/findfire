@@ -3,7 +3,7 @@ use crate::{
     geo::{BoundingBox, Coord, Geo, Hilbert2DRTreeView},
     pixel::PixelList,
     satellite::Satellite,
-    KmlFile, SatFireResult,
+    KmlFile, KmlWriter, SatFireResult,
 };
 use chrono::{DateTime, Duration, Utc};
 use std::{
@@ -470,7 +470,7 @@ impl FireList {
         minimum_duration: Duration,
         kml_path: P,
     ) -> SatFireResult<()> {
-        let mut kml = KmlFile::start_document(kml_path)?;
+        let mut kml = KmlFile::new(kml_path)?;
 
         kml.start_style(Some("fire"))?;
         kml.create_icon_style(

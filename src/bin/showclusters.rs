@@ -2,8 +2,8 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
 use log::info;
 use satfire::{
-    BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlFile, SatFireResult,
-    Satellite, Sector,
+    BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlFile, KmlWriter,
+    SatFireResult, Satellite, Sector,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -199,7 +199,7 @@ fn main() -> SatFireResult<()> {
     let opts = parse_args()?;
 
     let db = ClusterDatabase::connect(&opts.cluster_store_file)?;
-    let mut kfile = KmlFile::start_document(&opts.kml_file)?;
+    let mut kfile = KmlFile::new(&opts.kml_file)?;
 
     for sat in Satellite::iter() {
         kfile.start_folder(Some(sat.name()), None, false)?;

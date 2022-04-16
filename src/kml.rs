@@ -17,21 +17,34 @@ use std::{
 
 pub struct KmlFile(BufWriter<File>);
 
-impl Drop for KmlFile {
-    fn drop(&mut self) {
-        const FOOTER: &str = concat!(r#"</Document>"#, "\n", r#"</kml>"#, "\n");
-        let _ = self.0.write_all(FOOTER.as_bytes());
-    }
-}
-
 impl KmlFile {
-    /// Open a file for output and start by putting the header out.
-    pub fn start_document<P: AsRef<Path>>(pth: P) -> SatFireResult<Self> {
+    pub fn new<P: AsRef<Path>>(pth: P) -> SatFireResult<Self> {
         let p = pth.as_ref();
 
         let f = std::fs::File::create(p)?;
-        let mut buf = BufWriter::new(f);
+        let mut new = KmlFile(BufWriter::new(f));
+        new.start_document()?;
+        Ok(new)
+    }
+}
 
+impl KmlWriter for KmlFile {
+    fn output(&mut self) -> &mut dyn Write {
+        &mut self.0
+    }
+}
+
+impl Drop for KmlFile {
+    fn drop(&mut self) {
+        self.finish_document();
+    }
+}
+
+pub trait KmlWriter {
+    fn output(&mut self) -> &mut dyn Write;
+
+    /// Open a file for output and start by putting the header out.
+    fn start_document(&mut self) -> SatFireResult<()> {
         const HEADER: &str = concat!(
             r#"<?xml version="1.0" encoding="UTF-8"?>"#,
             "\n",
@@ -40,15 +53,21 @@ impl KmlFile {
             "<Document>\n"
         );
 
-        buf.write_all(HEADER.as_bytes())?;
+        self.output().write_all(HEADER.as_bytes())?;
 
-        Ok(KmlFile(buf))
+        Ok(())
+    }
+
+    /// Close a document.
+    fn finish_document(&mut self) {
+        const FOOTER: &str = concat!(r#"</Document>"#, "\n", r#"</kml>"#, "\n");
+        let _ = self.output().write_all(FOOTER.as_bytes());
     }
 
     /// Write a description element to the file.
-    pub fn write_description(&mut self, description: &str) -> SatFireResult<()> {
+    fn write_description(&mut self, description: &str) -> SatFireResult<()> {
         writeln!(
-            self.0,
+            self.output(),
             "<description><![CDATA[{}]]></description>",
             description
         )?;
@@ -56,16 +75,16 @@ impl KmlFile {
     }
 
     /// Start a KML folder.
-    pub fn start_folder(
+    fn start_folder(
         &mut self,
         name: Option<&str>,
         description: Option<&str>,
         is_open: bool,
     ) -> SatFireResult<()> {
-        self.0.write_all("<Folder>\n".as_bytes())?;
+        self.output().write_all("<Folder>\n".as_bytes())?;
 
         if let Some(name) = name {
-            writeln!(self.0, "<name>{}</name>", name)?;
+            writeln!(self.output(), "<name>{}</name>", name)?;
         }
 
         if let Some(description) = description {
@@ -73,29 +92,29 @@ impl KmlFile {
         }
 
         if is_open {
-            self.0.write_all("<open>1</open>\n".as_bytes())?;
+            self.output().write_all("<open>1</open>\n".as_bytes())?;
         }
 
         Ok(())
     }
 
     /// Close out a folder element
-    pub fn finish_folder(&mut self) -> SatFireResult<()> {
-        writeln!(self.0, "</Folder>")?;
+    fn finish_folder(&mut self) -> SatFireResult<()> {
+        writeln!(self.output(), "</Folder>")?;
         Ok(())
     }
 
     /// Start a placemark element.
-    pub fn start_placemark(
+    fn start_placemark(
         &mut self,
         name: Option<&str>,
         description: Option<&str>,
         style_url: Option<&str>,
     ) -> SatFireResult<()> {
-        writeln!(self.0, "<Placemark>")?;
+        writeln!(self.output(), "<Placemark>")?;
 
         if let Some(name) = name {
-            writeln!(self.0, "<name>{}</name>", name)?;
+            writeln!(self.output(), "<name>{}</name>", name)?;
         }
 
         if let Some(description) = description {
@@ -103,117 +122,117 @@ impl KmlFile {
         }
 
         if let Some(style_url) = style_url {
-            writeln!(self.0, "<styleUrl>{}</styleUrl>", style_url)?;
+            writeln!(self.output(), "<styleUrl>{}</styleUrl>", style_url)?;
         }
 
         Ok(())
     }
 
     /// Close out a placemark element.
-    pub fn finish_placemark(&mut self) -> SatFireResult<()> {
-        writeln!(self.0, "</Placemark>")?;
+    fn finish_placemark(&mut self) -> SatFireResult<()> {
+        writeln!(self.output(), "</Placemark>")?;
         Ok(())
     }
 
     /// Start a style definition.
-    pub fn start_style(&mut self, style_id: Option<&str>) -> SatFireResult<()> {
+    fn start_style(&mut self, style_id: Option<&str>) -> SatFireResult<()> {
         if let Some(style_id) = style_id {
-            writeln!(self.0, "<Style id=\"{}\">", style_id)?;
+            writeln!(self.output(), "<Style id=\"{}\">", style_id)?;
         } else {
-            writeln!(self.0, "<Style>")?;
+            writeln!(self.output(), "<Style>")?;
         }
         Ok(())
     }
 
     /// Close out a style definition.
-    pub fn finish_style(&mut self) -> SatFireResult<()> {
-        writeln!(self.0, "</Style>")?;
+    fn finish_style(&mut self) -> SatFireResult<()> {
+        writeln!(self.output(), "</Style>")?;
         Ok(())
     }
 
     /// Create a PolyStyle element.
     ///
     /// These should ONLY go inside a style element.
-    pub fn create_poly_style(
+    fn create_poly_style(
         &mut self,
         color: Option<&str>,
         filled: bool,
         outlined: bool,
     ) -> SatFireResult<()> {
-        writeln!(self.0, "<PolyStyle>")?;
+        writeln!(self.output(), "<PolyStyle>")?;
 
         if let Some(color) = color {
-            writeln!(self.0, "<color>{}</color>", color)?;
-            writeln!(self.0, "<colorMode>normal</colorMode>")?;
+            writeln!(self.output(), "<color>{}</color>", color)?;
+            writeln!(self.output(), "<colorMode>normal</colorMode>")?;
         } else {
-            writeln!(self.0, "<colorMode>random</colorMode>")?;
+            writeln!(self.output(), "<colorMode>random</colorMode>")?;
         }
 
         let filled = if filled { 1 } else { 0 };
         let outlined = if outlined { 1 } else { 0 };
 
-        writeln!(self.0, "<fill>{}</fill>", filled)?;
-        writeln!(self.0, "<outline>{}</outline>", outlined)?;
+        writeln!(self.output(), "<fill>{}</fill>", filled)?;
+        writeln!(self.output(), "<outline>{}</outline>", outlined)?;
 
-        writeln!(self.0, "</PolyStyle>")?;
+        writeln!(self.output(), "</PolyStyle>")?;
         Ok(())
     }
 
     /// Create an IconStyle element.
-    pub fn create_icon_style(&mut self, icon_url: Option<&str>, scale: f64) -> SatFireResult<()> {
-        writeln!(self.0, "<IconStyle>")?;
+    fn create_icon_style(&mut self, icon_url: Option<&str>, scale: f64) -> SatFireResult<()> {
+        writeln!(self.output(), "<IconStyle>")?;
 
         if scale > 0.0 {
-            writeln!(self.0, "<scale>{}</scale>", scale)?;
+            writeln!(self.output(), "<scale>{}</scale>", scale)?;
         } else {
-            writeln!(self.0, "<scale>1</scale>")?;
+            writeln!(self.output(), "<scale>1</scale>")?;
         }
 
         if let Some(icon_url) = icon_url {
-            writeln!(self.0, "<Icon><href>{}</href></Icon>", icon_url)?;
+            writeln!(self.output(), "<Icon><href>{}</href></Icon>", icon_url)?;
         }
 
-        writeln!(self.0, "</IconStyle>")?;
+        writeln!(self.output(), "</IconStyle>")?;
         Ok(())
     }
 
     /// Write out a TimeSpan element.
-    pub fn timespan(&mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> SatFireResult<()> {
-        self.0.write_all("<TimeSpan>\n".as_bytes())?;
+    fn timespan(&mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> SatFireResult<()> {
+        self.output().write_all("<TimeSpan>\n".as_bytes())?;
         writeln!(
-            self.0,
+            self.output(),
             "<begin>{}</begin>",
             start.format("%Y-%m-%dT%H:%M:%S.000Z")
         )?;
         writeln!(
-            self.0,
+            self.output(),
             "<end>{}</end>",
             end.format("%Y-%m-%dT%H:%M:%S.000Z")
         )?;
-        self.0.write_all("</TimeSpan>\n".as_bytes())?;
+        self.output().write_all("</TimeSpan>\n".as_bytes())?;
         Ok(())
     }
 
     /// Start a MultiGeometry
-    pub fn start_multi_geometry(&mut self) -> SatFireResult<()> {
-        self.0.write_all("<MultiGeometry>\n".as_bytes())?;
+    fn start_multi_geometry(&mut self) -> SatFireResult<()> {
+        self.output().write_all("<MultiGeometry>\n".as_bytes())?;
         Ok(())
     }
 
     /// Close out a MultiGeometry
-    pub fn finish_multi_geometry(&mut self) -> SatFireResult<()> {
-        self.0.write_all("</MultiGeometry>\n".as_bytes())?;
+    fn finish_multi_geometry(&mut self) -> SatFireResult<()> {
+        self.output().write_all("</MultiGeometry>\n".as_bytes())?;
         Ok(())
     }
 
     /// Start a Polygon element.
-    pub fn start_polygon(
+    fn start_polygon(
         &mut self,
         extrude: bool,
         tessellate: bool,
         altitude_mode: Option<&str>,
     ) -> SatFireResult<()> {
-        self.0.write_all("<Polygon>\n".as_bytes())?;
+        self.output().write_all("<Polygon>\n".as_bytes())?;
 
         if let Some(altitude_mode) = altitude_mode {
             debug_assert!(
@@ -222,15 +241,20 @@ impl KmlFile {
                     || altitude_mode == "absolute"
             );
 
-            writeln!(self.0, "<altitudeMode>{}</altitudeMode>", altitude_mode)?;
+            writeln!(
+                self.output(),
+                "<altitudeMode>{}</altitudeMode>",
+                altitude_mode
+            )?;
         }
 
         if extrude {
-            self.0.write_all("<extrude>1</extrude>\n".as_bytes())?;
+            self.output()
+                .write_all("<extrude>1</extrude>\n".as_bytes())?;
         }
 
         if tessellate {
-            self.0
+            self.output()
                 .write_all("<tessellate>1</tessellate>\n".as_bytes())?;
         }
 
@@ -238,8 +262,8 @@ impl KmlFile {
     }
 
     /// Close out a Polygon element.
-    pub fn finish_polygon(&mut self) -> SatFireResult<()> {
-        self.0.write_all("</Polygon>\n".as_bytes())?;
+    fn finish_polygon(&mut self) -> SatFireResult<()> {
+        self.output().write_all("</Polygon>\n".as_bytes())?;
         Ok(())
     }
 
@@ -247,8 +271,8 @@ impl KmlFile {
     ///
     /// This should only be used inside a Polygon element.
     ///
-    pub fn polygon_start_outer_ring(&mut self) -> SatFireResult<()> {
-        self.0.write_all("<outerBoundaryIs>\n".as_bytes())?;
+    fn polygon_start_outer_ring(&mut self) -> SatFireResult<()> {
+        self.output().write_all("<outerBoundaryIs>\n".as_bytes())?;
         Ok(())
     }
 
@@ -256,21 +280,21 @@ impl KmlFile {
     ///
     ///  This should only be used inside a Polygon element.
     ///
-    pub fn polygon_finish_outer_ring(&mut self) -> SatFireResult<()> {
-        self.0.write_all("</outerBoundaryIs>\n".as_bytes())?;
+    fn polygon_finish_outer_ring(&mut self) -> SatFireResult<()> {
+        self.output().write_all("</outerBoundaryIs>\n".as_bytes())?;
         Ok(())
     }
 
     /// Start a LinearRing.
-    pub fn start_linear_ring(&mut self) -> SatFireResult<()> {
-        self.0
+    fn start_linear_ring(&mut self) -> SatFireResult<()> {
+        self.output()
             .write_all("<LinearRing>\n<coordinates>\n".as_bytes())?;
         Ok(())
     }
 
     /// End a LinearRing.
-    pub fn finish_linear_ring(&mut self) -> SatFireResult<()> {
-        self.0
+    fn finish_linear_ring(&mut self) -> SatFireResult<()> {
+        self.output()
             .write_all("</coordinates>\n</LinearRing>\n".as_bytes())?;
         Ok(())
     }
@@ -278,17 +302,19 @@ impl KmlFile {
     /// Add a vertex to the LinearRing
     ///
     /// Must be used inside a linear ring element.
-    pub fn linear_ring_add_vertex(&mut self, lat: f64, lon: f64, z: f64) -> SatFireResult<()> {
-        writeln!(self.0, "{},{},{}", lon, lat, z)?;
+    fn linear_ring_add_vertex(&mut self, lat: f64, lon: f64, z: f64) -> SatFireResult<()> {
+        writeln!(self.output(), "{},{},{}", lon, lat, z)?;
         Ok(())
     }
 
     /// Write out a KML Point element
-    pub fn create_point(&mut self, lat: f64, lon: f64, z: f64) -> SatFireResult<()> {
+    fn create_point(&mut self, lat: f64, lon: f64, z: f64) -> SatFireResult<()> {
         writeln!(
-            self.0,
+            self.output(),
             "<Point>\n<coordinates>{},{},{}</coordinates>\n</Point>",
-            lon, lat, z
+            lon,
+            lat,
+            z
         )?;
         Ok(())
     }

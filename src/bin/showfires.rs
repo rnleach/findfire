@@ -1,7 +1,9 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use clap::Parser;
 use log::info;
-use satfire::{BoundingBox, Coord, FiresDatabase, Geo, KmlFile, SatFireResult, Satellite};
+use satfire::{
+    BoundingBox, Coord, FiresDatabase, Geo, KmlFile, KmlWriter, SatFireResult, Satellite,
+};
 use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display},
@@ -207,7 +209,7 @@ fn main() -> SatFireResult<()> {
     let opts = parse_args()?;
 
     let db = FiresDatabase::connect(&opts.fires_store_file)?;
-    let mut kfile = KmlFile::start_document(&opts.kml_file)?;
+    let mut kfile = KmlFile::new(&opts.kml_file)?;
 
     kfile.start_style(Some("fire"))?;
     kfile.create_icon_style(
