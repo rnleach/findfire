@@ -586,6 +586,11 @@ impl<'a> FireListView<'a> {
 fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     let duration_since_last_observed = current_time - fire.last_observed;
 
+    // If it got this big, it can't be real. It must be a "noise fire"
+    if fire.pixels().len() >= 350 {
+        return true;
+    }
+
     // Minimum time to stick around.
     if duration_since_last_observed < Duration::hours(6) {
         return false;
@@ -594,12 +599,6 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     // Maximum time to stick around after being last observed.
     if duration_since_last_observed > Duration::days(30) {
         return true;
-    }
-
-    // Let larger fires stick around longer.
-    let num_pixels = fire.area.len() as i64;
-    if Duration::days(2 * num_pixels) > duration_since_last_observed {
-        return false;
     }
 
     // If it's been out longer than it burned, let it go.
