@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::Parser;
 use log::info;
 use satfire::{
-    BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlFile, KmlWriter,
+    BoundingBox, ClusterDatabase, ClusterDatabaseClusterRow, Coord, KmlWriter, KmzFile,
     SatFireResult, Satellite, Sector,
 };
 use simple_logger::SimpleLogger;
@@ -16,9 +16,9 @@ use strum::IntoEnumIterator;
  *                               Parse Command Line Arguments
  *-----------------------------------------------------------------------------------------------*/
 ///
-/// Export clusters into a KML file.
+/// Export clusters into a KMZ file.
 ///
-/// This program will export all the clusters in a requested region and time range into a KML file.
+/// This program will export all the clusters in a requested region and time range into a KMZ file.
 ///
 #[derive(Debug, Parser)]
 #[clap(bin_name = "showclusters")]
@@ -32,12 +32,12 @@ struct ShowClustersOptionsInit {
     #[clap(env = "CLUSTER_DB")]
     cluster_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
+    /// The path to a KMZ file to produce from this run.
     ///
     /// If this is not specified, then the program will create one automatically by replacing the
-    /// file extension on the cluster_store_file with "*.kml".
+    /// file extension on the cluster_store_file with "*.kmz".
     #[clap(short, long)]
-    kml_file: Option<PathBuf>,
+    kmz_file: Option<PathBuf>,
 
     /// The start time (UTC) for the export in the format YYYY-MM-DD-HH
     #[clap(parse(try_from_str=parse_datetime))]
@@ -118,8 +118,8 @@ struct ShowClustersOptionsChecked {
     /// The path to the database file.
     cluster_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
-    kml_file: PathBuf,
+    /// The path to a KMZ file to produce from this run.
+    kmz_file: PathBuf,
 
     /// The start time.
     start: DateTime<Utc>,
@@ -138,7 +138,7 @@ impl Display for ShowClustersOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
         writeln!(f, "    Database: {}", self.cluster_store_file.display())?;
-        writeln!(f, "  Output KML: {}", self.kml_file.display())?;
+        writeln!(f, "  Output KMZ: {}", self.kmz_file.display())?;
         writeln!(f, "       Start: {}", self.start)?;
         writeln!(f, "         End: {}", self.end)?;
         writeln!(
@@ -158,25 +158,25 @@ impl Display for ShowClustersOptionsChecked {
 fn parse_args() -> SatFireResult<ShowClustersOptionsChecked> {
     let ShowClustersOptionsInit {
         cluster_store_file,
-        kml_file,
+        kmz_file,
         start,
         end,
         bbox,
         verbose,
     } = ShowClustersOptionsInit::parse();
 
-    let kml_file = match kml_file {
+    let kmz_file = match kmz_file {
         Some(v) => v,
         None => {
             let mut clone = cluster_store_file.clone();
-            clone.set_extension("kml");
+            clone.set_extension("kmz");
             clone
         }
     };
 
     let checked = ShowClustersOptionsChecked {
         cluster_store_file,
-        kml_file,
+        kmz_file,
         start,
         end,
         bbox,
@@ -199,7 +199,7 @@ fn main() -> SatFireResult<()> {
     let opts = parse_args()?;
 
     let db = ClusterDatabase::connect(&opts.cluster_store_file)?;
-    let mut kfile = KmlFile::new(&opts.kml_file)?;
+    let mut kfile = KmzFile::new(&opts.kmz_file)?;
 
     for sat in Satellite::iter() {
         kfile.start_folder(Some(sat.name()), None, false)?;

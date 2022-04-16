@@ -25,16 +25,16 @@ detect satellite name, sector, scan start, and scan end times. Later versions ma
 the NetCDF4 to detect these properties internally.
 
 ## showclusters
-Select clusters from the database created by findfire and output them in a KML format.
+Select clusters from the database created by findfire and output them in a KMZ format.
 
 This is a command line application that will select clusters based on a given start time, end time,
-and geographic bounding box and then output them in KML. 
+and geographic bounding box and then output them in KMZ. 
 
 ## currentclusters
 Select the clusters from the most recent satellite image given a satellite name and sector name.
 
 This command line application will query the database created by findfire for the most recent image
-given the satelltie and sector and produce a KML file with all the clusters.
+given the satelltie and sector and produce a KMZ file with all the clusters.
 
 ## connectfire
 Create a database with the necessary information to create time series of fires.
@@ -49,10 +49,10 @@ power for a given fire.
 
 ## showfires
 
-Select fires from the database created by connectfire and output them in a KML format. 
+Select fires from the database created by connectfire and output them in a KMZ format. 
 
 This is a command line application that will select fires based on a given start time, end time,
-and geographic bounding box and then output them in KML. It is analagous to showclusters, however, 
+and geographic bounding box and then output them in KMZ. It is analagous to showclusters, however, 
 showclusters only selects clusters that are within the given start and end times, wheres showfires 
 selects any fire that overlaps the start and end times.
 

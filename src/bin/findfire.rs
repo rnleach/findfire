@@ -5,7 +5,7 @@ use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{debug, info, warn};
 use satfire::{
-    Cluster, ClusterDatabase, ClusterList, Geo, KmlFile, KmlWriter, SatFireResult, Satellite,
+    Cluster, ClusterDatabase, ClusterList, Geo, KmlWriter, KmzFile, SatFireResult, Satellite,
     Sector,
 };
 use simple_logger::SimpleLogger;
@@ -39,7 +39,7 @@ use strum::IntoEnumIterator;
 /// processing it.
 ///
 /// At the end of processing, some summary statistics are printed to the screen and a file called
-/// findfire.kml is output in the same location as the database file findfire.sqlite that has some
+/// findfire.kmz is output in the same location as the database file findfire.sqlite that has some
 /// summary statistics about the clusters and images that were analyzed during this run.
 ///
 #[derive(Debug, Parser)]
@@ -54,12 +54,12 @@ struct FindFireOptionsInit {
     #[clap(env = "CLUSTER_DB")]
     cluster_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
+    /// The path to a KMZ file to produce from this run.
     ///
     /// If this is not specified, then the program will create on automatically by replacing the
-    /// file extension on the store_file with "*.kml".
+    /// file extension on the store_file with "*.kmz".
     #[clap(short, long)]
-    kml_file: Option<PathBuf>,
+    kmz_file: Option<PathBuf>,
 
     /// The path to the data directory that will be walked to find new data.
     ///
@@ -83,8 +83,8 @@ struct FindFireOptionsChecked {
     /// The path to the database file.
     cluster_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
-    kml_file: PathBuf,
+    /// The path to a KMZ file to produce from this run.
+    kmz_file: PathBuf,
 
     /// The path to the data directory that will be walked to find new data.
     data_dir: PathBuf,
@@ -102,24 +102,24 @@ struct FindFireOptionsChecked {
 fn parse_args() -> SatFireResult<FindFireOptionsChecked> {
     let FindFireOptionsInit {
         cluster_store_file,
-        kml_file,
+        kmz_file,
         data_dir,
         new_only,
         verbose,
     } = FindFireOptionsInit::parse();
 
-    let kml_file = match kml_file {
+    let kmz_file = match kmz_file {
         Some(v) => v,
         None => {
             let mut clone = cluster_store_file.clone();
-            clone.set_extension("kml");
+            clone.set_extension("kmz");
             clone
         }
     };
 
     Ok(FindFireOptionsChecked {
         cluster_store_file,
-        kml_file,
+        kmz_file,
         data_dir,
         new_only,
         verbose,
@@ -157,7 +157,7 @@ fn main() -> SatFireResult<()> {
     let db_filler = db_filler_thread(
         &opts.cluster_store_file,
         from_loader,
-        &opts.kml_file,
+        &opts.kmz_file,
         opts.verbose,
     )?;
 
@@ -319,11 +319,11 @@ fn loader_threads(
 fn db_filler_thread<P: AsRef<Path>>(
     store_file: P,
     from_loader: Receiver<ClusterList>,
-    kml_path: P,
+    kmz_path: P,
     verbose: bool,
 ) -> SatFireResult<JoinHandle<SatFireResult<()>>> {
     let store_file = store_file.as_ref().to_path_buf();
-    let kml_path = kml_path.as_ref().to_path_buf();
+    let kmz_path = kmz_path.as_ref().to_path_buf();
 
     let jh = std::thread::Builder::new()
         .name("findfire-dbase".to_owned())
@@ -343,7 +343,7 @@ fn db_filler_thread<P: AsRef<Path>>(
             if let (Some(ref cluster_stats), Some(ref cluster_list_stats)) =
                 (cluster_stats, cluster_list_stats)
             {
-                save_cluster_stats_kml(kml_path, cluster_stats)?;
+                save_cluster_stats_kmz(kmz_path, cluster_stats)?;
                 if verbose {
                     info!(target: "stats", "{}", cluster_stats);
                     info!(target: "stats", "{}", cluster_list_stats);
@@ -817,30 +817,30 @@ fn is_cluster_a_keeper(cluster: &Cluster) -> bool {
 }
 
 /*-------------------------------------------------------------------------------------------------
- *                             Save a Cluster in a KML File
+ *                             Save a Cluster in a KMZ File
  *-----------------------------------------------------------------------------------------------*/
-fn save_cluster_stats_kml<P: AsRef<Path>>(
+fn save_cluster_stats_kmz<P: AsRef<Path>>(
     path: P,
     cluster_stats: &ClusterStats,
 ) -> SatFireResult<()> {
-    let mut kml = KmlFile::new(path)?;
+    let mut kmz = KmzFile::new(path)?;
 
-    kml.start_style(Some("fire"))?;
-    kml.create_poly_style(Some("880000FF"), true, true)?;
-    kml.create_icon_style(
+    kmz.start_style(Some("fire"))?;
+    kmz.create_poly_style(Some("880000FF"), true, true)?;
+    kmz.create_icon_style(
         Some("http://maps.google.com/mapfiles/kml/shapes/firedept.png"),
         1.3,
     )?;
-    kml.finish_style()?;
+    kmz.finish_style()?;
 
-    output_cluster_stat_kml(&mut kml, "Biggest Fire", &cluster_stats.biggest_fire)?;
-    output_cluster_stat_kml(&mut kml, "Hottest Fire", &cluster_stats.hottest_fire)?;
+    output_cluster_stat_kml(&mut kmz, "Biggest Fire", &cluster_stats.biggest_fire)?;
+    output_cluster_stat_kml(&mut kmz, "Hottest Fire", &cluster_stats.hottest_fire)?;
 
     Ok(())
 }
 
-fn output_cluster_stat_kml(
-    out: &mut KmlFile,
+fn output_cluster_stat_kml<K: KmlWriter>(
+    out: &mut K,
     label: &str,
     cluster: &ClusterStat,
 ) -> SatFireResult<()> {

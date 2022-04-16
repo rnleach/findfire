@@ -1,5 +1,5 @@
-//! Very simple functions for producing KML files specifcally suited to this crate and the programs
-//! that use it.
+//! Very simple functions for producing KML and KMZ files specifcally suited to this crate and the
+//! programs that use it.
 //!
 //! This is not a general solution at all, but I opted to create it instead of pulling another
 //! potentially large dependency. I actually did test using the [KML](https://github.com/georust/kml)
@@ -14,6 +14,35 @@ use std::{
     io::{BufWriter, Write},
     path::Path,
 };
+use zip::ZipWriter;
+
+pub struct KmzFile(ZipWriter<BufWriter<File>>);
+
+impl KmzFile {
+    pub fn new<P: AsRef<Path>>(pth: P) -> SatFireResult<Self> {
+        let p = pth.as_ref();
+
+        let f = std::fs::File::create(p)?;
+        let mut kmz = ZipWriter::new(BufWriter::new(f));
+        let kmz_opts = zip::write::FileOptions::default().compression_level(Some(9));
+        kmz.start_file("doc.kml", kmz_opts)?;
+        let mut new = KmzFile(kmz);
+        new.start_document()?;
+        Ok(new)
+    }
+}
+
+impl KmlWriter for KmzFile {
+    fn output(&mut self) -> &mut dyn Write {
+        &mut self.0
+    }
+}
+
+impl Drop for KmzFile {
+    fn drop(&mut self) {
+        self.finish_document();
+    }
+}
 
 pub struct KmlFile(BufWriter<File>);
 

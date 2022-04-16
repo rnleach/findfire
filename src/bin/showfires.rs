@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use clap::Parser;
 use log::info;
 use satfire::{
-    BoundingBox, Coord, FiresDatabase, Geo, KmlFile, KmlWriter, SatFireResult, Satellite,
+    BoundingBox, Coord, FiresDatabase, Geo, KmlWriter, KmzFile, SatFireResult, Satellite,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -15,9 +15,9 @@ use strum::IntoEnumIterator;
  *                               Parse Command Line Arguments
  *-----------------------------------------------------------------------------------------------*/
 ///
-/// Export fires into a KML file.
+/// Export fires into a KMZ file.
 ///
-/// This program will export all the fires in a requested region and time range into a KML file.
+/// This program will export all the fires in a requested region and time range into a KMZ file.
 ///
 #[derive(Debug, Parser)]
 #[clap(bin_name = "showfires")]
@@ -31,12 +31,12 @@ struct ShowFiresOptionsInit {
     #[clap(env = "FIRES_DB")]
     fires_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
+    /// The path to a KMZ file to produce from this run.
     ///
     /// If this is not specified, then the program will create one automatically by replacing the
-    /// file extension on the fires_store_file with "*.kml".
+    /// file extension on the fires_store_file with "*.kmz".
     #[clap(short, long)]
-    kml_file: Option<PathBuf>,
+    kmz_file: Option<PathBuf>,
 
     /// The start time (UTC) for the export in the format YYYY-MM-DD-HH
     #[clap(parse(try_from_str=parse_datetime))]
@@ -122,8 +122,8 @@ struct ShowFiresOptionsChecked {
     /// The path to the database file.
     fires_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
-    kml_file: PathBuf,
+    /// The path to a KMZ file to produce from this run.
+    kmz_file: PathBuf,
 
     /// The start time.
     start: DateTime<Utc>,
@@ -145,7 +145,7 @@ impl Display for ShowFiresOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
         writeln!(f, "        Database: {}", self.fires_store_file.display())?;
-        writeln!(f, "      Output KML: {}", self.kml_file.display())?;
+        writeln!(f, "      Output KMZ: {}", self.kmz_file.display())?;
         writeln!(f, "           Start: {}", self.start)?;
         writeln!(f, "             End: {}", self.end)?;
         writeln!(f, "Minimum Duration: {}", self.minimum_days)?;
@@ -166,7 +166,7 @@ impl Display for ShowFiresOptionsChecked {
 fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
     let ShowFiresOptionsInit {
         fires_store_file,
-        kml_file,
+        kmz_file,
         start,
         end,
         minimum_days,
@@ -174,18 +174,18 @@ fn parse_args() -> SatFireResult<ShowFiresOptionsChecked> {
         verbose,
     } = ShowFiresOptionsInit::parse();
 
-    let kml_file = match kml_file {
+    let kmz_file = match kmz_file {
         Some(v) => v,
         None => {
             let mut clone = fires_store_file.clone();
-            clone.set_extension("kml");
+            clone.set_extension("kmz");
             clone
         }
     };
 
     let checked = ShowFiresOptionsChecked {
         fires_store_file,
-        kml_file,
+        kmz_file,
         start,
         end,
         minimum_days: Duration::days(minimum_days),
@@ -209,7 +209,7 @@ fn main() -> SatFireResult<()> {
     let opts = parse_args()?;
 
     let db = FiresDatabase::connect(&opts.fires_store_file)?;
-    let mut kfile = KmlFile::new(&opts.kml_file)?;
+    let mut kfile = KmzFile::new(&opts.kmz_file)?;
 
     kfile.start_style(Some("fire"))?;
     kfile.create_icon_style(

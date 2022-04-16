@@ -14,10 +14,10 @@ use std::{
  *-----------------------------------------------------------------------------------------------*/
 
 ///
-/// Export active fires into a KML file.
+/// Export active fires into a KMZ file.
 ///
 /// This program will export all the fires not deemed as stale in the database for a given
-/// satellite as KML.
+/// satellite as KMZ.
 ///
 #[derive(Debug, Parser)]
 #[clap(bin_name = "currentfires")]
@@ -31,12 +31,12 @@ struct CurrentFiresOptionsInit {
     #[clap(env = "FIRES_DB")]
     fires_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
+    /// The path to a KMZ file to produce from this run.
     ///
     /// If this is not specified, then the program will create one automatically by replacing the
-    /// file extension on the store_file with "*.kml".
+    /// file extension on the store_file with "*.kmz".
     #[clap(short, long)]
-    kml_file: Option<PathBuf>,
+    kmz_file: Option<PathBuf>,
 
     /// The satellite to export the data for.
     ///
@@ -61,8 +61,8 @@ struct CurrentFiresOptionsChecked {
     /// The path to the database file.
     fires_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
-    kml_file: PathBuf,
+    /// The path to a KMZ file to produce from this run.
+    kmz_file: PathBuf,
 
     /// The satellite.
     sat: Satellite,
@@ -75,7 +75,7 @@ impl Display for CurrentFiresOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
         writeln!(f, "    Database: {}", self.fires_store_file.display())?;
-        writeln!(f, "  Output KML: {}", self.kml_file.display())?;
+        writeln!(f, "  Output KMZ: {}", self.kmz_file.display())?;
         writeln!(f, "   Satellite: {}", self.sat.name())?;
         writeln!(f, "\n")?; // yes, two blank lines.
 
@@ -89,23 +89,23 @@ impl Display for CurrentFiresOptionsChecked {
 fn parse_args() -> SatFireResult<CurrentFiresOptionsChecked> {
     let CurrentFiresOptionsInit {
         fires_store_file,
-        kml_file,
+        kmz_file,
         sat,
         verbose,
     } = CurrentFiresOptionsInit::parse();
 
-    let kml_file = match kml_file {
+    let kmz_file = match kmz_file {
         Some(v) => v,
         None => {
             let mut clone = fires_store_file.clone();
-            clone.set_extension("kml");
+            clone.set_extension("kmz");
             clone
         }
     };
 
     let checked = CurrentFiresOptionsChecked {
         fires_store_file,
-        kml_file,
+        kmz_file,
         sat,
         verbose,
     };
@@ -140,7 +140,7 @@ fn main() -> SatFireResult<()> {
         info!("Retrieved {} fires.", active_fires.len());
     }
 
-    active_fires.save_kml(Duration::days(1), &opts.kml_file)?;
+    active_fires.save_kmz(Duration::days(1), &opts.kmz_file)?;
 
     Ok(())
 }

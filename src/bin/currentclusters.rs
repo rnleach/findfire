@@ -1,7 +1,7 @@
 use clap::Parser;
 use log::info;
 use satfire::{
-    BoundingBox, ClusterDatabase, Coord, Geo, KmlFile, KmlWriter, SatFireResult, Satellite, Sector,
+    BoundingBox, ClusterDatabase, Coord, Geo, KmlWriter, KmzFile, SatFireResult, Satellite, Sector,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -14,10 +14,10 @@ use std::{
  *-----------------------------------------------------------------------------------------------*/
 
 ///
-/// Export clusters from most recent image into a KML file.
+/// Export clusters from most recent image into a KMZ file.
 ///
 /// This program will export all the clusters from the latest image in the database for a given
-/// satellite and sector as KML.
+/// satellite and sector as KMZ.
 ///
 #[derive(Debug, Parser)]
 #[clap(bin_name = "currentclusters")]
@@ -31,12 +31,12 @@ struct CurrentClustersOptionsInit {
     #[clap(env = "CLUSTER_DB")]
     cluster_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
+    /// The path to a KMZ file to produce from this run.
     ///
     /// If this is not specified, then the program will create one automatically by replacing the
-    /// file extension on the store_file with "*.kml".
+    /// file extension on the store_file with "*.kmz".
     #[clap(short, long)]
-    kml_file: Option<PathBuf>,
+    kmz_file: Option<PathBuf>,
 
     /// The satellite to export the data for.
     ///
@@ -75,8 +75,8 @@ struct CurrentClustersOptionsChecked {
     /// The path to the database file.
     cluster_store_file: PathBuf,
 
-    /// The path to a KML file to produce from this run.
-    kml_file: PathBuf,
+    /// The path to a KMZ file to produce from this run.
+    kmz_file: PathBuf,
 
     /// The satellite.
     sat: Satellite,
@@ -92,7 +92,7 @@ impl Display for CurrentClustersOptionsChecked {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         writeln!(f, "\n")?; // yes, two blank lines.
         writeln!(f, "    Database: {}", self.cluster_store_file.display())?;
-        writeln!(f, "  Output KML: {}", self.kml_file.display())?;
+        writeln!(f, "  Output KMZ: {}", self.kmz_file.display())?;
         writeln!(f, "   Satellite: {}", self.sat.name())?;
         writeln!(f, "      Sector: {}", self.sector.name())?;
         writeln!(f, "\n")?; // yes, two blank lines.
@@ -107,24 +107,24 @@ impl Display for CurrentClustersOptionsChecked {
 fn parse_args() -> SatFireResult<CurrentClustersOptionsChecked> {
     let CurrentClustersOptionsInit {
         cluster_store_file,
-        kml_file,
+        kmz_file,
         sat,
         sector,
         verbose,
     } = CurrentClustersOptionsInit::parse();
 
-    let kml_file = match kml_file {
+    let kmz_file = match kmz_file {
         Some(v) => v,
         None => {
             let mut clone = cluster_store_file.clone();
-            clone.set_extension("kml");
+            clone.set_extension("kmz");
             clone
         }
     };
 
     let checked = CurrentClustersOptionsChecked {
         cluster_store_file,
-        kml_file,
+        kmz_file,
         sat,
         sector,
         verbose,
@@ -186,9 +186,9 @@ fn main() -> SatFireResult<()> {
     }
 
     //
-    // Output the KML
+    // Output the KMZ
     //
-    let mut kfile = KmlFile::new(&opts.kml_file)?;
+    let mut kfile = KmzFile::new(&opts.kmz_file)?;
 
     kfile.start_style(Some("fire"))?;
     kfile.create_icon_style(

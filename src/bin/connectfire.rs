@@ -297,7 +297,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     area: BoundingBox,
     start: Option<DateTime<Utc>>,
     end: Option<DateTime<Utc>>,
-    kml_path: P3,
+    kmz_path: P3,
     to_db_filler: Sender<DatabaseMessage>,
     verbose: bool,
 ) -> SatFireResult<()> {
@@ -450,7 +450,7 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     let num_old = current_fires.drain_stale_fires(&mut old_fires, current_time_step);
     let num_new = current_fires.extend(&mut new_fires);
 
-    current_fires.save_kml(Duration::days(1), kml_path)?;
+    current_fires.save_kmz(Duration::days(1), kmz_path)?;
 
     let largest_pixel_list_size = current_fires
         .iter()
@@ -557,9 +557,9 @@ fn main() -> SatFireResult<()> {
     }
 
     for sat in Satellite::iter() {
-        let mut kml_path = opts.clusters_store_file.clone();
-        kml_path.set_file_name(sat.name());
-        kml_path.set_extension("kml");
+        let mut kmz_path = opts.clusters_store_file.clone();
+        kmz_path.set_file_name(sat.name());
+        kmz_path.set_extension("kmz");
         let clusters_store_file = opts.clusters_store_file.clone();
         let fires_store_file = opts.fires_store_file.clone();
         let send_to_db_filler = send_to_db_filler.clone();
@@ -572,7 +572,7 @@ fn main() -> SatFireResult<()> {
                 opts.bbox,
                 opts.start,
                 opts.end,
-                kml_path,
+                kmz_path,
                 send_to_db_filler,
                 opts.verbose,
             )

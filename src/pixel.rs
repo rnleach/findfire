@@ -1,6 +1,6 @@
 use crate::{
     geo::{BoundingBox, Coord, Geo},
-    kml::{KmlWriter},
+    kml::KmlWriter,
     satellite::{DataQualityFlagCode, MaskCode},
 };
 use std::{

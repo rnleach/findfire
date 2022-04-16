@@ -3,7 +3,7 @@ use crate::{
     geo::{BoundingBox, Coord, Geo, Hilbert2DRTreeView},
     pixel::PixelList,
     satellite::Satellite,
-    KmlFile, KmlWriter, SatFireResult,
+    KmlWriter, KmzFile, SatFireResult,
 };
 use chrono::{DateTime, Duration, Utc};
 use std::{
@@ -465,19 +465,19 @@ impl FireList {
     }
 
     /// Save this list in a KML file.
-    pub fn save_kml<P: AsRef<Path>>(
+    pub fn save_kmz<P: AsRef<Path>>(
         &self,
         minimum_duration: Duration,
-        kml_path: P,
+        kmz_path: P,
     ) -> SatFireResult<()> {
-        let mut kml = KmlFile::new(kml_path)?;
+        let mut kmz = KmzFile::new(kmz_path)?;
 
-        kml.start_style(Some("fire"))?;
-        kml.create_icon_style(
+        kmz.start_style(Some("fire"))?;
+        kmz.create_icon_style(
             Some("http://maps.google.com/mapfiles/kml/shapes/firedept.png"),
             1.0,
         )?;
-        kml.finish_style()?;
+        kmz.finish_style()?;
 
         let mut name = String::with_capacity(32);
         let mut description = String::with_capacity(256);
@@ -486,7 +486,7 @@ impl FireList {
             name.clear();
             let _ = write!(&mut name, "{}", fire.id());
 
-            kml.start_folder(Some(&name), None, false)?;
+            kmz.start_folder(Some(&name), None, false)?;
 
             fire.format_duration(&mut duration_buf);
 
@@ -509,13 +509,13 @@ impl FireList {
                 fire.max_temperature()
             );
 
-            kml.start_placemark(Some(&name), Some(&description), Some("#fire"))?;
+            kmz.start_placemark(Some(&name), Some(&description), Some("#fire"))?;
             let centroid = fire.centroid();
-            kml.create_point(centroid.lat, centroid.lon, 0.0)?;
-            kml.finish_placemark()?;
+            kmz.create_point(centroid.lat, centroid.lon, 0.0)?;
+            kmz.finish_placemark()?;
 
-            fire.pixels().kml_write(&mut kml);
-            kml.finish_folder()?;
+            fire.pixels().kml_write(&mut kmz);
+            kmz.finish_folder()?;
         }
 
         Ok(())
