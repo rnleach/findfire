@@ -56,3 +56,8 @@ and geographic bounding box and then output them in KMZ. It is analagous to show
 showclusters only selects clusters that are within the given start and end times, wheres showfires 
 selects any fire that overlaps the start and end times.
 
+## singlefire
+
+Select a single fire based on its identification fire_id value (perhaps by viewing output from 
+showfires) and output all clusters that eventually contributed to that fire in a KMZ file.
+

@@ -6,7 +6,7 @@ pub use cluster::{Cluster, ClusterList};
 pub use database::{
     ClusterDatabase, ClusterDatabaseAddCluster, ClusterDatabaseClusterRow,
     ClusterDatabaseQueryClusterPresent, ClusterDatabaseQueryClusters, FiresDatabase,
-    FiresDatabaseAddFire,
+    FiresDatabaseAddFire, JointFiresClusterDatabases, JointQuerySingleFire,
 };
 pub use fire::{Fire, FireList, FireListUpdateResult, FireListView};
 pub use geo::{BoundingBox, Coord, Geo};

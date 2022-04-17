@@ -219,6 +219,8 @@ pub trait KmlWriter {
 
         if let Some(icon_url) = icon_url {
             writeln!(self.output(), "<Icon><href>{}</href></Icon>", icon_url)?;
+        } else {
+            writeln!(self.output(), "<Icon/>")?;
         }
 
         writeln!(self.output(), "</IconStyle>")?;
