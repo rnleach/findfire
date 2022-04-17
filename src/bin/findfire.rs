@@ -163,9 +163,10 @@ fn main() -> SatFireResult<()> {
 
     db_filler.join().expect("Error joining db filler thread")?;
     walk_dir.join().expect("Error joining dir walker thread")?;
-    filter_present
-        .join()
-        .expect("Error joining filter thread")?;
+
+    for jh in filter_present {
+        jh.join().expect("Error joining filter thread")?;
+    }
 
     for jh in loader {
         jh.join().expect("Error joining loader thread")?;
@@ -245,35 +246,45 @@ fn filter_already_processed<P: AsRef<Path>>(
     from_dir_walker: Receiver<PathBuf>,
     to_loader: Sender<PathBuf>,
     verbose: bool,
-) -> SatFireResult<JoinHandle<SatFireResult<()>>> {
+) -> SatFireResult<Vec<JoinHandle<SatFireResult<()>>>> {
     let store_file = store_file.as_ref().to_path_buf();
 
-    let jh = std::thread::Builder::new()
-        .name("findifre-filter".to_owned())
-        .spawn(move || {
-            let db = ClusterDatabase::connect(store_file)?;
-            let mut is_present = db.prepare_to_query_clusters_present()?;
+    let mut handles = Vec::with_capacity(num_cpus::get());
 
-            for path in from_dir_walker {
-                if let Some((sat, sector, start, end)) = path.file_name().and_then(|fname| {
-                    satfire::parse_satellite_description_from_file_name(&fname.to_string_lossy())
-                }) {
-                    if !is_present.present(sat, sector, start, end)? {
-                        if verbose {
-                            info!(target: "filter", "processing {} {} {}", sat, sector, start);
-                            debug!(target: "filter", "processing {} {} {} - {}", sat, sector, start, path.display());
+    for _ in 0..num_cpus::get() {
+        let to_loader_clone = to_loader.clone();
+        let from_dir_walker_clone = from_dir_walker.clone();
+        let store_file_clone = store_file.clone();
+
+        let jh = std::thread::Builder::new()
+            .name("findifre-filter".to_owned())
+            .spawn(move || {
+                let db = ClusterDatabase::connect(store_file_clone)?;
+                let mut is_present = db.prepare_to_query_clusters_present()?;
+
+                for path in from_dir_walker_clone {
+                    if let Some((sat, sector, start, end)) = path.file_name().and_then(|fname| {
+                        satfire::parse_satellite_description_from_file_name(&fname.to_string_lossy())
+                    }) {
+                        if !is_present.present(sat, sector, start, end)? {
+                            if verbose {
+                                info!(target: "filter", "processing {} {} {}", sat, sector, start);
+                                debug!(target: "filter", "processing {} {} {} - {}", sat, sector, start, path.display());
+                            }
+
+                            to_loader_clone.send(path)?;
+                        } else if verbose {
+                            info!(target: "filter", "already in db: {}", path.display());
                         }
-
-                        to_loader.send(path)?;
-                    } else if verbose {
-                        info!(target: "filter", "already in db: {}", path.display());
                     }
                 }
-            }
-            Ok(())
-        })?;
+                Ok(())
+            })?;
 
-    Ok(jh)
+        handles.push(jh);
+    }
+
+    Ok(handles)
 }
 
 fn loader_threads(
