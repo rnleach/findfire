@@ -587,7 +587,7 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     let duration_since_last_observed = current_time - fire.last_observed;
 
     // If it got this big, it can't be real. It must be a "noise fire"
-    if fire.pixels().len() >= 350 {
+    if fire.pixels().len() >= 1_000 {
         return true;
     }
 
