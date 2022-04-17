@@ -256,6 +256,7 @@ fn main() -> SatFireResult<()> {
                             "Duration: {}<br/>",
                             "Max Power: {:.0} MW<br/>",
                             "Max Temperature: {:.0}K<br/>",
+                            "Num Pixels: {}<br/>",
                         ),
                         fire.id(),
                         fire.first_observed(),
@@ -263,6 +264,7 @@ fn main() -> SatFireResult<()> {
                         &duration_buf,
                         fire.max_power(),
                         fire.max_temperature(),
+                        fire.pixels().len(),
                     )?;
 
                     kfile.start_placemark(Some(&name), Some(&description), Some("#fire"))?;
