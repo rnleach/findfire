@@ -566,7 +566,7 @@ impl PixelList {
         &self.0
     }
 
-    pub(crate) fn max_merge(&mut self, other: &PixelList) {
+    pub fn max_merge(&mut self, other: &PixelList) {
         for other_pixel in other.0.iter() {
             let mut is_new = true;
 

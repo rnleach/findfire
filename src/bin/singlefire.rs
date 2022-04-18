@@ -1,7 +1,8 @@
 use clap::Parser;
 use log::info;
 use satfire::{
-    ClusterDatabaseClusterRow, Coord, JointFiresClusterDatabases, KmlWriter, KmzFile, SatFireResult,
+    Coord, Geo, JointFiresClusterDatabases, KmlWriter, KmzFile,
+    SatFireResult,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -96,55 +97,62 @@ fn main() -> SatFireResult<()> {
     kfile.create_icon_style(None, 0.0)?;
     kfile.finish_style()?;
 
-    let mut name = String::new();
     let mut description = String::new();
-    for cluster in query.rows()? {
-        let cluster = cluster?;
+    let mut hour_of_data = Vec::new();
+    let mut current_hour_ts = 0;
 
-        let ClusterDatabaseClusterRow {
-            rowid,
-            sat,
-            sector,
-            power,
-            scan_angle,
-            max_temperature,
-            area,
-            centroid: Coord { lat, lon },
-            pixels,
-            start,
-            end,
-        } = cluster;
+    for group in query.rows()?.filter_map(Result::ok).filter_map(|cluster| {
+        // Works because satellite times are all after 1970
+        let mut cluster_hour_ts = cluster.start.timestamp();
+        cluster_hour_ts -= cluster_hour_ts % 3_600;
 
-        name.clear();
-        let _ = write!(&mut name, "{}", rowid);
+        if current_hour_ts != cluster_hour_ts {
+            let mut to_ret = Vec::with_capacity(hour_of_data.len());
+            std::mem::swap(&mut to_ret, &mut hour_of_data);
 
-        description.clear();
-        let _ = write!(
-            &mut description,
-            concat!(
-                "<h3>Cluster Power: {:.0}MW</h3>",
-                "<h3>Max Scan Angle: {:.2}&deg;</h3>",
-                "<h3>Max Temperature: {:.2}&deg;K</h3>",
-                "<h3>Area: {:.0}m&sup2;</h3>",
-                "<h3>Satellite: {}</h3>",
-                "<h3>Scan Sector: {}</h3>",
-            ),
-            power,
-            scan_angle,
-            max_temperature,
-            area,
-            sat.name(),
-            sector.name(),
-        );
+            hour_of_data.push(cluster);
+            current_hour_ts = cluster_hour_ts;
+            Some(to_ret)
+        } else {
+            hour_of_data.push(cluster);
+            None
+        }
+    }) {
+        if !group.is_empty() {
+            let start = group[0].start;
+            let end = group.iter().last().map(|c| c.end).unwrap_or(start);
 
-        kfile.start_folder(Some(&name), None, false)?;
-        kfile.timespan(start, end)?;
+            let mut max_power: f64 = -f64::INFINITY;
+            let mut max_temp: f64 = -f64::INFINITY;
+            let mut pixels = satfire::PixelList::new();
 
-        kfile.start_placemark(None, Some(&description), Some("#fire"))?;
-        kfile.create_point(lat, lon, 0.0)?;
-        kfile.finish_placemark()?;
-        pixels.kml_write(&mut kfile);
-        kfile.finish_folder()?;
+            for cluster in group {
+                pixels.max_merge(&cluster.pixels);
+                max_power = max_power.max(cluster.power);
+                max_temp = max_temp.max(cluster.max_temperature);
+            }
+
+            description.clear();
+            let _ = write!(
+                &mut description,
+                concat!(
+                    "<h3>Cluster Power: {:.0}MW</h3>",
+                    "<h3>Max Temperature: {:.2}&deg;K</h3>",
+                ),
+                max_power, max_temp,
+            );
+
+            let Coord { lat, lon } = pixels.centroid();
+
+            kfile.start_folder(None, None, false)?;
+            kfile.timespan(start, end)?;
+
+            kfile.start_placemark(None, Some(&description), Some("#fire"))?;
+            kfile.create_point(lat, lon, 0.0)?;
+            kfile.finish_placemark()?;
+            pixels.kml_write(&mut kfile);
+            kfile.finish_folder()?;
+        }
     }
 
     Ok(())
