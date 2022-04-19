@@ -7,3 +7,4 @@ WITH RECURSIVE
  SELECT fire_id FROM fires
  WHERE fire_id IN find_mergers
  ORDER BY fire_id ASC
+
