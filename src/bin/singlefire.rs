@@ -1,9 +1,6 @@
 use clap::Parser;
 use log::info;
-use satfire::{
-    Coord, Geo, JointFiresClusterDatabases, KmlWriter, KmzFile,
-    SatFireResult,
-};
+use satfire::{Coord, Geo, JointFiresClusterDatabases, KmlWriter, KmzFile, SatFireResult};
 use simple_logger::SimpleLogger;
 use std::{
     fmt::{self, Display, Write},
@@ -86,7 +83,7 @@ fn main() -> SatFireResult<()> {
     let dbs =
         JointFiresClusterDatabases::connect(&opts.clusters_store_file, &opts.fires_store_file)?;
 
-    let mut query = dbs.single_fire_query(opts.fire_id)?;
+    let mut query = dbs.single_fire_query()?;
 
     //
     // Output the KMZ
@@ -101,23 +98,27 @@ fn main() -> SatFireResult<()> {
     let mut hour_of_data = Vec::new();
     let mut current_hour_ts = 0;
 
-    for group in query.rows()?.filter_map(Result::ok).filter_map(|cluster| {
-        // Works because satellite times are all after 1970
-        let mut cluster_hour_ts = cluster.start.timestamp();
-        cluster_hour_ts -= cluster_hour_ts % 3_600;
+    for group in query
+        .run(opts.fire_id)?
+        .filter_map(Result::ok)
+        .filter_map(|cluster| {
+            // Works because satellite times are all after 1970
+            let mut cluster_hour_ts = cluster.start.timestamp();
+            cluster_hour_ts -= cluster_hour_ts % 3_600;
 
-        if current_hour_ts != cluster_hour_ts {
-            let mut to_ret = Vec::with_capacity(hour_of_data.len());
-            std::mem::swap(&mut to_ret, &mut hour_of_data);
+            if current_hour_ts != cluster_hour_ts {
+                let mut to_ret = Vec::with_capacity(hour_of_data.len());
+                std::mem::swap(&mut to_ret, &mut hour_of_data);
 
-            hour_of_data.push(cluster);
-            current_hour_ts = cluster_hour_ts;
-            Some(to_ret)
-        } else {
-            hour_of_data.push(cluster);
-            None
-        }
-    }) {
+                hour_of_data.push(cluster);
+                current_hour_ts = cluster_hour_ts;
+                Some(to_ret)
+            } else {
+                hour_of_data.push(cluster);
+                None
+            }
+        })
+    {
         if !group.is_empty() {
             let start = group[0].start;
             let end = group.iter().last().map(|c| c.end).unwrap_or(start);

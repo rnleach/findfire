@@ -297,60 +297,7 @@ impl<'a> ClusterDatabaseQueryClusters<'a> {
     pub fn rows(
         &mut self,
     ) -> SatFireResult<impl Iterator<Item = SatFireResult<ClusterDatabaseClusterRow>> + '_> {
-        Ok(self
-            .stmt
-            .query_and_then([], |row| -> SatFireResult<ClusterDatabaseClusterRow> {
-                let rowid: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
-                let sat = match row.get_ref(1)? {
-                    rusqlite::types::ValueRef::Text(txt) => {
-                        let txt = unsafe { std::str::from_utf8_unchecked(txt) };
-                        Satellite::string_contains_satellite(txt).ok_or("Invalid satellite")
-                    }
-                    _ => Err("satellite not text"),
-                }?;
-
-                let sector = match row.get_ref(2)? {
-                    rusqlite::types::ValueRef::Text(txt) => {
-                        let txt = unsafe { std::str::from_utf8_unchecked(txt) };
-                        Sector::string_contains_sector(txt).ok_or("Invalid sector")
-                    }
-                    _ => Err("sector not text"),
-                }?;
-
-                let start: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
-                let end: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
-                let power: f64 = row.get(5)?;
-                let max_temperature: f64 = row.get(6)?;
-                let area: f64 = row.get(7)?;
-                let scan_angle: f64 = row.get(8)?;
-                let lat: f64 = row.get(9)?;
-                let lon: f64 = row.get(10)?;
-                let centroid = Coord { lat, lon };
-
-                let pixels = match row.get_ref(11)? {
-                    rusqlite::types::ValueRef::Blob(bytes) => {
-                        let mut cursor = std::io::Cursor::new(bytes);
-                        Ok(PixelList::binary_deserialize(&mut cursor))
-                    }
-                    _ => Err("Invalid type in pixels column"),
-                }?;
-
-                Ok(ClusterDatabaseClusterRow {
-                    rowid,
-                    sat,
-                    sector,
-                    start,
-                    end,
-                    power,
-                    max_temperature,
-                    area,
-                    scan_angle,
-                    centroid,
-                    pixels,
-                })
-            })?)
+        Ok(self.stmt.query_and_then([], query_row_to_cluster_row)?)
     }
 }
 
@@ -690,8 +637,7 @@ impl<'a> FiresDatabaseQueryFires<'a> {
 }
 
 pub struct JointFiresClusterDatabases {
-    fires_conn: Connection,
-    clusters_conn: Connection,
+    conn: Connection,
 }
 
 impl JointFiresClusterDatabases {
@@ -699,148 +645,92 @@ impl JointFiresClusterDatabases {
         clusters_db: P1,
         fires_db: P2,
     ) -> SatFireResult<Self> {
-        let clusters_path = clusters_db.as_ref();
         let fires_path = fires_db.as_ref();
+        let attach_clusters = format!(
+            "ATTACH DATABASE \"{}\" AS ff",
+            clusters_db.as_ref().display()
+        );
 
-        let clusters_conn = ClusterDatabase::open_database_to_write(clusters_path)?;
-        let fires_conn = FiresDatabase::open_database_to_write(fires_path)?;
-        Ok(JointFiresClusterDatabases {
-            fires_conn,
-            clusters_conn,
-        })
+        let conn = FiresDatabase::open_database_to_write(fires_path)?;
+        conn.execute(&attach_clusters, [])?;
+
+        Ok(JointFiresClusterDatabases { conn })
     }
 
-    pub fn single_fire_query(&self, fire_id: u64) -> SatFireResult<JointQuerySingleFire> {
-        use std::fmt::Write;
-
-        let mut query = String::from("SELECT cluster_id FROM associations WHERE fire_id in (");
-
-        const ALL_FIRES_QUERY: &str = r#"WITH RECURSIVE
-                 find_mergers(x) AS (
-                   VALUES(?)
-                   UNION ALL
-                   SELECT fire_id FROM fires, find_mergers WHERE merged_into= find_mergers.x
-                 )
-               SELECT fire_id FROM fires
-               WHERE fire_id IN find_mergers
-               ORDER BY fire_id ASC
-               "#;
-
-        let mut all_fires_stmt = self.fires_conn.prepare(ALL_FIRES_QUERY)?;
-        let mut all_fires_rows = all_fires_stmt.query([fire_id])?;
-
-        let mut cnt = 0;
-        while let Some(row) = all_fires_rows.next()? {
-            write!(query, "{},", row.get::<_, i64>(0)? as u64)?;
-            cnt += 1;
-        }
-        if cnt > 0 {
-            query.pop();
-        }
-
-        query.push_str(") ORDER BY fire_id ASC");
-
-        let mut cluster_ids = self.fires_conn.prepare(&query)?;
-
-        query.clear();
-        write!(
-            query,
-            r#"SELECT 
-                  rowid,
-                  satellite, 
-                  sector, 
-                  start_time, 
-                  end_time, 
-                  power, 
-                  max_temperature, 
-                  area, 
-                  max_scan_angle,
-                  lat,
-                  lon,
-                  pixels
-                FROM clusters
-                WHERE rowid in ("#
-        )?;
-
-        let mut cnt = 0;
-        let mut rows = cluster_ids.query([])?;
-        while let Some(row) = rows.next()? {
-            write!(query, "{},", row.get::<_, i64>(0)? as u64)?;
-            cnt += 1;
-        }
-        if cnt > 0 {
-            query.pop();
-        }
-        query.push_str(") ORDER BY start_time ASC");
-
-        let stmt = self.clusters_conn.prepare(&query)?;
+    pub fn single_fire_query(&self) -> SatFireResult<JointQuerySingleFire> {
+        let stmt = self.conn.prepare_cached(include_str!(
+            "database/single_fire_clusters_time_series.sql"
+        ))?;
 
         Ok(JointQuerySingleFire { stmt })
     }
 }
 
 pub struct JointQuerySingleFire<'a> {
-    stmt: rusqlite::Statement<'a>,
+    stmt: rusqlite::CachedStatement<'a>,
 }
 
 impl<'a> JointQuerySingleFire<'a> {
     /// Get an iterator over the rows
-    pub fn rows(
+    pub fn run(
         &mut self,
+        fire_id: u64,
     ) -> SatFireResult<impl Iterator<Item = SatFireResult<ClusterDatabaseClusterRow>> + '_> {
         Ok(self
             .stmt
-            .query_and_then([], |row| -> SatFireResult<ClusterDatabaseClusterRow> {
-                let rowid: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
-                let sat = match row.get_ref(1)? {
-                    rusqlite::types::ValueRef::Text(txt) => {
-                        let txt = unsafe { std::str::from_utf8_unchecked(txt) };
-                        Satellite::string_contains_satellite(txt).ok_or("Invalid satellite")
-                    }
-                    _ => Err("satellite not text"),
-                }?;
-
-                let sector = match row.get_ref(2)? {
-                    rusqlite::types::ValueRef::Text(txt) => {
-                        let txt = unsafe { std::str::from_utf8_unchecked(txt) };
-                        Sector::string_contains_sector(txt).ok_or("Invalid sector")
-                    }
-                    _ => Err("sector not text"),
-                }?;
-
-                let start: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
-                let end: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
-                let power: f64 = row.get(5)?;
-                let max_temperature: f64 = row.get(6)?;
-                let area: f64 = row.get(7)?;
-                let scan_angle: f64 = row.get(8)?;
-                let lat: f64 = row.get(9)?;
-                let lon: f64 = row.get(10)?;
-                let centroid = Coord { lat, lon };
-
-                let pixels = match row.get_ref(11)? {
-                    rusqlite::types::ValueRef::Blob(bytes) => {
-                        let mut cursor = std::io::Cursor::new(bytes);
-                        Ok(PixelList::binary_deserialize(&mut cursor))
-                    }
-                    _ => Err("Invalid type in pixels column"),
-                }?;
-
-                Ok(ClusterDatabaseClusterRow {
-                    rowid,
-                    sat,
-                    sector,
-                    start,
-                    end,
-                    power,
-                    max_temperature,
-                    area,
-                    scan_angle,
-                    centroid,
-                    pixels,
-                })
-            })?)
+            .query_and_then([fire_id], query_row_to_cluster_row)?)
     }
+}
+
+fn query_row_to_cluster_row(row: &rusqlite::Row) -> SatFireResult<ClusterDatabaseClusterRow> {
+    let rowid: u64 = u64::try_from(row.get::<_, i64>(0)?)?;
+    let sat = match row.get_ref(1)? {
+        rusqlite::types::ValueRef::Text(txt) => {
+            let txt = unsafe { std::str::from_utf8_unchecked(txt) };
+            Satellite::string_contains_satellite(txt).ok_or("Invalid satellite")
+        }
+        _ => Err("satellite not text"),
+    }?;
+
+    let sector = match row.get_ref(2)? {
+        rusqlite::types::ValueRef::Text(txt) => {
+            let txt = unsafe { std::str::from_utf8_unchecked(txt) };
+            Sector::string_contains_sector(txt).ok_or("Invalid sector")
+        }
+        _ => Err("sector not text"),
+    }?;
+
+    let start: DateTime<Utc> =
+        DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
+    let end: DateTime<Utc> =
+        DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
+    let power: f64 = row.get(5)?;
+    let max_temperature: f64 = row.get(6)?;
+    let area: f64 = row.get(7)?;
+    let scan_angle: f64 = row.get(8)?;
+    let lat: f64 = row.get(9)?;
+    let lon: f64 = row.get(10)?;
+    let centroid = Coord { lat, lon };
+
+    let pixels = match row.get_ref(11)? {
+        rusqlite::types::ValueRef::Blob(bytes) => {
+            let mut cursor = std::io::Cursor::new(bytes);
+            Ok(PixelList::binary_deserialize(&mut cursor))
+        }
+        _ => Err("Invalid type in pixels column"),
+    }?;
+
+    Ok(ClusterDatabaseClusterRow {
+        rowid,
+        sat,
+        sector,
+        start,
+        end,
+        power,
+        max_temperature,
+        area,
+        scan_angle,
+        centroid,
+        pixels,
+    })
 }
