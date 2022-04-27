@@ -10,3 +10,7 @@ useful_commands.txt
 target
 doc
 
+# Python Files
+__pycache__
+*ipynb_checkpoints
+
