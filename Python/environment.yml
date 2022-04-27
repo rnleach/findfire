@@ -1,0 +1,9 @@
+name: satfire
+dependencies:
+  - jupyter
+  - matplotlib
+  - numpy
+  - pandas
+  - python
+  - scipy
+
