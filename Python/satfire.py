@@ -4,6 +4,7 @@ This module provides functions for querying and graphing the contents of the dat
 findfire and connectfire.
 '''
 
+from datetime import timedelta, datetime, date
 import os
 import pandas as pd
 import sqlite3
@@ -62,5 +63,24 @@ class SatfireDatabases:
                 inplace=True)
 
         return df
+
+    def total_fire_power_by_day(self, fire_id, break_hour = 12):
+        df = self.total_fire_power_time_series(fire_id)
+
+        def to_second_of_burn_day(val):
+            start = (val - timedelta(hours=break_hour)).time()
+            hours = start.hour
+            minutes = start.minute
+            seconds = start.second
+            return 3600*hours + 60 * minutes + seconds
+            
+
+        df['second of burn day'] = df['scan start'].map(to_second_of_burn_day)
+        df.set_index('scan start', inplace=True)
+
+        def to_date(val):
+            return (val - timedelta(hours=break_hour)).date
+
+        return df.groupby(to_date)
 
 
