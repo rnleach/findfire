@@ -133,7 +133,7 @@ class SatfireDatabases:
 
         return (daily_data, sat)
 
-    def make_daily_plot(self,
+    def make_daily_fire_power_plot(self,
                         fire_id,
                         daily_break_hour_z=12,
                         start=None,
