@@ -592,7 +592,7 @@ fn wildfire_is_stale(fire: &Fire, current_time: DateTime<Utc>) -> bool {
     }
 
     // Minimum time to stick around.
-    if duration_since_last_observed < Duration::hours(6) {
+    if duration_since_last_observed < Duration::hours(24) {
         return false;
     }
 
