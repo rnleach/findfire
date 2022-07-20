@@ -69,7 +69,21 @@ class SatfireDatabases:
 
         df = pd.read_sql_query(QUERY, self._db, params=(fire_id, ))
 
+        # Insert NaN values everywhere there is more than a 15 minute break between detections.
+        new_index = []
+        st0 = df.iloc[0]['st']
+        for st in df['st']:
+            if st - st0 > 240:
+                new_index.append(st0 + 240)
+            new_index.append(st)
+            st0 = st
+        df.set_index('st', inplace=True)
+        df = df.reindex(new_index)
+        df.reset_index(inplace=True)
+        
+        # Convert time stamps to time values.
         df['st'] = pd.to_datetime(df['st'], unit='s')
+        
         df.rename(columns={
             'st': 'scan start',
             'tp': 'total power',
@@ -77,12 +91,13 @@ class SatfireDatabases:
         },
                   inplace=True)
 
+        # Get the satellite name.
         sat = pd.read_sql_query(
             f"SELECT satellite FROM fires WHERE fires.fire_id = ?",
             self._db,
             params=(fire_id, ))
         df.satellite = sat.loc[0]['satellite']
-
+        
         return df
 
     def total_fire_power_by_day(self, fire_id, break_hour_z=12):
