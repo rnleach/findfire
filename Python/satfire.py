@@ -69,12 +69,13 @@ class SatfireDatabases:
 
         df = pd.read_sql_query(QUERY, self._db, params=(fire_id, ))
 
-        # Insert NaN values everywhere there is more than a 15 minute break between detections.
+        # Insert NaN values everywhere there is more than a 32 minute break between detections.
+        MAX_BREAK = 32 * 60
         new_index = []
         st0 = df.iloc[0]['st']
         for st in df['st']:
-            if st - st0 > 240:
-                new_index.append(st0 + 240)
+            if st - st0 > MAX_BREAK:
+                new_index.append(st0 + MAX_BREAK)
             new_index.append(st)
             st0 = st
         df.set_index('st', inplace=True)
@@ -180,8 +181,7 @@ class SatfireDatabases:
                         for day, data in daily_data
                         for val in data['total power'])
 
-        all_days = list(
-            set(day for daily_data in daily_datas for day, data in daily_data))
+        all_days = list(set(day for daily_data in daily_datas for day, data in daily_data))
         all_days.sort()
 
         tick_positions = [s for s in range(0, 24 * 60 * 60, 3600)]
@@ -193,10 +193,13 @@ class SatfireDatabases:
 
         tick_labels = [seconds_to_time_str(v) for v in tick_positions]
 
-        f, axs = plt.subplots(len(all_days), figsize=(20, len(all_days) * 4))
+        plt_width, plt_hgt = plt.rcParams['figure.figsize']
+        plt_hgt /= 2.0
+        f, axs = plt.subplots(len(all_days), figsize=(plt_width, len(all_days) * plt_hgt))
 
         prop_cycle = axs[0]._get_lines.prop_cycler
 
+        assert len(all_days) == len(axs)
         axs_dict = {day: ax for day, ax in zip(all_days, axs)}
 
         colors = {}
