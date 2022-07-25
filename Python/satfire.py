@@ -7,7 +7,9 @@ findfire and connectfire.
 from collections.abc import Iterable
 from datetime import timedelta, datetime, date
 import os
+import math as m
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import sqlite3
 
@@ -49,8 +51,7 @@ class SatfireDatabases:
         QUERY = """
             SELECT
                 ff.clusters.start_time as st, 
-                SUM(ff.clusters.power) as tp, 
-                MAX(ff.clusters.max_temperature) as maxt
+                SUM(ff.clusters.power) as tp 
             FROM associations  JOIN ff.clusters ON ff.clusters.cluster_id = associations.cluster_id
             WHERE associations.fire_id in (
                 WITH RECURSIVE
@@ -69,28 +70,16 @@ class SatfireDatabases:
 
         df = pd.read_sql_query(QUERY, self._db, params=(fire_id, ))
 
-        # Insert NaN values everywhere there is more than a 32 minute break between detections.
-        MAX_BREAK = 32 * 60
-        new_index = []
-        st0 = df.iloc[0]['st']
-        for st in df['st']:
-            if st - st0 > MAX_BREAK:
-                new_index.append(st0 + MAX_BREAK)
-            new_index.append(st)
-            st0 = st
-        df.set_index('st', inplace=True)
-        df = df.reindex(new_index)
-        df.reset_index(inplace=True)
-        
         # Convert time stamps to time values.
         df['st'] = pd.to_datetime(df['st'], unit='s')
         
         df.rename(columns={
             'st': 'scan start',
             'tp': 'total power',
-            'maxt': 'maximum temperature'
         },
                   inplace=True)
+
+        df = _clean_data(df)
 
         # Get the satellite name.
         sat = pd.read_sql_query(
@@ -98,7 +87,7 @@ class SatfireDatabases:
             self._db,
             params=(fire_id, ))
         df.satellite = sat.loc[0]['satellite']
-        
+
         return df
 
     def total_fire_power_by_day(self, fire_id, break_hour_z=12):
@@ -179,7 +168,7 @@ class SatfireDatabases:
 
         max_power = max(val for daily_data in daily_datas
                         for day, data in daily_data
-                        for val in data['total power'])
+                        for val in data['total power'] if not m.isnan(val))
 
         all_days = list(set(day for daily_data in daily_datas for day, data in daily_data))
         all_days.sort()
@@ -227,3 +216,40 @@ class SatfireDatabases:
         axs[-1].set_xlabel("Hour of Day (Z)")
 
         return f
+
+
+def _clean_data(df, gap=timedelta(minutes=15), min_valid_power=100):
+    df2 = df
+    df2['total power'] = df2['total power'].map(lambda x: np.NaN if x < min_valid_power else x, na_action='ignore')
+    df2.dropna()
+
+    iterator = df.itertuples()
+
+    def map_to_index_vt(row):
+        i = int(row[0])
+        t_orig = row[1]
+        t = row[1].to_pydatetime()
+
+        return (i, t, t_orig)
+
+    row0 = next(iterator)
+    i0, t0, t0_orig = map_to_index_vt(row0)
+
+    updates = []
+    for row in iterator:
+        i, t, t_orig = map_to_index_vt(row)
+
+        delta_t = t - t0
+
+        if delta_t > gap:
+            updates.append((i0, t0_orig + pd.Timedelta(5, unit='seconds')))
+
+        i0, t0 = (i, t)
+
+    for idx, vt in reversed(updates):
+        df2 = pd.DataFrame(np.insert(df2.values, idx, values=[vt, np.NaN], axis=0))
+
+    df2.columns = df.columns
+
+    return df2
+
