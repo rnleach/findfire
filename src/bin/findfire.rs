@@ -5,8 +5,8 @@ use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{debug, info, warn};
 use satfire::{
-    Cluster, ClusterDatabase, ClusterList, Geo, KmlWriter, KmzFile, SatFireResult, Satellite,
-    Sector,
+    BoundingBox, Cluster, ClusterDatabase, ClusterList, Coord, Geo, KmlWriter, KmzFile,
+    SatFireResult, Satellite, Sector,
 };
 use simple_logger::SimpleLogger;
 use std::{
@@ -339,13 +339,25 @@ fn db_filler_thread<P: AsRef<Path>>(
     let jh = std::thread::Builder::new()
         .name("findfire-dbase".to_owned())
         .spawn(move || {
+            let bb = BoundingBox {
+                ll: Coord {
+                    lat: 24.0,
+                    lon: -177.0,
+                },
+                ur: Coord {
+                    lat: 90.0,
+                    lon: -50.0,
+                },
+            };
+
             let db = ClusterDatabase::connect(store_file)?;
             let mut add_stmt = db.prepare_to_add_clusters()?;
 
             let mut cluster_stats: Option<ClusterStats> = None;
             let mut cluster_list_stats: Option<ClusterListStats> = None;
 
-            for cluster_list in from_loader {
+            for mut cluster_list in from_loader {
+                cluster_list.filter_box(bb);
                 ClusterStats::update(&mut cluster_stats, &cluster_list);
                 ClusterListStats::update(&mut cluster_list_stats, &cluster_list);
                 add_stmt.add(cluster_list)?;
