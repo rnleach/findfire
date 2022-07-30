@@ -209,6 +209,7 @@ impl ClusterList {
             .iter()
             .fold(0.0, |acc, cluster| acc + cluster.power)
     }
+
     /// Analyze a file and return a ClusterList.
     ///
     /// The metadata is gleaned from the file name, so this program relies on the current naming
