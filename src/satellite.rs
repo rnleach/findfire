@@ -49,9 +49,24 @@ impl Satellite {
         use Satellite::*;
 
         match self {
-            G16 => DateTime::from_utc(NaiveDate::from_ymd(2017, 12, 18).and_hms(12, 0, 0), Utc),
-            G17 => DateTime::from_utc(NaiveDate::from_ymd(2019, 2, 12).and_hms(12, 0, 0), Utc),
-            G18 => DateTime::from_utc(NaiveDate::from_ymd(2023, 1, 17).and_hms(12, 0, 0), Utc),
+            G16 => DateTime::from_utc(
+                NaiveDate::from_ymd_opt(2017, 12, 18)
+                    .and_then(|d| d.and_hms_opt(12, 0, 0))
+                    .unwrap(),
+                Utc,
+            ),
+            G17 => DateTime::from_utc(
+                NaiveDate::from_ymd_opt(2019, 2, 12)
+                    .and_then(|d| d.and_hms_opt(12, 0, 0))
+                    .unwrap(),
+                Utc,
+            ),
+            G18 => DateTime::from_utc(
+                NaiveDate::from_ymd_opt(2023, 1, 17)
+                    .and_then(|d| d.and_hms_opt(12, 0, 0))
+                    .unwrap(),
+                Utc,
+            ),
         }
     }
 }

@@ -72,7 +72,7 @@ impl ClusterDatabase {
             ],
             |row| {
                 let timestamp: i64 = row.get(0)?;
-                let naive = chrono::NaiveDateTime::from_timestamp(timestamp, 0);
+                let naive = chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap();
                 let value = DateTime::<Utc>::from_utc(naive, Utc);
                 Ok(value)
             },
@@ -380,7 +380,10 @@ impl FiresDatabase {
                 |row| row.get::<_, i64>(0),
             )
             .map(|time_stamp| {
-                DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(time_stamp, 0), Utc)
+                DateTime::<Utc>::from_utc(
+                    NaiveDateTime::from_timestamp_opt(time_stamp, 0).unwrap(),
+                    Utc,
+                )
             })
             .ok()
     }
@@ -414,10 +417,14 @@ impl FiresDatabase {
                     _ => Err("sattelite not text"),
                 }?;
 
-                let first_observed: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(2)?, 0), Utc);
-                let last_observed: DateTime<Utc> =
-                    DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
+                let first_observed: DateTime<Utc> = DateTime::from_utc(
+                    chrono::NaiveDateTime::from_timestamp_opt(row.get(2)?, 0).unwrap(),
+                    Utc,
+                );
+                let last_observed: DateTime<Utc> = DateTime::from_utc(
+                    chrono::NaiveDateTime::from_timestamp_opt(row.get(3)?, 0).unwrap(),
+                    Utc,
+                );
 
                 let max_power: f64 = row.get(4)?;
                 let max_temperature: f64 = row.get(5)?;
@@ -606,10 +613,14 @@ impl<'a> FiresDatabaseQueryFires<'a> {
                 _ => Err("sattelite not text"),
             }?;
 
-            let first_observed: DateTime<Utc> =
-                DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
-            let last_observed: DateTime<Utc> =
-                DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
+            let first_observed: DateTime<Utc> = DateTime::from_utc(
+                chrono::NaiveDateTime::from_timestamp_opt(row.get(3)?, 0).unwrap(),
+                Utc,
+            );
+            let last_observed: DateTime<Utc> = DateTime::from_utc(
+                chrono::NaiveDateTime::from_timestamp_opt(row.get(4)?, 0).unwrap(),
+                Utc,
+            );
 
             let max_power: f64 = row.get(5)?;
             let max_temperature: f64 = row.get(6)?;
@@ -700,10 +711,14 @@ fn query_row_to_cluster_row(row: &rusqlite::Row) -> SatFireResult<ClusterDatabas
         _ => Err("sector not text"),
     }?;
 
-    let start: DateTime<Utc> =
-        DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(3)?, 0), Utc);
-    let end: DateTime<Utc> =
-        DateTime::from_utc(chrono::NaiveDateTime::from_timestamp(row.get(4)?, 0), Utc);
+    let start: DateTime<Utc> = DateTime::from_utc(
+        chrono::NaiveDateTime::from_timestamp_opt(row.get(3)?, 0).unwrap(),
+        Utc,
+    );
+    let end: DateTime<Utc> = DateTime::from_utc(
+        chrono::NaiveDateTime::from_timestamp_opt(row.get(4)?, 0).unwrap(),
+        Utc,
+    );
     let power: f64 = row.get(5)?;
     let max_temperature: f64 = row.get(6)?;
     let area: f64 = row.get(7)?;

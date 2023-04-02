@@ -79,13 +79,13 @@ mod test {
         let case1_start = start_time_from_file_name(CASE1).unwrap();
         assert_eq!(
             case1_start,
-            DateTime::<Utc>::from_utc(NaiveDate::from_yo(2021, 213).and_hms(1, 0, 31), Utc)
+            DateTime::<Utc>::from_utc(NaiveDate::from_yo_opt(2021, 213).and_then(|d| d.and_hms_opt(1, 0, 31)).unwrap(), Utc)
         );
 
         let case1_end = end_time_from_file_name(CASE1).unwrap();
         assert_eq!(
             case1_end,
-            DateTime::<Utc>::from_utc(NaiveDate::from_yo(2021, 213).and_hms(1, 9, 38), Utc)
+            DateTime::<Utc>::from_utc(NaiveDate::from_yo_opt(2021, 213).and_then(|d| d.and_hms_opt(1, 9, 38)).unwrap(), Utc)
         );
     }
 }
