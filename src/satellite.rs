@@ -10,6 +10,8 @@ pub enum Satellite {
     G16,
     /// GOES-17 (formerly GOES-S), or commonly known as GOES West
     G17,
+    /// GOES-18 (formerly GOES-T), or commonly known as GOES West
+    G18,
 }
 
 impl Satellite {
@@ -20,6 +22,7 @@ impl Satellite {
         match self {
             G16 => "G16",
             G17 => "G17",
+            G18 => "G18",
         }
     }
 
@@ -48,6 +51,7 @@ impl Satellite {
         match self {
             G16 => DateTime::from_utc(NaiveDate::from_ymd(2017, 12, 18).and_hms(12, 0, 0), Utc),
             G17 => DateTime::from_utc(NaiveDate::from_ymd(2019, 2, 12).and_hms(12, 0, 0), Utc),
+            G18 => DateTime::from_utc(NaiveDate::from_ymd(2023, 1, 17).and_hms(12, 0, 0), Utc),
         }
     }
 }

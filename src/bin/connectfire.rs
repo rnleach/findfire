@@ -344,8 +344,12 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
     let mut rows = db.query_clusters(Some(sat), None, start, end, area)?;
     let rows = rows.rows()?;
 
-    let mut current_time_step: DateTime<Utc> =
-        DateTime::from_utc(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0), Utc);
+    let mut current_time_step: DateTime<Utc> = DateTime::from_utc(
+        NaiveDate::from_ymd_opt(1970, 1, 1)
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .unwrap(),
+        Utc,
+    );
     let mut last_merge = current_time_step;
 
     let mut num_absorbed = 0;
