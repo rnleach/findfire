@@ -286,6 +286,31 @@ impl<'a> ClusterDatabaseQueryClusterPresent<'a> {
             Ok(true)
         }
     }
+
+    pub fn present_no_fire(
+        &mut self,
+        satellite: Satellite,
+        sector: Sector,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> SatFireResult<bool> {
+        let start = start.timestamp();
+        let end = end.timestamp();
+
+        let no_fire: i64 = self.no_fire_stmt.query_row(
+            [
+                &satellite.name() as &dyn ToSql,
+                &sector.name(),
+                &start,
+                &end,
+            ],
+            |row| row.get(0),
+        )?;
+
+        // This satellite, sector, start, end time group was processessed and there were no
+        // clusters found, so it is present in the database, just with no clusters.
+        Ok(no_fire > 0)
+    }
 }
 
 pub struct ClusterDatabaseQueryClusters<'a> {
