@@ -30,7 +30,7 @@ impl Satellite {
     pub fn string_contains_satellite(string: &str) -> Option<Satellite> {
         use Satellite::*;
 
-        let all_sats = [G16, G17];
+        let all_sats = [G16, G17, G18];
         for sat in &all_sats {
             if string.contains(sat.name()) {
                 return Some(*sat);
