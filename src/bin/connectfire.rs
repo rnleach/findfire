@@ -367,6 +367,8 @@ fn process_rows_for_satellite<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>
                 let group_time = current_time_step;
                 current_time_step = start;
 
+                group.push(cluster);
+
                 Some(Some((group_time, next_group)))
             } else {
                 group.push(cluster);
